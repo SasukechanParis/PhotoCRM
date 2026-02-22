@@ -1,0 +1,675 @@
+<!DOCTYPE html>
+<html lang="en">
+<!-- PhotoCRM v2.2.3 - Fixed btoa encoding error - 2026-02-22 -->
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title data-i18n="appTitle">PhotoCRM - Professional Photographer CRM</title>
+  <meta name="description"
+    content="Customer management for photographers. Manage everything from inquiries to payments."
+    data-i18n="metaDescription">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icon.svg">
+  <meta name="theme-color" content="#8b5cf6">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+</head>
+
+<body>
+  <div class="app-container">
+
+    <!-- ===== Header ===== -->
+    <header class="app-header">
+      <div class="logo">
+        <div class="logo-icon">📷</div>
+        <div>
+          <h1 data-i18n="appTitle">PhotoCRM</h1>
+          <p class="subtitle" data-i18n="appSubtitle">Photographer CRM</p>
+        </div>
+      </div>
+      <div class="header-actions">
+        <!-- Language Switcher -->
+        <select id="lang-select" class="btn btn-secondary btn-sm" style="padding: 6px 8px; min-width:auto;">
+          <option value="en">🇺🇸 English</option>
+          <option value="ja">🇯🇵 日本語</option>
+          <option value="fr">🇫🇷 Français</option>
+          <option value="zh-CN">🇨🇳 简体中文</option>
+          <option value="zh-TW">🇹🇼 繁體中文</option>
+          <option value="ko">🇰🇷 한국어</option>
+        </select>
+
+        <button class="theme-toggle" id="btn-theme" title="Toggle Theme">🌙</button>
+        <button class="btn btn-secondary btn-sm" id="btn-settings" title="Settings" data-i18n="settings">⚙
+          Settings</button>
+        <button class="btn btn-secondary btn-sm" id="btn-sync-export" title="Export data" data-i18n="exportSync">📤
+          Export</button>
+        <button class="btn btn-secondary btn-sm" id="btn-sync-import" title="Import data" data-i18n="importSync">📥
+          Import</button>
+        <input type="file" id="import-file" accept=".json" style="display:none;" />
+        <button class="btn btn-secondary btn-sm" id="btn-ics-export" title="Export .ics" data-i18n="exportIcs">📅
+          .ics</button>
+        <button class="btn btn-secondary btn-sm" id="btn-export" title="Export CSV" data-i18n="exportCsv">⬇ CSV</button>
+        <button class="btn btn-primary" id="btn-add" data-i18n="addCustomer">＋ Add New</button>
+      </div>
+    </header>
+
+    <!-- ===== Dashboard ===== -->
+    <div class="dashboard" id="dashboard">
+      <div class="stat-card">
+        <div class="stat-icon">👤</div>
+        <div class="stat-info">
+          <label data-i18n="cardTotalCustomers">Total Customers</label>
+          <div class="stat-value" id="stat-total">0</div>
+        </div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-icon">📅</div>
+        <div class="stat-info">
+          <label data-i18n="cardMonthlyShoots">Monthly Shoots</label>
+          <div class="stat-value" id="stat-monthly">0</div>
+        </div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-icon">💰</div>
+        <div class="stat-info">
+          <label data-i18n="cardMonthlyRevenue">Monthly Revenue</label>
+          <div class="stat-value" id="stat-revenue">¥0</div>
+        </div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-icon">📈</div>
+        <div class="stat-info">
+          <label data-i18n="cardProfit">Profit</label>
+          <div class="stat-value" id="profit-month">¥0</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Expense Tracking Section -->
+    <div class="expense-section" style="margin-top: 30px; margin-bottom: 30px; display: none;" id="expense-container">
+      <div class="section-header"
+        style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+        <h2 class="section-title" data-i18n="expenseTracking" style="margin-bottom: 0;">Expense Tracking</h2>
+        <button class="btn btn-primary" onclick="openExpenseModal()">
+          <span data-i18n="addExpense">➕ Add Expense</span>
+        </button>
+      </div>
+      <div class="stat-grid"
+        style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 20px; margin-bottom: 20px;">
+        <div class="stat-card small">
+          <label data-i18n="thisMonth">This Month</label>
+          <div class="stat-value sm" id="expense-month">¥0</div>
+        </div>
+        <div class="stat-card small">
+          <label data-i18n="cardMonthlyRevenue">Revenue</label>
+          <div class="stat-value sm" id="revenue-month">¥0</div>
+        </div>
+        <div class="stat-card small">
+          <label data-i18n="cardProfit">Profit</label>
+          <div class="stat-value sm" id="profit-month-alt">¥0</div>
+        </div>
+      </div>
+      <div class="expense-list-container"
+        style="background: var(--bg-card); border-radius: 16px; padding: 20px; border: 1px solid var(--border);">
+        <div id="expense-list" class="expense-list"></div>
+      </div>
+    </div>
+    <section class="dashboard">
+      <div class="stat-card pink">
+        <div class="stat-icon">⚠️</div>
+        <div class="stat-value" id="stat-unpaid">0</div>
+        <div class="stat-label" data-i18n="cardUnpaid">Unpaid</div>
+      </div>
+    </section>
+    <!-- ===== View Toggle ===== -->
+    <div class="view-tabs">
+      <div class="view-tab active" data-view="list" data-i18n="tabList">List</div>
+      <div class="view-tab" data-view="calendar" data-i18n="tabCalendar">Calendar</div>
+    </div>
+
+    <!-- ===== List View ===== -->
+    <div class="list-view active" id="list-view">
+      <div class="toolbar">
+        <div class="search-box">
+          <span class="search-icon">🔍</span>
+          <input type="text" id="search-input" placeholder="お客様名・連絡先で検索..." data-i18n-placeholder="searchPlaceholder" />
+        </div>
+        <select class="filter-select" id="filter-payment">
+          <option value="all" data-i18n="filterAll">すべて</option>
+          <option value="paid" data-i18n="filterPaid">入金済み</option>
+          <option value="unpaid" data-i18n="filterUnpaid">未入金</option>
+        </select>
+        <select class="filter-select" id="filter-photographer">
+          <option value="all" data-i18n="filterPhotographer">Filter by Staff</option>
+        </select>
+        <select class="filter-select" id="filter-month">
+          <option value="all" data-i18n="filterPeriodAll">全期間</option>
+        </select>
+      </div>
+
+      <div class="table-wrapper" id="table-wrapper">
+        <div class="table-scroll">
+          <table id="customer-table">
+            <thead>
+              <tr>
+                <th data-sort="inquiryDate"><span data-i18n="thInquiryDate">問い合わせ日</span> <span
+                    class="sort-arrow">▼</span></th>
+                <th data-sort="contractDate"><span data-i18n="thContractDate">成約日</span> <span
+                    class="sort-arrow">▼</span></th>
+                <th data-sort="shootingDate"><span data-i18n="thShootingDate">撮影日</span> <span
+                    class="sort-arrow">▼</span></th>
+                <th data-sort="customerName"><span data-i18n="thCustomerName">お客様名</span> <span
+                    class="sort-arrow">▼</span></th>
+                <th data-sort="contact"><span data-i18n="thContact">連絡先</span> <span class="sort-arrow">▼</span></th>
+                <th data-sort="meetingDate"><span data-i18n="thMeetingDate">打ち合わせ日</span> <span
+                    class="sort-arrow">▼</span></th>
+                <th data-sort="plan"><span data-i18n="thPlan">プラン</span> <span class="sort-arrow">▼</span></th>
+                <th data-sort="revenue"><span data-i18n="thRevenue">売上</span> <span class="sort-arrow">▼</span></th>
+                <th data-sort="paymentChecked"><span data-i18n="thPayment">入金</span> <span class="sort-arrow">▼</span>
+                </th>
+                <th data-sort="assignedTo"><span data-i18n="thPhotographer">担当</span> <span class="sort-arrow">▼</span>
+                </th>
+                <th data-i18n="thActions">操作</th>
+              </tr>
+            </thead>
+            <tbody id="customer-tbody"></tbody>
+          </table>
+        </div>
+        <div class="table-footer">
+          <span id="table-count">0 件</span>
+          <span id="table-revenue-total">合計売上: ¥0</span>
+        </div>
+      </div>
+
+      <div class="empty-state" id="empty-state" style="display:none;">
+        <div class="empty-icon">📷</div>
+        <h3 data-i18n="emptyStateTitle">No customers yet</h3>
+        <p data-i18n="emptyStateDesc">Start by adding your first customer to manage your shoots.</p>
+        <button class="btn btn-primary btn-lg" onclick="openModal()" data-i18n="emptyStateBtn">
+          ➕ Add First Customer
+        </button>
+      </div>
+    </div>
+
+    <!-- ===== Calendar View ===== -->
+    <div class="calendar-view" id="calendar-view">
+      <div class="calendar-nav">
+        <button class="btn-icon" id="cal-prev" title="前月">◀</button>
+        <h2 id="cal-title">2026年2月</h2>
+        <button class="btn-icon" id="cal-next" title="次月">▶</button>
+        <button class="btn btn-secondary btn-sm" id="cal-today" data-i18n="calToday">今月</button>
+      </div>
+      <div class="calendar-grid" id="calendar-grid"></div>
+      <div class="calendar-legend">
+        <div class="legend-item">
+          <span class="legend-dot" style="background: var(--accent);"></span>
+          <span data-i18n="legendShooting">Photoshoot</span>
+        </div>
+        <div class="legend-item">
+          <span class="legend-dot" style="background: var(--success);"></span>
+          <span data-i18n="legendMeeting">Meeting</span>
+        </div>
+        <div class="legend-item">
+          <span class="legend-dot" style="background: var(--warning);"></span>
+          <span data-i18n="legendInquiry">Inquiry</span>
+        </div>
+        <div class="legend-item">
+          <span class="legend-dot" style="background: var(--pink);"></span>
+          <span data-i18n="legendBilling">Payment Due</span>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ===== Add/Edit Modal ===== -->
+  <div class="modal-overlay" id="modal-overlay">
+    <div class="modal modal-form">
+      <div class="modal-header">
+        <h2 class="modal-title" id="modal-title">
+          <span class="modal-icon">👤</span>
+          <span data-i18n="modalAddTitle">New Customer</span>
+        </h2>
+        <button class="btn-close" onclick="closeModal()">✕</button>
+      </div>
+      <div class="modal-body">
+        <form id="customer-form" class="form-grid">
+          <input type="hidden" id="form-id" />
+
+          <div class="form-section-title" data-i18n="secBasic">基本情報</div>
+          <div class="form-group">
+            <label for="form-inquiryDate" data-i18n="labelInquiryDate">問い合わせ日</label>
+            <input type="date" id="form-inquiryDate" />
+          </div>
+          <div class="form-group">
+            <label for="form-contractDate" data-i18n="labelContractDate">成約日</label>
+            <input type="date" id="form-contractDate" />
+          </div>
+          <div class="form-group">
+            <label for="form-customerName" data-i18n="labelCustomerName">お客様名 *</label>
+            <input type="text" id="form-customerName" required placeholder="例: 山田 花子"
+              data-i18n-placeholder="placeholderCustomerName" />
+          </div>
+          <div class="form-group">
+            <label for="form-contact" data-i18n="labelContact">連絡先（Insta / メール）</label>
+            <input type="text" id="form-contact" placeholder="例: @yamada_hanako"
+              data-i18n-placeholder="placeholderContact" />
+          </div>
+          <div class="form-group">
+            <label for="form-assignedTo" data-i18n="labelAssignedTo">担当カメラマン</label>
+            <select id="form-assignedTo">
+              <option value="" data-i18n="selectDefault">選択してください</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="form-location" data-i18n="labelLocation">Location</label>
+            <input type="text" id="form-location" placeholder="e.g., Central Park, Studio A">
+          </div>
+
+          <div class="form-section-title" data-i18n="secShooting">撮影情報</div>
+          <div class="form-group">
+            <label for="form-shootingDate" data-i18n="labelShootingDate">撮影日</label>
+            <input type="date" id="form-shootingDate" />
+          </div>
+          <div class="form-group">
+            <label for="form-meetingDate" data-i18n="labelMeetingDate">打ち合わせ日</label>
+            <input type="date" id="form-meetingDate" />
+          </div>
+          <div class="form-group">
+            <label for="form-plan" data-i18n="labelPlan">プラン</label>
+            <select id="form-plan">
+              <option value="" data-i18n="selectDefault">選択してください</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="form-costume" data-i18n="labelCostume">衣装</label>
+            <select id="form-costume">
+              <option value="" data-i18n="selectDefault">選択してください</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="form-hairMakeup" data-i18n="labelHairMakeup">ヘアメイク</label>
+            <select id="form-hairMakeup">
+              <option value="" data-i18n="selectDefault">選択してください</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="form-assistant" data-i18n="labelAssistant">アシスタント</label>
+            <input type="text" id="form-assistant" placeholder="例: 田中太郎" data-i18n-placeholder="labelAssistant" />
+          </div>
+          <div class="form-group">
+            <label for="form-secondAssistant" data-i18n="labelSecondAssistant">第二アシスタント</label>
+            <input type="text" id="form-secondAssistant" placeholder="例: 佐藤花子"
+              data-i18n-placeholder="labelSecondAssistant" />
+          </div>
+
+          <div class="form-section-title" data-i18n="secPayment">支払い情報</div>
+          <div class="form-group">
+            <label for="form-revenue" data-i18n="labelRevenue">売上（円）</label>
+            <input type="number" id="form-revenue" min="0" step="1" placeholder="例: 150000"
+              data-i18n-placeholder="placeholderRevenue" />
+          </div>
+          <div class="form-group">
+            <label for="form-billingDate" data-i18n="labelBillingDate">請求日</label>
+            <input type="date" id="form-billingDate" />
+          </div>
+          <div class="checkbox-wrapper">
+            <input type="checkbox" id="form-paymentChecked" />
+            <label for="form-paymentChecked" data-i18n="labelPaymentChecked">入金チェック済み</label>
+          </div>
+
+          <div class="form-section-title" data-i18n="secMemo">メモ</div>
+          <div class="form-group full-width">
+            <label for="form-details" data-i18n="labelDetails">詳細</label>
+            <textarea id="form-details" placeholder="撮影の詳細情報..." data-i18n-placeholder="placeholderDetails"></textarea>
+          </div>
+          <div class="form-group full-width">
+            <label for="form-notes" data-i18n="labelNotes">備考</label>
+            <textarea id="form-notes" placeholder="その他メモ..." data-i18n-placeholder="placeholderNotes"></textarea>
+          </div>
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeModal()" data-i18n="cancel">Cancel</button>
+        <button class="btn btn-primary" id="btn-save" onclick="saveCustomer()" data-i18n="save">Save Customer</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Customer Detail Modal -->
+  <div class="modal-overlay" id="detail-overlay" style="display:none;">
+    <div class="modal modal-detail">
+      <div class="modal-header">
+        <h3 class="modal-title">
+          <span class="modal-icon">👤</span>
+          <span data-i18n="customerDetails">Customer Details</span>
+        </h3>
+        <button class="btn-close" onclick="closeDetailModal()">✕</button>
+      </div>
+
+      <div class="modal-body">
+        <div class="detail-grid" id="detail-body-container">
+          <div class="detail-item">
+            <label class="detail-label" data-i18n="labelCustomerName">Customer Name</label>
+            <p class="detail-value" id="detail-name">—</p>
+          </div>
+          <div class="detail-item">
+            <label class="detail-label" data-i18n="labelContact">Contact</label>
+            <p class="detail-value" id="detail-contact">—</p>
+          </div>
+          <div class="detail-item">
+            <label class="detail-label" data-i18n="labelShootingDate">Shooting Date</label>
+            <p class="detail-value" id="detail-shooting-date">—</p>
+          </div>
+          <div class="detail-item">
+            <label class="detail-label" data-i18n="labelLocation">Location</label>
+            <p class="detail-value" id="detail-location">—</p>
+          </div>
+          <div class="detail-item">
+            <label class="detail-label" data-i18n="labelPlan">Plan</label>
+            <p class="detail-value" id="detail-plan">—</p>
+          </div>
+          <div class="detail-item">
+            <label class="detail-label" data-i18n="labelRevenue">Revenue</label>
+            <p class="detail-value" id="detail-revenue">—</p>
+          </div>
+          <div class="detail-item">
+            <label class="detail-label" data-i18n="labelPayment">Payment Status</label>
+            <p class="detail-value" id="detail-payment">—</p>
+          </div>
+          <div class="detail-item">
+            <label class="detail-label" data-i18n="labelNotes">Notes</label>
+            <p class="detail-value" id="detail-notes">—</p>
+          </div>
+          <div class="detail-item full-width"
+            style="grid-column: 1 / -1; margin-top: 20px; padding-top: 20px; border-top: 1px solid var(--border);">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+              <h3 style="font-size: 1.1rem; margin: 0;">
+                <span data-i18n="taskManagement">Tasks</span>
+                <span id="task-progress"
+                  style="background: var(--primary); color: white; padding: 2px 8px; border-radius: 10px; font-size: 0.75rem; margin-left: 10px;">0%</span>
+              </h3>
+              <button class="btn btn-primary btn-sm" onclick="openTaskModal()">
+                <span data-i18n="addTask">➕ Add Task</span>
+              </button>
+            </div>
+            <div id="task-list" class="task-list" style="display: grid; gap: 10px;"></div>
+          </div>
+        </div>
+        <!-- Hidden legacy body for JS compatibility if needed -->
+        <div id="detail-body" style="display:none;"></div>
+      </div>
+
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeDetailModal()">
+          <span data-i18n="close">Close</span>
+        </button>
+        <button class="btn btn-primary" id="detail-edit-btn">
+          <span data-i18n="edit">✏️ Edit</span>
+        </button>
+        <button class="btn btn-danger" id="detail-delete-btn">
+          <span data-i18n="delete">🗑️ Delete</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="settings-overlay">
+    <div class="modal" style="max-width:650px;">
+      <div class="modal-header">
+        <h2 class="modal-title">
+          <span class="modal-icon">⚙️</span>
+          <span data-i18n="settingsTitle">Settings</span>
+        </h2>
+        <button class="btn-close" onclick="closeSettings()">✕</button>
+      </div>
+      <div class="modal-body">
+        <p style="font-size:0.85rem; color:var(--text-muted); margin-bottom:20px;" data-i18n="settingsDesc">
+          各フィールドの選択肢をカスタマイズできます。追加した選択肢は登録フォームのドロップダウンに反映されます。
+        </p>
+        <div class="settings-tabs">
+          <button class="settings-tab-btn active" data-tab="menu" data-i18n="settings">General</button>
+          <button class="settings-tab-btn" data-tab="invoice" data-i18n="invoiceSettings">Invoice & Tax</button>
+          <button class="settings-tab-btn" data-tab="team" data-i18n="teamManager">Team</button>
+        </div>
+        <div class="settings-tab-content active" id="settings-content-menu">
+          <div class="settings-list" id="settings-list"></div>
+        </div>
+
+        <div class="settings-tab-content" id="settings-content-invoice">
+          <div class="settings-section">
+            <h3 data-i18n="taxSettings">Tax Settings</h3>
+            <div class="form-group-row" style="display: flex; align-items: center; gap: 10px; margin-bottom: 15px;">
+              <input type="checkbox" id="tax-enabled" style="width: auto;">
+              <label for="tax-enabled" data-i18n="enableTax" style="margin: 0;">Enable tax calculation</label>
+            </div>
+            <div id="tax-options" style="display: none;">
+              <div class="form-group">
+                <label data-i18n="taxRate">Tax Rate (%)</label>
+                <input type="number" id="tax-rate" value="10" step="0.1">
+                <p class="help-text" data-i18n="taxRateHelp">Enter your local tax rate (e.g., 10 for 10%)</p>
+              </div>
+              <div class="form-group" id="tax-label-group">
+                <label data-i18n="taxLabel">Tax Label</label>
+                <select id="tax-label">
+                  <option value="Tax">Tax</option>
+                  <option value="VAT">VAT (EU)</option>
+                  <option value="GST">GST</option>
+                  <option value="Sales Tax">Sales Tax (US)</option>
+                  <option value="消費税" data-i18n="taxLabelJapan">消費税 (Japan)</option>
+                  <option value="Custom">Custom...</option>
+                </select>
+                <input type="text" id="tax-label-custom" style="display: none; margin-top: 5px;"
+                  placeholder="Custom tax label...">
+              </div>
+              <div class="form-group-row" id="tax-included-group"
+                style="display: flex; align-items: center; gap: 10px;">
+                <input type="checkbox" id="tax-included" style="width: auto;">
+                <label for="tax-included" data-i18n="taxIncluded" style="margin: 0;">Prices include tax</label>
+              </div>
+            </div>
+          </div>
+          <div class="settings-section" style="margin-top: 25px;">
+            <h3 data-i18n="invoiceSettings">Invoice Settings</h3>
+            <div class="form-group">
+              <label data-i18n="companyName">Company Name</label>
+              <input type="text" id="invoice-company-name">
+            </div>
+            <div class="form-group">
+              <label data-i18n="companyAddress">Company Address</label>
+              <textarea id="invoice-address" style="min-height: 60px;"></textarea>
+            </div>
+            <div class="form-group-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+              <div class="form-group">
+                <label data-i18n="companyEmail">Email</label>
+                <input type="email" id="invoice-email">
+              </div>
+              <div class="form-group">
+                <label data-i18n="companyPhone">Phone</label>
+                <input type="tel" id="invoice-phone">
+              </div>
+            </div>
+            <div class="form-group">
+              <label data-i18n="bankInfo">Bank Information (optional)</label>
+              <textarea id="invoice-bank" style="min-height: 80px;"></textarea>
+            </div>
+            <button class="btn btn-primary" id="btn-save-invoice-settings" data-i18n="saveSettings"
+              style="width: 100%; margin-top: 15px;">Save Settings</button>
+          </div>
+        </div>
+        <div class="settings-tab-content" id="settings-content-team">
+          <div class="team-management">
+            <h3 data-i18n="teamList">Team Members</h3>
+            <div id="team-list" class="team-list"></div>
+            <div class="team-add-form">
+              <h3 data-i18n="addMember">Add Member</h3>
+              <div class="form-group">
+                <input type="text" id="team-new-name" data-i18n-placeholder="placeholderMemberName" />
+                <select id="team-new-role">
+                  <option value="photographer" data-i18n="rolePhotog">Photographer</option>
+                  <option value="admin" data-i18n="roleAdmin">Admin</option>
+                  <option value="assistant" data-i18n="roleAsst">Assistant</option>
+                </select>
+                <button class="btn btn-primary btn-sm" id="btn-team-add" data-i18n="addMember">Add</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-primary" onclick="closeSettings()" data-i18n="settingsDone">完了</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Delete Confirmation Modal -->
+  <div class="modal-overlay" id="confirm-overlay" style="display:none;">
+    <div class="modal modal-confirm">
+      <div class="modal-header modal-header-danger">
+        <h3 class="modal-title">
+          <span class="modal-icon">⚠️</span>
+          <span data-i18n="confirmDelete">Confirm Delete</span>
+        </h3>
+        <button class="btn-close" onclick="closeConfirmModal()">✕</button>
+      </div>
+
+      <div class="modal-body">
+        <div class="confirm-message">
+          <p data-i18n="confirmDeleteMessage">
+            Are you sure you want to delete this customer? This action cannot be undone.
+          </p>
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeConfirmModal()">
+          <span data-i18n="cancel">Cancel</span>
+        </button>
+        <button class="btn btn-danger" id="btn-confirm-delete">
+          <span data-i18n="confirmDelete">Delete</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== Toast Container ===== -->
+  <div class="toast-container" id="toast-container"></div>
+
+  <!-- Contract Template Modal -->
+  <div class="modal-overlay" id="contract-modal" style="display:none;">
+    <div class="modal" style="max-width: 400px;">
+      <div class="modal-header">
+        <h3 class="modal-title" data-i18n="selectTemplate">Select Contract Template</h3>
+        <button class="btn-close" onclick="closeContractModal()">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="template-grid" style="display: grid; grid-template-columns: 1fr; gap: 10px;">
+          <button class="btn btn-secondary contract-template-btn" data-template="wedding"
+            style="justify-content: flex-start;">
+            <span style="font-size: 1.5rem; margin-right: 15px;">💒</span>
+            <span data-i18n="wedding">Wedding</span>
+          </button>
+          <button class="btn btn-secondary contract-template-btn" data-template="portrait"
+            style="justify-content: flex-start;">
+            <span style="font-size: 1.5rem; margin-right: 15px;">👤</span>
+            <span data-i18n="portrait">Portrait</span>
+          </button>
+          <button class="btn btn-secondary contract-template-btn" data-template="commercial"
+            style="justify-content: flex-start;">
+            <span style="font-size: 1.5rem; margin-right: 15px;">🏢</span>
+            <span data-i18n="commercial">Commercial</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Task Modal -->
+  <div class="modal-overlay" id="task-modal" style="display:none;">
+    <div class="modal" style="max-width: 400px;">
+      <div class="modal-header">
+        <h3 class="modal-title" data-i18n="addTask">Add Task</h3>
+        <button class="btn-close" onclick="closeTaskModal()">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label data-i18n="taskName">Task Name</label>
+          <input type="text" id="task-name" placeholder="e.g., Send contract">
+        </div>
+        <div class="form-group">
+          <label data-i18n="dueDate">Due Date</label>
+          <input type="date" id="task-due-date">
+        </div>
+        <div class="form-group">
+          <label data-i18n="priority">Priority</label>
+          <select id="task-priority">
+            <option value="low" data-i18n="low">Low</option>
+            <option value="medium" data-i18n="medium" selected>Medium</option>
+            <option value="high" data-i18n="high">High</option>
+          </select>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeTaskModal()" data-i18n="cancel">Cancel</button>
+        <button class="btn btn-primary" onclick="window.saveTask()" data-i18n="addTask">Add Task</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Expense Modal -->
+  <div class="modal-overlay" id="expense-modal" style="display:none;">
+    <div class="modal" style="max-width: 450px;">
+      <div class="modal-header">
+        <h3 class="modal-title" data-i18n="addExpense">Add Expense</h3>
+        <button class="btn-close" onclick="closeExpenseModal()">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label data-i18n="dueDate">Date</label>
+          <input type="date" id="expense-date">
+        </div>
+        <div class="form-group">
+          <label data-i18n="category">Category</label>
+          <select id="expense-category">
+            <option value="Equipment" data-i18n="equipment">Equipment</option>
+            <option value="Software" data-i18n="software">Software</option>
+            <option value="Travel" data-i18n="travel">Travel</option>
+            <option value="Marketing" data-i18n="marketing">Marketing</option>
+            <option value="Assistant/Staff" data-i18n="assistantStaff">Assistant/Staff</option>
+            <option value="Studio Rent" data-i18n="studioRent">Studio Rent</option>
+            <option value="Other" data-i18n="other">Other</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label data-i18n="description">Description</label>
+          <input type="text" id="expense-item" placeholder="e.g., New Lens">
+        </div>
+        <div class="form-group">
+          <label data-i18n="amount">Amount</label>
+          <input type="number" id="expense-amount" placeholder="0.00">
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeExpenseModal()" data-i18n="cancel">Cancel</button>
+        <button class="btn btn-primary" onclick="window.saveExpense()" data-i18n="addExpense">Add Expense</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- PhotoCRM Scripts v2.2.3 -->
+  <script>console.log('📦 Loading PhotoCRM v2.2.3 (Fixed btoa encoding error)...');</script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="locales.js"></script>
+  <script src="invoice-generator.js"></script>
+  <script src="team-manager.js"></script>
+  <script src="sync-manager.js"></script>
+  <script src="app.js"></script>
+</body>
+
+</html>
