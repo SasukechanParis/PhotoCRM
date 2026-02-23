@@ -1958,6 +1958,7 @@
   hookPhotographerOther();
 
   let appInitialized = false;
+  let authReady = false;
 
   async function handleAuthState(user) {
     const appContainer = document.querySelector('.app-container');
@@ -1968,6 +1969,16 @@
     const logoutBtn = document.getElementById('btn-logout');
 
     if (!user) {
+      if (!authReady) {
+        if (authStatus) authStatus.textContent = '🔄 ログイン結果を確認中...';
+        if (loginBtn) loginBtn.style.display = 'none';
+        if (logoutBtn) logoutBtn.style.display = 'none';
+        if (loginScreen) loginScreen.style.display = 'none';
+        if (authBanner) authBanner.style.display = 'flex';
+        if (appContainer) appContainer.style.display = 'none';
+        return;
+      }
+
       if (authStatus) authStatus.textContent = '🔐 Sign in to enable cloud sync';
       if (loginBtn) loginBtn.style.display = '';
       if (logoutBtn) logoutBtn.style.display = 'none';
@@ -2000,13 +2011,25 @@
   }
 
   // Ensure DOM is ready before initializing
-  document.addEventListener('DOMContentLoaded', () => {
+  document.addEventListener('DOMContentLoaded', async () => {
     const triggerGoogleLogin = () => {
       window.FirebaseService.signInWithGoogle().catch((err) => {
         console.error(err);
         showToast('Googleログインに失敗しました');
       });
     };
+
+    try {
+      await window.FirebaseService.processRedirectResult();
+    } catch (err) {
+      console.error('Redirect login failed', err);
+      showToast('Googleログインに失敗しました');
+    } finally {
+      authReady = true;
+      handleAuthState(window.FirebaseService.getCurrentUser()).catch((err) => {
+        console.error('Auth state refresh failed', err);
+      });
+    }
 
     document.getElementById('btn-google-login')?.addEventListener('click', triggerGoogleLogin);
     document.getElementById('btn-google-login-screen')?.addEventListener('click', triggerGoogleLogin);
