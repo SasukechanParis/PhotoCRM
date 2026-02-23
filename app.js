@@ -1190,32 +1190,101 @@
   }
 
   // ICS Export
-  $('#btn-ics-export').addEventListener('click', () => {
-    let ics = "BEGIN:VCALENDAR\nVERSION:2.0\nPRODID:-//PhotoCRM//JP\n";
+  function formatICSDate(dateStr) {
+    return (dateStr || '').replace(/-/g, '');
+  }
+
+  function addDays(dateStr, days = 1) {
+    const d = new Date(`${dateStr}T00:00:00`);
+    d.setDate(d.getDate() + days);
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+  }
+
+  function escapeICSText(value) {
+    return String(value || '')
+      .replace(/\\/g, '\\\\')
+      .replace(/\r?\n/g, '\\n')
+      .replace(/;/g, '\\;')
+      .replace(/,/g, '\\,');
+  }
+
+  function createICSEventsForCalendarView() {
+    const monthStr = `${calYear}-${String(calMonth + 1).padStart(2, '0')}`;
+    const dateFields = [
+      { key: 'shootingDate', icon: '📷', label: '撮影' },
+      { key: 'meetingDate', icon: '🤝', label: '打ち合わせ' },
+      { key: 'inquiryDate', icon: '💌', label: '問い合わせ' },
+      { key: 'billingDate', icon: '💳', label: '請求' },
+    ].filter(df => calendarFilters[df.key]);
+
+    const nowStamp = new Date().toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '');
+    const events = [];
+
     customers.forEach(c => {
-      if (c.shootingDate) {
-        const d = c.shootingDate.replace(/-/g, '');
-        ics += "BEGIN:VEVENT\n";
-        ics += `DTSTART;VALUE=DATE:${d}\n`;
-        ics += `SUMMARY:📷 ${c.customerName || ''}\n`;
-        ics += `DESCRIPTION:Plan: ${c.plan || '-'}\\nContact: ${c.contact || '-'}\n`;
-        ics += "END:VEVENT\n";
-      }
-      if (c.meetingDate) {
-        const d = c.meetingDate.replace(/-/g, '');
-        ics += "BEGIN:VEVENT\n";
-        ics += `DTSTART;VALUE=DATE:${d}\n`;
-        ics += `SUMMARY:🤝 ${c.customerName || ''}\n`;
-        ics += "END:VEVENT\n";
-      }
+      dateFields.forEach(df => {
+        const eventDate = c[df.key];
+        if (!eventDate || !eventDate.startsWith(monthStr)) return;
+
+        const customerName = c.customerName || '未設定';
+        const plan = c.plan || '未設定';
+        const contact = c.contact || '未設定';
+        const notes = c.notes || 'なし';
+        const summary = `${df.icon} ${df.label} - ${customerName}`;
+        const description = [
+          `予定種別: ${df.label}`,
+          `顧客名: ${customerName}`,
+          `プラン内容: ${plan}`,
+          `連絡先: ${contact}`,
+          `備考: ${notes}`,
+        ].join('\n');
+
+        events.push([
+          'BEGIN:VEVENT',
+          `UID:${escapeICSText(`${c.id}-${df.key}-${eventDate}@photocrm`)}`,
+          `DTSTAMP:${nowStamp}`,
+          `DTSTART;VALUE=DATE:${formatICSDate(eventDate)}`,
+          `DTEND;VALUE=DATE:${formatICSDate(addDays(eventDate, 1))}`,
+          `SUMMARY:${escapeICSText(summary)}`,
+          `DESCRIPTION:${escapeICSText(description)}`,
+          'STATUS:CONFIRMED',
+          'TRANSP:OPAQUE',
+          'END:VEVENT'
+        ].join('\r\n'));
+      });
     });
-    ics += "END:VCALENDAR";
-    const blob = new Blob([ics], { type: 'text/calendar' });
+
+    return events;
+  }
+
+  $('#btn-ics-export').addEventListener('click', () => {
+    const events = createICSEventsForCalendarView();
+    if (events.length === 0) {
+      showToast('書き出し対象の予定がありません');
+      return;
+    }
+
+    const ics = [
+      'BEGIN:VCALENDAR',
+      'VERSION:2.0',
+      'PRODID:-//PhotoCRM//Calendar Export//JA',
+      'CALSCALE:GREGORIAN',
+      'METHOD:PUBLISH',
+      'X-WR-CALNAME:PhotoCRM Calendar',
+      'X-WR-TIMEZONE:Asia/Tokyo',
+      ...events,
+      'END:VCALENDAR'
+    ].join('\r\n');
+
+    const blob = new Blob([ics], { type: 'text/calendar;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = 'shoots.ics';
+    a.download = `photocrm-calendar-${calYear}${String(calMonth + 1).padStart(2, '0')}.ics`;
     a.click();
+    URL.revokeObjectURL(url);
   });
 
   // CSV Export
