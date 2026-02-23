@@ -43,8 +43,12 @@ const INVOICE_I18N = {
     }
 };
 
-const CJK_FONT_URL = 'https://cdn.jsdelivr.net/gh/notofonts/noto-cjk@main/Sans/OTF/Japanese/NotoSansCJKjp-Regular.otf';
-let cjkFontLoaded = false;
+const CJK_FONT_URLS = [
+    'https://cdn.jsdelivr.net/gh/notofonts/noto-cjk@main/Sans/OTF/Japanese/NotoSansCJKjp-Regular.otf',
+    'https://raw.githubusercontent.com/notofonts/noto-cjk/main/Sans/OTF/Japanese/NotoSansCJKjp-Regular.otf'
+];
+const CJK_FONT_CACHE_KEY = 'photocrm_invoice_font_notosanscjk_regular_base64';
+let cjkFontBase64 = null;
 
 function getInvoiceLang() {
     return document.documentElement.lang || localStorage.getItem('photocrm_lang') || 'en';
@@ -61,16 +65,11 @@ function formatInvoiceDate(value) {
     return new Intl.DateTimeFormat(getInvoiceLang()).format(date);
 }
 
-async function loadCjkFont(doc) {
-    if (cjkFontLoaded) {
-        doc.setFont('NotoSansCJKjp', 'normal');
-        return;
-    }
+function containsUnicodeText(value) {
+    return /[^\u0000-\u00ff]/.test(String(value || ''));
+}
 
-    const response = await fetch(CJK_FONT_URL);
-    if (!response.ok) throw new Error('Failed to load CJK font');
-
-    const arrayBuffer = await response.arrayBuffer();
+function arrayBufferToBase64(arrayBuffer) {
     const bytes = new Uint8Array(arrayBuffer);
     let binary = '';
     const chunkSize = 0x8000;
@@ -78,28 +77,86 @@ async function loadCjkFont(doc) {
         binary += String.fromCharCode.apply(null, bytes.subarray(i, i + chunkSize));
     }
 
-    const base64 = btoa(binary);
+    return btoa(binary);
+}
+
+function registerCjkFont(doc, base64) {
     doc.addFileToVFS('NotoSansCJKjp-Regular.otf', base64);
     doc.addFont('NotoSansCJKjp-Regular.otf', 'NotoSansCJKjp', 'normal');
-    cjkFontLoaded = true;
     doc.setFont('NotoSansCJKjp', 'normal');
 }
 
-async function configureInvoiceFont(doc) {
+async function getCjkFontBase64() {
+    if (cjkFontBase64) return cjkFontBase64;
+
+    try {
+        const cached = localStorage.getItem(CJK_FONT_CACHE_KEY);
+        if (cached) {
+            cjkFontBase64 = cached;
+            return cjkFontBase64;
+        }
+    } catch (err) {
+        console.warn('Unable to read cached CJK font.', err);
+    }
+
+    let lastError = null;
+    for (const fontUrl of CJK_FONT_URLS) {
+        try {
+            const response = await fetch(fontUrl);
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}`);
+            }
+
+            const arrayBuffer = await response.arrayBuffer();
+            cjkFontBase64 = arrayBufferToBase64(arrayBuffer);
+
+            try {
+                localStorage.setItem(CJK_FONT_CACHE_KEY, cjkFontBase64);
+            } catch (err) {
+                console.warn('Unable to cache CJK font locally.', err);
+            }
+
+            return cjkFontBase64;
+        } catch (err) {
+            lastError = err;
+        }
+    }
+
+    throw lastError || new Error('Failed to load CJK font');
+}
+
+async function loadCjkFont(doc) {
+    const base64 = await getCjkFontBase64();
+    registerCjkFont(doc, base64);
+}
+
+function setInvoiceFontStyle(doc, fontMode, style = 'normal') {
+    if (fontMode === 'cjk') {
+        doc.setFont('NotoSansCJKjp', 'normal');
+        return;
+    }
+
+    doc.setFont('helvetica', style);
+}
+
+async function configureInvoiceFont(doc, sampleTexts = []) {
     const lang = getInvoiceLang();
-    if (!['ja', 'zh', 'zh-TW', 'ko'].includes(lang)) return;
+    const languageNeedsCjk = ['ja', 'zh', 'zh-TW', 'ko'].includes(lang);
+    const contentNeedsCjk = sampleTexts.some(containsUnicodeText);
+    if (!languageNeedsCjk && !contentNeedsCjk) return 'latin';
 
     try {
         await loadCjkFont(doc);
+        return 'cjk';
     } catch (err) {
         console.warn('CJK font load failed, using fallback font.', err);
+        return 'latin';
     }
 }
 
 async function generateInvoicePDF(customer, type = 'invoice', invoiceData = {}) {
     const { jsPDF } = window.jspdf;
     const doc = new jsPDF();
-    await configureInvoiceFont(doc);
 
     const settings = getTaxSettings();
     const pageWidth = doc.internal.pageSize.getWidth();
@@ -125,6 +182,16 @@ async function generateInvoicePDF(customer, type = 'invoice', invoiceData = {}) 
     const recipientContact = invoiceData.recipientContact || customer.invoiceRecipientContact || customer.contact || '';
     const issueDate = invoiceData.issueDate || customer.invoiceIssueDate || new Date().toISOString().slice(0, 10);
     const dueDate = invoiceData.dueDate || customer.invoiceDueDate || '';
+    const fontMode = await configureInvoiceFont(doc, [
+        senderName,
+        senderContact,
+        recipientName,
+        recipientContact,
+        settings.label,
+        settings.bank,
+        ...items.map(item => item.description),
+        ...Object.values(INVOICE_I18N[getInvoiceLang()] || {}),
+    ]);
 
     // Header
     doc.setFillColor(31, 41, 55);
@@ -132,29 +199,29 @@ async function generateInvoicePDF(customer, type = 'invoice', invoiceData = {}) 
 
     doc.setTextColor(255, 255, 255);
     doc.setFontSize(22);
-    doc.setFont(undefined, 'bold');
+    setInvoiceFontStyle(doc, fontMode, 'bold');
     doc.text(type === 'invoice' ? invoiceText('invoiceTitle') : invoiceText('quoteTitle'), 20, 20);
 
     doc.setFontSize(10);
-    doc.setFont(undefined, 'normal');
+    setInvoiceFontStyle(doc, fontMode, 'normal');
     doc.text(`${type === 'invoice' ? invoiceText('numberLabelInvoice') : invoiceText('numberLabelQuote')}: ${customer.id}`, 20, 28);
 
-    doc.setFont(undefined, 'bold');
+    setInvoiceFontStyle(doc, fontMode, 'bold');
     doc.text(senderName, pageWidth - 20, 17, { align: 'right' });
-    doc.setFont(undefined, 'normal');
+    setInvoiceFontStyle(doc, fontMode, 'normal');
     if (senderContact) doc.text(senderContact, pageWidth - 20, 23, { align: 'right' });
 
     // Billing blocks
     let y = 48;
     doc.setTextColor(17, 24, 39);
     doc.setFontSize(9);
-    doc.setFont(undefined, 'bold');
+    setInvoiceFontStyle(doc, fontMode, 'bold');
     doc.text(invoiceText('billTo'), 20, y);
     doc.text(invoiceText('from'), 72, y);
     doc.text(invoiceText('invoiceDate'), 125, y);
     y += 6;
 
-    doc.setFont(undefined, 'normal');
+    setInvoiceFontStyle(doc, fontMode, 'normal');
     doc.setFontSize(10);
     doc.text(recipientName, 20, y);
     if (recipientContact) doc.text(recipientContact, 20, y + 5);
@@ -178,7 +245,7 @@ async function generateInvoicePDF(customer, type = 'invoice', invoiceData = {}) 
     doc.setFillColor(243, 244, 246);
     doc.rect(20, tableTop, pageWidth - 40, 10, 'F');
 
-    doc.setFont(undefined, 'bold');
+    setInvoiceFontStyle(doc, fontMode, 'bold');
     doc.setFontSize(9);
     doc.text(invoiceText('description'), col.desc + 2, tableTop + 6.5);
     doc.text(invoiceText('qty'), col.qty, tableTop + 6.5, { align: 'right' });
@@ -186,7 +253,7 @@ async function generateInvoicePDF(customer, type = 'invoice', invoiceData = {}) 
     doc.text(invoiceText('amount'), col.amount, tableTop + 6.5, { align: 'right' });
 
     let rowY = tableTop + 15;
-    doc.setFont(undefined, 'normal');
+    setInvoiceFontStyle(doc, fontMode, 'normal');
     doc.setFontSize(10);
 
     items.forEach(item => {
@@ -222,13 +289,13 @@ async function generateInvoicePDF(customer, type = 'invoice', invoiceData = {}) 
     doc.text(settings.label || 'Tax', boxX + 4, totalsY + 16);
     doc.text(`${currency}${amounts.tax.toFixed(2)}`, boxX + 66, totalsY + 16, { align: 'right' });
 
-    doc.setFont(undefined, 'bold');
+    setInvoiceFontStyle(doc, fontMode, 'bold');
     doc.setFontSize(11);
     doc.text(invoiceText('total'), boxX + 4, totalsY + 29);
     doc.text(`${currency}${amounts.total.toFixed(2)}`, boxX + 66, totalsY + 29, { align: 'right' });
 
     if (settings.bank && type === 'invoice') {
-        doc.setFont(undefined, 'normal');
+        setInvoiceFontStyle(doc, fontMode, 'normal');
         doc.setFontSize(9);
         doc.text(invoiceText('paymentInfo'), 20, totalsY + 12);
         const bankLines = doc.splitTextToSize(settings.bank, pageWidth - 120);
