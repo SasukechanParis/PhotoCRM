@@ -60,6 +60,12 @@
     </header>
 
     <!-- ===== Dashboard ===== -->
+    <div class="dashboard-period-controls" id="dashboard-period-controls">
+      <button class="btn-icon" id="dashboard-prev-month" title="Previous month">◀</button>
+      <input type="month" id="dashboard-month-picker" aria-label="Dashboard month" />
+      <button class="btn-icon" id="dashboard-next-month" title="Next month">▶</button>
+    </div>
+
     <div class="dashboard" id="dashboard">
       <div class="stat-card">
         <div class="stat-icon">👤</div>
@@ -90,6 +96,23 @@
         </div>
       </div>
     </div>
+
+    <section class="dashboard yearly-overview" id="yearly-overview">
+      <div class="stat-card">
+        <div class="stat-icon">🗓️</div>
+        <div class="stat-info">
+          <label id="yearly-revenue-label">Yearly Revenue</label>
+          <div class="stat-value" id="stat-yearly-revenue">$0</div>
+        </div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-icon">📊</div>
+        <div class="stat-info">
+          <label id="yearly-profit-label">Yearly Profit</label>
+          <div class="stat-value" id="stat-yearly-profit">$0</div>
+        </div>
+      </div>
+    </section>
 
     <!-- Expense Tracking Section -->
     <div class="expense-section" style="margin-top: 30px; margin-bottom: 30px; display: none;" id="expense-container">

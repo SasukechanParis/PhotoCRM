@@ -170,6 +170,7 @@
   const now = new Date();
   calYear = now.getFullYear();
   calMonth = now.getMonth();
+  let selectedDashboardMonth = new Date(now.getFullYear(), now.getMonth(), 1);
 
   // ===== DOM =====
   const $ = (s) => document.querySelector(s);
@@ -178,6 +179,9 @@
   const searchInput = $('#search-input');
   const filterPayment = $('#filter-payment');
   const filterMonth = $('#filter-month');
+  const dashboardMonthPicker = $('#dashboard-month-picker');
+  const dashboardPrevMonth = $('#dashboard-prev-month');
+  const dashboardNextMonth = $('#dashboard-next-month');
   const modalOverlay = $('#modal-overlay');
   const detailOverlay = $('#detail-overlay');
   const confirmOverlay = $('#confirm-overlay');
@@ -473,28 +477,79 @@
   window.removeCustomField = removeCustomField;
 
   // ===== Dashboard =====
+  function getMonthRange(date) {
+    const year = date.getFullYear();
+    const month = date.getMonth();
+    return {
+      year,
+      month,
+      start: new Date(year, month, 1),
+      end: new Date(year, month + 1, 0),
+      monthKey: `${year}-${String(month + 1).padStart(2, '0')}`,
+    };
+  }
+
+  function isDateInRange(dateStr, start, end) {
+    if (!dateStr) return false;
+    const date = new Date(dateStr);
+    return !Number.isNaN(date.getTime()) && date >= start && date <= end;
+  }
+
+  function syncDashboardMonthPicker() {
+    if (!dashboardMonthPicker) return;
+    const { monthKey } = getMonthRange(selectedDashboardMonth);
+    dashboardMonthPicker.value = monthKey;
+  }
+
+  function moveDashboardMonth(offset) {
+    selectedDashboardMonth = new Date(
+      selectedDashboardMonth.getFullYear(),
+      selectedDashboardMonth.getMonth() + offset,
+      1
+    );
+    syncDashboardMonthPicker();
+    updateDashboard();
+  }
+
   function updateDashboard() {
     const total = customers.length;
-    const now = new Date();
-    const curMonthStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-    const monthlyShoots = customers.filter(c => c.shootingDate && c.shootingDate.startsWith(curMonthStr));
-    const monthlyRevenue = monthlyShoots.reduce((s, c) => s + (Number(c.revenue) || 0), 0);
-    const unpaid = customers.filter(c => !c.paymentChecked).length;
+    const { year, start, end } = getMonthRange(selectedDashboardMonth);
+
+    const monthlyShoots = customers.filter(c => isDateInRange(c.shootingDate, start, end));
+    const monthlyRevenue = monthlyShoots.reduce((sum, c) => sum + (Number(c.revenue) || 0), 0);
 
     const expenses = getExpenses();
-    const monthlyExpenses = expenses.filter(e => e.date && e.date.startsWith(curMonthStr))
-      .reduce((s, e) => s + (Number(e.amount) || 0), 0);
+    const monthlyExpenses = expenses
+      .filter(e => isDateInRange(e.date, start, end))
+      .reduce((sum, e) => sum + (Number(e.amount) || 0), 0);
     const monthlyProfit = monthlyRevenue - monthlyExpenses;
 
-    $('#stat-total').textContent = total;
-    $('#stat-monthly').textContent = monthlyShoots.length; // Fixed ID to match HTML
-    $('#stat-revenue').textContent = formatCurrency(monthlyRevenue);
-    $('#profit-month').textContent = formatCurrency(monthlyProfit); // Fixed ID to match HTML
+    const yearStart = new Date(year, 0, 1);
+    const yearEnd = new Date(year, 11, 31);
 
-    // Also update expense section stats if visible
+    const yearlyRevenue = customers
+      .filter(c => isDateInRange(c.shootingDate, yearStart, yearEnd))
+      .reduce((sum, c) => sum + (Number(c.revenue) || 0), 0);
+
+    const yearlyExpenses = expenses
+      .filter(e => isDateInRange(e.date, yearStart, yearEnd))
+      .reduce((sum, e) => sum + (Number(e.amount) || 0), 0);
+
+    const yearlyProfit = yearlyRevenue - yearlyExpenses;
+
+    $('#stat-total').textContent = total;
+    $('#stat-monthly').textContent = monthlyShoots.length;
+    $('#stat-revenue').textContent = formatCurrency(monthlyRevenue);
+    $('#profit-month').textContent = formatCurrency(monthlyProfit);
+
     if ($('#expense-month')) $('#expense-month').textContent = formatCurrency(monthlyExpenses);
     if ($('#revenue-month')) $('#revenue-month').textContent = formatCurrency(monthlyRevenue);
     if ($('#profit-month-alt')) $('#profit-month-alt').textContent = formatCurrency(monthlyProfit);
+
+    if ($('#stat-yearly-revenue')) $('#stat-yearly-revenue').textContent = formatCurrency(yearlyRevenue);
+    if ($('#stat-yearly-profit')) $('#stat-yearly-profit').textContent = formatCurrency(yearlyProfit);
+    if ($('#yearly-revenue-label')) $('#yearly-revenue-label').textContent = `${year} Yearly Revenue`;
+    if ($('#yearly-profit-label')) $('#yearly-profit-label').textContent = `${year} Yearly Profit`;
   }
 
   // ===== Month Filter =====
@@ -1697,6 +1752,25 @@
     searchInput.addEventListener('input', renderTable);
     filterPayment.addEventListener('change', renderTable);
     filterMonth.addEventListener('change', renderTable);
+
+    if (dashboardMonthPicker) {
+      syncDashboardMonthPicker();
+      dashboardMonthPicker.addEventListener('change', (e) => {
+        if (!e.target.value) return;
+        const [year, month] = e.target.value.split('-').map(Number);
+        if (!year || !month) return;
+        selectedDashboardMonth = new Date(year, month - 1, 1);
+        updateDashboard();
+      });
+    }
+
+    if (dashboardPrevMonth) {
+      dashboardPrevMonth.addEventListener('click', () => moveDashboardMonth(-1));
+    }
+
+    if (dashboardNextMonth) {
+      dashboardNextMonth.addEventListener('click', () => moveDashboardMonth(1));
+    }
 
     // Initial render
     renderTable();
