@@ -13,6 +13,7 @@
   const EXPENSES_KEY = 'photocrm_expenses';
   const CURRENCY_KEY = 'photocrm_currency';
   const CUSTOM_FIELDS_KEY = 'photocrm_custom_fields';
+  const DEFAULT_INVOICE_MESSAGE = 'この度はありがとうございます。';
   const FREE_PLAN_LIMIT = 30;
 
   // ===== Language Management =====
@@ -258,8 +259,7 @@
   }
   // ===== Financial Helpers =====
   function getTaxSettings() {
-    const saved = localStorage.getItem(TAX_SETTINGS_KEY);
-    return saved ? JSON.parse(saved) : {
+    const defaults = {
       enabled: false,
       rate: 10,
       label: 'Tax',
@@ -270,7 +270,11 @@
       phone: '',
       bank: '',
       invoiceTemplate: 'modern',
+      invoiceFooterMessage: DEFAULT_INVOICE_MESSAGE,
     };
+
+    const saved = localStorage.getItem(TAX_SETTINGS_KEY);
+    return saved ? { ...defaults, ...JSON.parse(saved) } : defaults;
   }
 
   function saveTaxSettings(settings) {
@@ -1311,6 +1315,7 @@
     const recipientNameInput = document.getElementById('invoice-recipient-name');
     const senderContactInput = document.getElementById('invoice-sender-contact');
     const recipientContactInput = document.getElementById('invoice-recipient-contact');
+    const messageInput = document.getElementById('invoice-message');
     const today = new Date();
     const defaultDueDate = new Date();
     defaultDueDate.setDate(defaultDueDate.getDate() + 14);
@@ -1321,6 +1326,7 @@
     if (recipientNameInput) recipientNameInput.value = customer.invoiceRecipientName || customer.customerName || '';
     if (senderContactInput) senderContactInput.value = customer.invoiceSenderContact || senderProfile.contact || settings.email || '';
     if (recipientContactInput) recipientContactInput.value = customer.invoiceRecipientContact || customer.contact || '';
+    if (messageInput) messageInput.value = customer.invoiceMessage || settings.invoiceFooterMessage || DEFAULT_INVOICE_MESSAGE;
 
     const modal = document.getElementById('invoice-builder-modal');
     modal.style.display = 'flex';
@@ -1370,6 +1376,12 @@
     customer.invoiceRecipientName = document.getElementById('invoice-recipient-name')?.value?.trim() || '';
     customer.invoiceSenderContact = document.getElementById('invoice-sender-contact')?.value?.trim() || '';
     customer.invoiceRecipientContact = document.getElementById('invoice-recipient-contact')?.value?.trim() || '';
+    customer.invoiceMessage = document.getElementById('invoice-message')?.value?.trim() || DEFAULT_INVOICE_MESSAGE;
+    const settings = getTaxSettings();
+    saveTaxSettings({
+      ...settings,
+      invoiceFooterMessage: customer.invoiceMessage,
+    });
     saveInvoiceSenderProfile({
       name: customer.invoiceSenderName,
       contact: customer.invoiceSenderContact,
@@ -1385,6 +1397,7 @@
       recipientName: customer.invoiceRecipientName,
       senderContact: customer.invoiceSenderContact,
       recipientContact: customer.invoiceRecipientContact,
+      message: customer.invoiceMessage,
     });
     closeInvoiceBuilderModal();
   };
@@ -1560,6 +1573,7 @@
 
   $('#btn-save-invoice-settings').onclick = () => {
     const label = $('#tax-label').value === 'Custom' ? $('#tax-label-custom').value : $('#tax-label').value;
+    const currentSettings = getTaxSettings();
     const settings = {
       enabled: $('#tax-enabled').checked,
       rate: Number($('#tax-rate').value),
@@ -1571,6 +1585,7 @@
       phone: $('#invoice-phone').value,
       bank: $('#invoice-bank').value,
       invoiceTemplate: $('#invoice-template').value || 'modern',
+      invoiceFooterMessage: currentSettings.invoiceFooterMessage || DEFAULT_INVOICE_MESSAGE,
     };
     saveTaxSettings(settings);
     showToast(t('msgSettingsSaved'));
