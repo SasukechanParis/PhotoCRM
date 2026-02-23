@@ -1281,6 +1281,24 @@
     const items = normalizeInvoiceItems(customer.invoiceItems);
     renderInvoiceBuilderItems(items.length ? items : getDefaultInvoiceItems(customer));
 
+    const settings = getTaxSettings();
+    const issueDateInput = document.getElementById('invoice-issue-date');
+    const dueDateInput = document.getElementById('invoice-due-date');
+    const senderNameInput = document.getElementById('invoice-sender-name');
+    const recipientNameInput = document.getElementById('invoice-recipient-name');
+    const senderContactInput = document.getElementById('invoice-sender-contact');
+    const recipientContactInput = document.getElementById('invoice-recipient-contact');
+    const today = new Date();
+    const defaultDueDate = new Date();
+    defaultDueDate.setDate(defaultDueDate.getDate() + 14);
+
+    if (issueDateInput) issueDateInput.value = customer.invoiceIssueDate || today.toISOString().slice(0, 10);
+    if (dueDateInput) dueDateInput.value = customer.invoiceDueDate || defaultDueDate.toISOString().slice(0, 10);
+    if (senderNameInput) senderNameInput.value = customer.invoiceSenderName || settings.companyName || '';
+    if (recipientNameInput) recipientNameInput.value = customer.invoiceRecipientName || customer.customerName || '';
+    if (senderContactInput) senderContactInput.value = customer.invoiceSenderContact || settings.email || '';
+    if (recipientContactInput) recipientContactInput.value = customer.invoiceRecipientContact || customer.contact || '';
+
     const modal = document.getElementById('invoice-builder-modal');
     modal.style.display = 'flex';
     setTimeout(() => modal.classList.add('active'), 10);
@@ -1323,10 +1341,24 @@
     }
 
     customer.invoiceItems = items;
+    customer.invoiceIssueDate = document.getElementById('invoice-issue-date')?.value || '';
+    customer.invoiceDueDate = document.getElementById('invoice-due-date')?.value || '';
+    customer.invoiceSenderName = document.getElementById('invoice-sender-name')?.value?.trim() || '';
+    customer.invoiceRecipientName = document.getElementById('invoice-recipient-name')?.value?.trim() || '';
+    customer.invoiceSenderContact = document.getElementById('invoice-sender-contact')?.value?.trim() || '';
+    customer.invoiceRecipientContact = document.getElementById('invoice-recipient-contact')?.value?.trim() || '';
     customer.updatedAt = new Date().toISOString();
     saveCustomers(customers);
 
-    window.generateInvoicePDF(customer, 'invoice', { items });
+    window.generateInvoicePDF(customer, 'invoice', {
+      items,
+      issueDate: customer.invoiceIssueDate,
+      dueDate: customer.invoiceDueDate,
+      senderName: customer.invoiceSenderName,
+      recipientName: customer.invoiceRecipientName,
+      senderContact: customer.invoiceSenderContact,
+      recipientContact: customer.invoiceRecipientContact,
+    });
     closeInvoiceBuilderModal();
   };
 
