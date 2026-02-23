@@ -560,7 +560,7 @@
         </td>
       `;
       tr.addEventListener('click', e => {
-        if (e.target.closest('.btn-edit') || e.target.closest('.btn-del')) return;
+        if (e.target.closest('.btn-icon')) return;
         openDetail(c.id);
       });
       tbody.appendChild(tr);
@@ -853,6 +853,7 @@
     renderTasks(c);
 
     // Button actions
+    $('#detail-invoice-btn').onclick = () => { closeDetailModal(); setTimeout(() => openInvoiceBuilderModal(id), 200); };
     $('#detail-edit-btn').onclick = () => { closeDetailModal(); setTimeout(() => openModal(id), 200); };
     $('#detail-delete-btn').onclick = () => { closeDetailModal(); setTimeout(() => openConfirm(id), 200); };
 
@@ -1179,6 +1180,154 @@
     renderTasks(c);
     closeTaskModal();
     showToast('Task added');
+  };
+
+
+  // ===== Invoice Builder =====
+  let invoiceBuilderCustomerId = null;
+
+  function getDefaultInvoiceItems(customer) {
+    return [{
+      description: `${customer.plan || 'Photography'} Session`,
+      quantity: 1,
+      unitPrice: Number(customer.revenue) || 0,
+    }];
+  }
+
+  function normalizeInvoiceItems(items) {
+    return (items || []).map(item => ({
+      description: (item.description || '').trim(),
+      quantity: Math.max(0, Number(item.quantity) || 0),
+      unitPrice: Math.max(0, Number(item.unitPrice) || 0),
+    })).filter(item => item.description && item.quantity > 0);
+  }
+
+  function updateInvoiceBuilderSummary() {
+    const customer = customers.find(x => x.id === invoiceBuilderCustomerId);
+    if (!customer) return;
+
+    const rows = Array.from(document.querySelectorAll('.invoice-item-row'));
+    const items = normalizeInvoiceItems(rows.map(row => ({
+      description: row.querySelector('.invoice-item-desc').value,
+      quantity: row.querySelector('.invoice-item-qty').value,
+      unitPrice: row.querySelector('.invoice-item-unit').value,
+    })));
+
+    const subtotal = items.reduce((sum, item) => sum + (item.quantity * item.unitPrice), 0);
+    const amounts = calculateTax(subtotal);
+    const settings = getTaxSettings();
+
+    const summary = document.getElementById('invoice-builder-summary');
+    if (!summary) return;
+
+    summary.innerHTML = `
+      <div class="invoice-summary-row"><span>Subtotal</span><strong>${formatCurrency(amounts.subtotal)}</strong></div>
+      <div class="invoice-summary-row"><span>${settings.label || 'Tax'}</span><strong>${formatCurrency(amounts.tax)}</strong></div>
+      <div class="invoice-summary-row invoice-summary-total"><span>Total</span><strong>${formatCurrency(amounts.total)}</strong></div>
+    `;
+  }
+
+  function renderInvoiceBuilderItems(items = []) {
+    const container = document.getElementById('invoice-items-container');
+    if (!container) return;
+
+    container.innerHTML = '';
+    const safeItems = items.length ? items : [{ description: '', quantity: 1, unitPrice: 0 }];
+
+    safeItems.forEach((item) => {
+      const row = document.createElement('div');
+      row.className = 'invoice-item-row';
+      const amount = (Number(item.quantity) || 0) * (Number(item.unitPrice) || 0);
+
+      row.innerHTML = `
+        <input class="invoice-item-desc" type="text" value="${escapeHtml(item.description || '')}" placeholder="Item description">
+        <input class="invoice-item-qty" type="number" min="0" step="1" value="${Number(item.quantity) || 1}">
+        <input class="invoice-item-unit" type="number" min="0" step="0.01" value="${Number(item.unitPrice) || 0}">
+        <div class="invoice-item-amount">${formatCurrency(amount)}</div>
+        <button type="button" class="btn-remove-line" title="Remove">✕</button>
+      `;
+
+      row.querySelectorAll('input').forEach(input => {
+        input.addEventListener('input', () => {
+          const qty = Math.max(0, Number(row.querySelector('.invoice-item-qty').value) || 0);
+          const unitPrice = Math.max(0, Number(row.querySelector('.invoice-item-unit').value) || 0);
+          row.querySelector('.invoice-item-amount').textContent = formatCurrency(qty * unitPrice);
+          updateInvoiceBuilderSummary();
+        });
+      });
+
+      row.querySelector('.btn-remove-line').onclick = () => {
+        row.remove();
+        if (!container.children.length) renderInvoiceBuilderItems();
+        updateInvoiceBuilderSummary();
+      };
+
+      container.appendChild(row);
+    });
+
+    updateInvoiceBuilderSummary();
+  }
+
+  function openInvoiceBuilderModal(customerId) {
+    const customer = customers.find(c => c.id === customerId);
+    if (!customer) return;
+
+    invoiceBuilderCustomerId = customerId;
+    const meta = document.getElementById('invoice-customer-meta');
+    if (meta) {
+      meta.innerHTML = `<strong>${escapeHtml(customer.customerName || '—')}</strong> · ${escapeHtml(customer.contact || 'No contact')} · ${formatDate(customer.shootingDate)}`;
+    }
+
+    const items = normalizeInvoiceItems(customer.invoiceItems);
+    renderInvoiceBuilderItems(items.length ? items : getDefaultInvoiceItems(customer));
+
+    const modal = document.getElementById('invoice-builder-modal');
+    modal.style.display = 'flex';
+    setTimeout(() => modal.classList.add('active'), 10);
+  }
+
+  window.openInvoiceBuilderModal = openInvoiceBuilderModal;
+
+  window.closeInvoiceBuilderModal = function () {
+    const modal = document.getElementById('invoice-builder-modal');
+    if (!modal) return;
+    modal.classList.remove('active');
+    setTimeout(() => { modal.style.display = 'none'; }, 300);
+  };
+
+  document.getElementById('btn-add-invoice-item').onclick = () => {
+    const container = document.getElementById('invoice-items-container');
+    const rows = Array.from(container.querySelectorAll('.invoice-item-row')).map(row => ({
+      description: row.querySelector('.invoice-item-desc').value,
+      quantity: row.querySelector('.invoice-item-qty').value,
+      unitPrice: row.querySelector('.invoice-item-unit').value,
+    }));
+    rows.push({ description: '', quantity: 1, unitPrice: 0 });
+    renderInvoiceBuilderItems(rows);
+  };
+
+  document.getElementById('btn-generate-custom-invoice').onclick = () => {
+    const customer = customers.find(c => c.id === invoiceBuilderCustomerId);
+    if (!customer || !window.generateInvoicePDF) return;
+
+    const rows = Array.from(document.querySelectorAll('.invoice-item-row'));
+    const items = normalizeInvoiceItems(rows.map(row => ({
+      description: row.querySelector('.invoice-item-desc').value,
+      quantity: row.querySelector('.invoice-item-qty').value,
+      unitPrice: row.querySelector('.invoice-item-unit').value,
+    })));
+
+    if (!items.length) {
+      showToast('Please add at least one line item', 'error');
+      return;
+    }
+
+    customer.invoiceItems = items;
+    customer.updatedAt = new Date().toISOString();
+    saveCustomers(customers);
+
+    window.generateInvoicePDF(customer, 'invoice', { items });
+    closeInvoiceBuilderModal();
   };
 
   // ===== Expense Management Logic =====

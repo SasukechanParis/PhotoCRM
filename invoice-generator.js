@@ -1,144 +1,133 @@
 // Invoice & Quote PDF Generator
 
-function generateInvoicePDF(customer, type = 'invoice') {
+function generateInvoicePDF(customer, type = 'invoice', invoiceData = {}) {
     const { jsPDF } = window.jspdf;
     const doc = new jsPDF();
     const settings = getTaxSettings();
     const pageWidth = doc.internal.pageSize.getWidth();
-
     const currency = typeof getCurrencySymbol === 'function' ? getCurrencySymbol() : '$';
 
-    // Header
-    doc.setFontSize(24);
-    doc.setTextColor(139, 92, 246); // Purple
-    doc.text(type === 'invoice' ? 'INVOICE' : 'QUOTE', 20, 25);
+    const items = (invoiceData.items || customer.invoiceItems || [{
+        description: `${customer.plan || 'Photography'} Session`,
+        quantity: 1,
+        unitPrice: Number(customer.revenue) || 0,
+    }]).map(item => ({
+        description: item.description || 'Service',
+        quantity: Math.max(0, Number(item.quantity) || 0),
+        unitPrice: Math.max(0, Number(item.unitPrice) || 0),
+        get amount() { return this.quantity * this.unitPrice; }
+    })).filter(item => item.quantity > 0);
 
-    // Company info (right side)
+    const subtotalRaw = items.reduce((sum, item) => sum + item.amount, 0);
+    const amounts = calculateTax(subtotalRaw);
+
+    // Professional Header Banner
+    doc.setFillColor(31, 41, 55);
+    doc.rect(0, 0, pageWidth, 35, 'F');
+
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(22);
+    doc.setFont(undefined, 'bold');
+    doc.text(type === 'invoice' ? 'INVOICE' : 'QUOTE', 20, 20);
+
     doc.setFontSize(10);
-    doc.setTextColor(0, 0, 0);
-    const rightX = pageWidth - 20;
+    doc.setFont(undefined, 'normal');
+    doc.text(`${type === 'invoice' ? 'Invoice' : 'Quote'} #: ${customer.id}`, 20, 28);
 
-    if (settings.companyName) {
-        doc.text(settings.companyName, rightX, 25, { align: 'right' });
-    }
-    if (settings.address) {
-        const addressLines = doc.splitTextToSize(settings.address, 70);
-        doc.text(addressLines, rightX, 30, { align: 'right' });
-    }
-    if (settings.email) {
-        doc.text(settings.email, rightX, 45, { align: 'right' });
-    }
-    if (settings.phone) {
-        doc.text(settings.phone, rightX, 50, { align: 'right' });
-    }
+    doc.setFont(undefined, 'bold');
+    doc.text(settings.companyName || 'PhotoCRM Studio', pageWidth - 20, 17, { align: 'right' });
+    doc.setFont(undefined, 'normal');
+    if (settings.email) doc.text(settings.email, pageWidth - 20, 23, { align: 'right' });
+    if (settings.phone) doc.text(settings.phone, pageWidth - 20, 29, { align: 'right' });
 
-    // Invoice details
+    // Billing blocks
+    let y = 48;
+    doc.setTextColor(17, 24, 39);
+    doc.setFontSize(9);
+    doc.setFont(undefined, 'bold');
+    doc.text('Bill To', 20, y);
+    doc.text('Invoice Date', 125, y);
+    y += 6;
+
+    doc.setFont(undefined, 'normal');
     doc.setFontSize(10);
-    doc.text(`${type === 'invoice' ? 'Invoice' : 'Quote'} #: ${customer.id}`, 20, 40);
-    doc.text(`Date: ${new Date().toLocaleDateString()}`, 20, 45);
-
+    doc.text(customer.customerName || '—', 20, y);
+    if (customer.contact) doc.text(customer.contact, 20, y + 5);
+    doc.text(new Date().toLocaleDateString(), 125, y);
     if (type === 'quote') {
         const validDate = new Date();
         validDate.setDate(validDate.getDate() + 30);
-        doc.text(`Valid Until: ${validDate.toLocaleDateString()}`, 20, 50);
+        doc.text(`Valid Until: ${validDate.toLocaleDateString()}`, 125, y + 5);
     }
 
-    // Bill To
-    doc.setFontSize(12);
+    // Items table
+    const tableTop = 75;
+    const col = { desc: 20, qty: 120, unit: 142, amount: pageWidth - 20 };
+    doc.setFillColor(243, 244, 246);
+    doc.rect(20, tableTop, pageWidth - 40, 10, 'F');
+
     doc.setFont(undefined, 'bold');
-    doc.text('Bill To:', 20, 65);
+    doc.setFontSize(9);
+    doc.text('Description', col.desc + 2, tableTop + 6.5);
+    doc.text('Qty', col.qty, tableTop + 6.5, { align: 'right' });
+    doc.text('Unit Price', col.unit, tableTop + 6.5, { align: 'right' });
+    doc.text('Amount', col.amount, tableTop + 6.5, { align: 'right' });
+
+    let rowY = tableTop + 15;
     doc.setFont(undefined, 'normal');
     doc.setFontSize(10);
-    doc.text(customer.customerName, 20, 70);
-    doc.text(customer.contact, 20, 75);
 
-    // Line
-    doc.setLineWidth(0.5);
-    doc.setDrawColor(139, 92, 246);
-    doc.line(20, 85, pageWidth - 20, 85);
+    items.forEach(item => {
+        const wrapped = doc.splitTextToSize(item.description, 90);
+        const rowHeight = Math.max(8, wrapped.length * 5);
 
-    // Table header
-    doc.setFontSize(10);
+        if (rowY + rowHeight > 240) {
+            doc.addPage();
+            rowY = 25;
+        }
+
+        doc.text(wrapped, col.desc + 2, rowY);
+        doc.text(String(item.quantity), col.qty, rowY, { align: 'right' });
+        doc.text(`${currency}${item.unitPrice.toLocaleString()}`, col.unit, rowY, { align: 'right' });
+        doc.text(`${currency}${item.amount.toLocaleString()}`, col.amount, rowY, { align: 'right' });
+
+        rowY += rowHeight;
+        doc.setDrawColor(229, 231, 235);
+        doc.line(20, rowY, pageWidth - 20, rowY);
+        rowY += 4;
+    });
+
+    // Totals card
+    const totalsY = Math.max(rowY + 6, 195);
+    const boxX = pageWidth - 90;
+    doc.setFillColor(249, 250, 251);
+    doc.roundedRect(boxX, totalsY, 70, 38, 2, 2, 'F');
+
+    doc.setFontSize(9);
+    doc.text('Subtotal', boxX + 4, totalsY + 8);
+    doc.text(`${currency}${amounts.subtotal.toFixed(2)}`, boxX + 66, totalsY + 8, { align: 'right' });
+
+    doc.text(settings.label || 'Tax', boxX + 4, totalsY + 16);
+    doc.text(`${currency}${amounts.tax.toFixed(2)}`, boxX + 66, totalsY + 16, { align: 'right' });
+
     doc.setFont(undefined, 'bold');
-    doc.text('Description', 20, 95);
-    doc.text('Amount', rightX - 20, 95, { align: 'right' });
+    doc.setFontSize(11);
+    doc.text('Total', boxX + 4, totalsY + 29);
+    doc.text(`${currency}${amounts.total.toFixed(2)}`, boxX + 66, totalsY + 29, { align: 'right' });
 
-    // Line under header
-    doc.setLineWidth(0.3);
-    doc.setDrawColor(200, 200, 200);
-    doc.line(20, 98, pageWidth - 20, 98);
-
-    // Items
-    doc.setFont(undefined, 'normal');
-    let yPos = 108;
-
-    doc.text(`${customer.plan} Photography Session`, 20, yPos);
-    const revenue = parseFloat(customer.revenue) || 0;
-    doc.text(`${currency}${revenue.toFixed(2)}`, rightX - 20, yPos, { align: 'right' });
-
-    if (customer.shootingDate) {
-        yPos += 5;
-        doc.setFontSize(9);
-        doc.setTextColor(100, 100, 100);
-        doc.text(`Date: ${customer.shootingDate}`, 20, yPos);
-        doc.setTextColor(0, 0, 0);
-        doc.setFontSize(10);
-    }
-
-    if (customer.location) {
-        yPos += 5;
-        doc.setFontSize(9);
-        doc.setTextColor(100, 100, 100);
-        doc.text(`Location: ${customer.location}`, 20, yPos);
-        doc.setTextColor(0, 0, 0);
-        doc.setFontSize(10);
-    }
-
-    // Calculate totals
-    const amounts = calculateTax(revenue);
-
-    // Totals section
-    yPos = 150;
-    doc.line(rightX - 60, yPos, rightX - 20, yPos);
-
-    yPos += 10;
-    doc.text('Subtotal:', rightX - 60, yPos);
-    doc.text(`${currency}${amounts.subtotal.toFixed(2)}`, rightX - 20, yPos, { align: 'right' });
-
-    if (settings.enabled) {
-        yPos += 7;
-        doc.text(`${settings.label} (${settings.rate}%):`, rightX - 60, yPos);
-        doc.text(`${currency}${amounts.tax.toFixed(2)}`, rightX - 20, yPos, { align: 'right' });
-    }
-
-    yPos += 7;
-    doc.setLineWidth(0.5);
-    doc.line(rightX - 60, yPos, rightX - 20, yPos);
-
-    yPos += 10;
-    doc.setFont(undefined, 'bold');
-    doc.setFontSize(12);
-    doc.text('Total:', rightX - 60, yPos);
-    doc.text(`${currency}${amounts.total.toFixed(2)}`, rightX - 20, yPos, { align: 'right' });
-
-    // Payment info
     if (settings.bank && type === 'invoice') {
         doc.setFont(undefined, 'normal');
         doc.setFontSize(9);
-        yPos += 20;
-        doc.text('Payment Information:', 20, yPos);
-        yPos += 5;
-        const bankLines = doc.splitTextToSize(settings.bank, pageWidth - 40);
-        doc.text(bankLines, 20, yPos);
+        doc.text('Payment Information', 20, totalsY + 12);
+        const bankLines = doc.splitTextToSize(settings.bank, pageWidth - 120);
+        doc.text(bankLines, 20, totalsY + 18);
     }
 
-    // Footer
+    doc.setTextColor(107, 114, 128);
     doc.setFontSize(8);
-    doc.setTextColor(150, 150, 150);
-    doc.text('Thank you for your business!', pageWidth / 2, 280, { align: 'center' });
+    doc.text('Thank you for your business.', pageWidth / 2, 286, { align: 'center' });
 
-    // Save
-    const filename = `${type}-${customer.customerName.replace(/\s+/g, '-')}-${Date.now()}.pdf`;
+    const filename = `${type}-${(customer.customerName || 'customer').replace(/\s+/g, '-')}-${Date.now()}.pdf`;
     doc.save(filename);
 }
 
