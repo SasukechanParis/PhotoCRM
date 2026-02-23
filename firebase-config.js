@@ -103,6 +103,26 @@
     await batch.commit();
   }
 
+
+  function hasLocalData(payload) {
+    return Object.keys(payload).some((key) => {
+      const value = payload[key];
+      if (Array.isArray(value)) return value.length > 0;
+      if (value && typeof value === 'object') return Object.keys(value).length > 0;
+      return value !== undefined && value !== null && value !== '';
+    });
+  }
+
+  async function hasAnyCloudData(uid) {
+    const [settingsSnap, clientsSnap, expensesSnap] = await Promise.all([
+      userMetaRef(uid).get(),
+      userClientsRef(uid).limit(1).get(),
+      userExpensesRef(uid).limit(1).get(),
+    ]);
+
+    return settingsSnap.exists || !clientsSnap.empty || !expensesSnap.empty;
+  }
+
   async function migrateLocalDataToCloud(user) {
     const payload = localMigrationPayload();
     const uid = user.uid;
@@ -159,7 +179,20 @@
   async function ensureCloudData(user) {
     const migrationSnap = await userMigrationRef(user.uid).get();
     if (!migrationSnap.exists || !migrationSnap.data()?.localStorageMigrated) {
-      await migrateLocalDataToCloud(user);
+      const payload = localMigrationPayload();
+      const localExists = hasLocalData(payload);
+      const cloudExists = await hasAnyCloudData(user.uid);
+
+      if (localExists && !cloudExists) {
+        await migrateLocalDataToCloud(user);
+      } else {
+        await userMigrationRef(user.uid).set({
+          localStorageMigrated: true,
+          migratedAt: firebase.firestore.FieldValue.serverTimestamp(),
+          skipped: true,
+          reason: localExists ? 'cloud_data_already_exists' : 'no_local_data'
+        }, { merge: true });
+      }
     }
     return loadCloudDataForUser(user);
   }

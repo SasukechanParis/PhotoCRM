@@ -1,13 +1,13 @@
 {
-  "name": "PhotoCRM",
+  "name": "PhotoCRM Cloud",
   "short_name": "PhotoCRM",
-  "description": "フォトグラファー向け顧客管理アプリ",
+  "description": "フォトグラファー向けクラウドCRM",
+  "lang": "ja",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",
   "background_color": "#0f0f1a",
   "theme_color": "#8b5cf6",
-  "orientation": "any",
   "icons": [
     {
       "src": "icon.svg",

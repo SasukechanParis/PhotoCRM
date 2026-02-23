@@ -1935,10 +1935,6 @@
     const activeTab = $(`.view-tab[data-view="${savedView}"]`);
     if (activeTab) activeTab.click();
 
-    // Register SW
-    if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('./sw.js').catch(() => { });
-    }
   }
 
   function hydrateStateFromCloud() {
@@ -1970,7 +1966,7 @@
 
     if (!user) {
       if (!authReady) {
-        if (authStatus) authStatus.textContent = '🔄 ログイン結果を確認中...';
+        if (authStatus) authStatus.textContent = '🔄 ログイン状態を確認中...';
         if (loginBtn) loginBtn.style.display = 'none';
         if (logoutBtn) logoutBtn.style.display = 'none';
         if (loginScreen) loginScreen.style.display = 'none';
@@ -1979,7 +1975,7 @@
         return;
       }
 
-      if (authStatus) authStatus.textContent = '🔐 Sign in to enable cloud sync';
+      if (authStatus) authStatus.textContent = '🔐 Googleでログインしてクラウド同期を開始';
       if (loginBtn) loginBtn.style.display = '';
       if (logoutBtn) logoutBtn.style.display = 'none';
       if (loginScreen) loginScreen.style.display = 'flex';
@@ -2010,26 +2006,38 @@
     }
   }
 
+  async function bootstrapAuth() {
+    try {
+      const redirectResult = await window.FirebaseService.processRedirectResult();
+      if (redirectResult?.user) {
+        console.log('✅ Redirect login success:', redirectResult.user.uid);
+      }
+    } catch (err) {
+      console.error('Redirect login failed', err);
+      showToast('Googleログインに失敗しました。再度お試しください。');
+    } finally {
+      authReady = true;
+      await handleAuthState(window.FirebaseService.getCurrentUser());
+    }
+  }
+
+  function registerPwaServiceWorker() {
+    if (!('serviceWorker' in navigator)) return;
+    navigator.serviceWorker.register('./sw.js').catch((err) => {
+      console.warn('SW registration failed', err);
+    });
+  }
+
   // Ensure DOM is ready before initializing
   document.addEventListener('DOMContentLoaded', async () => {
     const triggerGoogleLogin = () => {
       window.FirebaseService.signInWithGoogle().catch((err) => {
         console.error(err);
-        showToast('Googleログインに失敗しました');
+        showToast('Googleログインに失敗しました。');
       });
     };
 
-    try {
-      await window.FirebaseService.processRedirectResult();
-    } catch (err) {
-      console.error('Redirect login failed', err);
-      showToast('Googleログインに失敗しました');
-    } finally {
-      authReady = true;
-      handleAuthState(window.FirebaseService.getCurrentUser()).catch((err) => {
-        console.error('Auth state refresh failed', err);
-      });
-    }
+    registerPwaServiceWorker();
 
     document.getElementById('btn-google-login')?.addEventListener('click', triggerGoogleLogin);
     document.getElementById('btn-google-login-screen')?.addEventListener('click', triggerGoogleLogin);
@@ -2039,9 +2047,11 @@
 
     window.FirebaseService.onAuthChanged((user) => {
       handleAuthState(user).catch((err) => {
-        console.error('Auth bootstrap failed', err);
+        console.error('Auth state refresh failed', err);
       });
     });
+
+    await bootstrapAuth();
   });
 
 })();
