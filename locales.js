@@ -67,6 +67,10 @@ const LOCALE = {
         legendMeeting: "打ち合わせ",
         legendInquiry: "問い合わせ",
         legendBilling: "請求",
+        calendarFilterInquiry: "問い合わせ日",
+        calendarFilterMeeting: "打ち合わせ日",
+        calendarFilterShooting: "撮影日",
+        calendarFilterBilling: "請求日",
 
         // Modal - Common
         modalEditTitle: "顧客情報を編集",
@@ -391,6 +395,10 @@ const LOCALE = {
         legendMeeting: "Meeting",
         legendInquiry: "Inquiry",
         legendBilling: "Billing",
+        calendarFilterInquiry: "Inquiry Date",
+        calendarFilterMeeting: "Meeting Date",
+        calendarFilterShooting: "Shooting Date",
+        calendarFilterBilling: "Billing Date",
 
         // Modal - Common
         modalEditTitle: "Edit Customer",
