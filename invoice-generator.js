@@ -49,6 +49,8 @@ const INVOICE_LOCALE_KEY_MAP = {
     total: 'invoicePdfTotal',
 };
 
+const DEFAULT_INVOICE_MESSAGE = 'この度はありがとうございます。';
+
 const INVOICE_TEMPLATE_STYLES = {
     modern: {
         rootClass: 'template-modern',
@@ -141,6 +143,7 @@ function buildInvoiceMarkup(type, customer, settings, invoiceModel) {
     const dueLabel = type === 'invoice' ? invoiceText('dueDate') : invoiceText('validUntil');
     const templateName = settings.invoiceTemplate || 'modern';
     const template = INVOICE_TEMPLATE_STYLES[templateName] || INVOICE_TEMPLATE_STYLES.modern;
+    const footerMessage = invoiceModel.message || settings.invoiceFooterMessage || invoiceText('thanks') || DEFAULT_INVOICE_MESSAGE;
 
     const itemsHtml = invoiceModel.items.map(item => `
         <tr>
@@ -178,7 +181,7 @@ function buildInvoiceMarkup(type, customer, settings, invoiceModel) {
                 .payment h3 { margin: 0 0 6px; font-size: 13px; color: #374151; }
                 .payment p { margin: 0; line-height: 1.6; white-space: pre-wrap; word-break: break-word; }
                 .seal-space { display: none; margin-top: 18px; margin-left: auto; width: 180px; height: 90px; border: 1px dashed #6b7280; text-align: center; line-height: 90px; color: #6b7280; font-size: 12px; }
-                .invoice-footer { text-align: center; margin-top: 28px; color: #6b7280; font-size: 12px; }
+                .invoice-footer { margin-top: 28px; padding-top: 12px; border-top: 1px solid #e5e7eb; color: #6b7280; font-size: 12px; line-height: 1.7; white-space: pre-wrap; word-break: break-word; overflow-wrap: anywhere; }
                 ${template.css}
             </style>
             <header class="invoice-header">
@@ -222,7 +225,7 @@ function buildInvoiceMarkup(type, customer, settings, invoiceModel) {
             </section>
             <div class="seal-space">SEAL</div>
             ${paymentInfoHtml}
-            <footer class="invoice-footer">${invoiceText('thanks')}</footer>
+            <footer class="invoice-footer">${escapeInvoiceHtml(footerMessage)}</footer>
         </div>
     `;
 }
@@ -304,6 +307,7 @@ async function generateInvoicePDF(customer, type = 'invoice', invoiceData = {}) 
     const recipientName = invoiceData.recipientName || customer.invoiceRecipientName || customer.customerName || '—';
     const recipientContact = invoiceData.recipientContact || customer.invoiceRecipientContact || customer.contact || '';
     const issueDate = invoiceData.issueDate || customer.invoiceIssueDate || new Date().toISOString().slice(0, 10);
+    const message = invoiceData.message || customer.invoiceMessage || settings.invoiceFooterMessage || invoiceText('thanks') || DEFAULT_INVOICE_MESSAGE;
     let dueDate = invoiceData.dueDate || customer.invoiceDueDate || '';
     if (type === 'quote') {
         const validDate = new Date(issueDate);
@@ -319,6 +323,7 @@ async function generateInvoicePDF(customer, type = 'invoice', invoiceData = {}) 
         recipientContact,
         issueDate,
         dueDate,
+        message,
         items,
         amounts,
     });
