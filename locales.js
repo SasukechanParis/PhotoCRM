@@ -23,6 +23,9 @@ const LOCALE = {
         cardMonthlyRevenue: "今月の売上",
         cardUnpaid: "入金未確認",
         cardProfit: "利益",
+        yearlyRevenueTotal: "今年の総売上",
+        yearlyExpenseTotal: "今年の総経費",
+        yearlyProfitTotal: "今年の総利益",
 
         // Tabs & Filters
         tabList: "📋 一覧",
@@ -344,6 +347,9 @@ const LOCALE = {
         cardMonthlyRevenue: "Monthly Revenue",
         cardUnpaid: "Unpaid",
         cardProfit: "Profit",
+        yearlyRevenueTotal: "Total Revenue This Year",
+        yearlyExpenseTotal: "Total Expenses This Year",
+        yearlyProfitTotal: "Total Profit This Year",
 
         // Tabs & Filters
         tabList: "📋 List",
@@ -666,6 +672,9 @@ const LOCALE = {
         cardMonthlyRevenue: "Revenus mensuels",
         cardUnpaid: "Impayés",
         cardProfit: "Profit",
+        yearlyRevenueTotal: "Revenu total de cette année",
+        yearlyExpenseTotal: "Dépenses totales de cette année",
+        yearlyProfitTotal: "Profit total de cette année",
 
         // Tabs & Filters
         tabList: "📋 Liste",
@@ -988,6 +997,9 @@ const LOCALE = {
         cardMonthlyRevenue: "本月收入",
         cardUnpaid: "未付款",
         cardProfit: "利润",
+        yearlyRevenueTotal: "今年总收入",
+        yearlyExpenseTotal: "今年总支出",
+        yearlyProfitTotal: "今年总利润",
 
         // Tabs & Filters
         tabList: "📋 列表",
@@ -1310,6 +1322,9 @@ const LOCALE = {
         cardMonthlyRevenue: "本月收入",
         cardUnpaid: "未付款",
         cardProfit: "利潤",
+        yearlyRevenueTotal: "今年總收入",
+        yearlyExpenseTotal: "今年總支出",
+        yearlyProfitTotal: "今年總利潤",
 
         // Tabs & Filters
         tabList: "📋 列表",
@@ -1632,6 +1647,9 @@ const LOCALE = {
         cardMonthlyRevenue: "이번 달 매출",
         cardUnpaid: "미결제",
         cardProfit: "수익",
+        yearlyRevenueTotal: "올해 총매출",
+        yearlyExpenseTotal: "올해 총경비",
+        yearlyProfitTotal: "올해 총이익",
 
         // Tabs & Filters
         tabList: "📋 목록",

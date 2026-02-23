@@ -489,10 +489,37 @@
     };
   }
 
-  function isDateInRange(dateStr, start, end) {
-    if (!dateStr) return false;
+  function parseDateParts(dateStr) {
+    if (!dateStr) return null;
+
+    const normalized = String(dateStr).trim().replace(/[年月]/g, '-').replace(/[日]/g, '');
+    const match = normalized.match(/(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})/);
+    if (match) {
+      return {
+        year: Number(match[1]),
+        month: Number(match[2]) - 1,
+        day: Number(match[3]),
+      };
+    }
+
     const date = new Date(dateStr);
-    return !Number.isNaN(date.getTime()) && date >= start && date <= end;
+    if (Number.isNaN(date.getTime())) return null;
+
+    return {
+      year: date.getFullYear(),
+      month: date.getMonth(),
+      day: date.getDate(),
+    };
+  }
+
+  function isInYearMonth(dateStr, year, month) {
+    const parts = parseDateParts(dateStr);
+    return !!parts && parts.year === year && parts.month === month;
+  }
+
+  function isInYear(dateStr, year) {
+    const parts = parseDateParts(dateStr);
+    return !!parts && parts.year === year;
   }
 
   function syncDashboardMonthPicker() {
@@ -513,26 +540,23 @@
 
   function updateDashboard() {
     const total = customers.length;
-    const { year, start, end } = getMonthRange(selectedDashboardMonth);
+    const { year, month } = getMonthRange(selectedDashboardMonth);
 
-    const monthlyShoots = customers.filter(c => isDateInRange(c.shootingDate, start, end));
+    const monthlyShoots = customers.filter(c => isInYearMonth(c.shootingDate, year, month));
     const monthlyRevenue = monthlyShoots.reduce((sum, c) => sum + (Number(c.revenue) || 0), 0);
 
     const expenses = getExpenses();
     const monthlyExpenses = expenses
-      .filter(e => isDateInRange(e.date, start, end))
+      .filter(e => isInYearMonth(e.date, year, month))
       .reduce((sum, e) => sum + (Number(e.amount) || 0), 0);
     const monthlyProfit = monthlyRevenue - monthlyExpenses;
 
-    const yearStart = new Date(year, 0, 1);
-    const yearEnd = new Date(year, 11, 31);
-
     const yearlyRevenue = customers
-      .filter(c => isDateInRange(c.shootingDate, yearStart, yearEnd))
+      .filter(c => isInYear(c.shootingDate, year))
       .reduce((sum, c) => sum + (Number(c.revenue) || 0), 0);
 
     const yearlyExpenses = expenses
-      .filter(e => isDateInRange(e.date, yearStart, yearEnd))
+      .filter(e => isInYear(e.date, year))
       .reduce((sum, e) => sum + (Number(e.amount) || 0), 0);
 
     const yearlyProfit = yearlyRevenue - yearlyExpenses;
@@ -548,8 +572,10 @@
 
     if ($('#stat-yearly-revenue')) $('#stat-yearly-revenue').textContent = formatCurrency(yearlyRevenue);
     if ($('#stat-yearly-profit')) $('#stat-yearly-profit').textContent = formatCurrency(yearlyProfit);
-    if ($('#yearly-revenue-label')) $('#yearly-revenue-label').textContent = `${year} Yearly Revenue`;
-    if ($('#yearly-profit-label')) $('#yearly-profit-label').textContent = `${year} Yearly Profit`;
+    if ($('#stat-yearly-expense')) $('#stat-yearly-expense').textContent = formatCurrency(yearlyExpenses);
+    if ($('#yearly-revenue-label')) $('#yearly-revenue-label').textContent = t('yearlyRevenueTotal');
+    if ($('#yearly-profit-label')) $('#yearly-profit-label').textContent = t('yearlyProfitTotal');
+    if ($('#yearly-expense-label')) $('#yearly-expense-label').textContent = t('yearlyExpenseTotal');
   }
 
   // ===== Month Filter =====
