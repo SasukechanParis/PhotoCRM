@@ -147,6 +147,35 @@ body {
   transition: background-color var(--transition), color var(--transition);
 }
 
+.login-screen {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+.login-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  max-width: 460px;
+  width: 100%;
+  padding: 40px 32px;
+  text-align: center;
+  box-shadow: var(--shadow);
+}
+
+.login-logo {
+  font-size: 42px;
+  margin-bottom: 12px;
+}
+
+.login-card p {
+  color: var(--text-secondary);
+  margin: 10px 0 24px;
+}
+
 .auth-banner {
   display: flex;
   justify-content: space-between;
