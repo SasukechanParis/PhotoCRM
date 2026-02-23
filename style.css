@@ -147,6 +147,28 @@ body {
   transition: background-color var(--transition), color var(--transition);
 }
 
+.auth-banner {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 20px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-card);
+  position: sticky;
+  top: 0;
+  z-index: 20;
+}
+
+.auth-status {
+  font-size: 14px;
+  color: var(--text-secondary);
+}
+
+.auth-actions {
+  display: flex;
+  gap: 8px;
+}
+
 .app-container {
   max-width: 1440px;
   margin: 0 auto;

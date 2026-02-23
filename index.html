@@ -22,6 +22,13 @@
 </head>
 
 <body>
+  <div class="auth-banner" id="auth-banner">
+    <div class="auth-status" id="auth-status">🔐 Sign in to enable cloud sync</div>
+    <div class="auth-actions">
+      <button class="btn btn-primary btn-sm" id="btn-google-login">Google Login</button>
+      <button class="btn btn-secondary btn-sm" id="btn-logout" style="display:none;">Logout</button>
+    </div>
+  </div>
   <div class="app-container">
 
     <!-- ===== Header ===== -->
@@ -799,6 +806,10 @@
   <script>console.log('📦 Loading PhotoCRM v2.2.3 (Fixed btoa encoding error)...');</script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+  <script src="firebase-config.js"></script>
   <script src="locales.js"></script>
   <script src="invoice-generator.js"></script>
   <script src="team-manager.js"></script>
