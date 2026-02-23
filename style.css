@@ -895,6 +895,107 @@ tbody tr:hover {
   line-height: 1.6;
 }
 
+.invoice-customer-meta {
+  margin-bottom: 1rem;
+  padding: 0.85rem 1rem;
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  background: var(--bg-input);
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+}
+
+.invoice-item-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.75rem;
+}
+
+.invoice-item-header h4 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.invoice-item-table {
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.invoice-item-table-head,
+.invoice-item-row {
+  display: grid;
+  grid-template-columns: 3fr 0.8fr 1.2fr 1.2fr 44px;
+  gap: 10px;
+  align-items: center;
+  padding: 12px;
+}
+
+.invoice-item-table-head {
+  background: var(--bg-input);
+  border-bottom: 1px solid var(--border-color);
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+}
+
+.invoice-item-row {
+  border-bottom: 1px solid var(--border-color);
+}
+
+.invoice-item-row:last-child {
+  border-bottom: none;
+}
+
+.invoice-item-row input {
+  width: 100%;
+  padding: 9px 10px;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background: var(--bg-app);
+  color: var(--text-primary);
+}
+
+.invoice-item-amount {
+  font-weight: 700;
+  text-align: right;
+}
+
+.btn-remove-line {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 1px solid var(--border-color);
+  background: transparent;
+  color: var(--danger);
+  cursor: pointer;
+}
+
+.invoice-summary {
+  margin-top: 1rem;
+  margin-left: auto;
+  width: min(100%, 320px);
+  display: grid;
+  gap: 0.45rem;
+}
+
+.invoice-summary-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.95rem;
+}
+
+.invoice-summary-total {
+  margin-top: 0.5rem;
+  padding-top: 0.5rem;
+  border-top: 1px solid var(--border-color);
+  font-size: 1.1rem;
+  font-weight: 700;
+}
+
 /* Forms in Modal */
 .form-grid {
   display: grid;
@@ -952,6 +1053,23 @@ tbody tr:hover {
   .modal-footer .btn {
     width: 100%;
     justify-content: center;
+  }
+
+  .invoice-item-table-head,
+  .invoice-item-row {
+    grid-template-columns: 1fr;
+  }
+
+  .invoice-item-table-head {
+    display: none;
+  }
+
+  .invoice-item-row {
+    gap: 8px;
+  }
+
+  .invoice-item-amount {
+    text-align: left;
   }
 }
 

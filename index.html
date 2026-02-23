@@ -407,6 +407,9 @@
         <button class="btn btn-secondary" onclick="closeDetailModal()">
           <span data-i18n="close">Close</span>
         </button>
+        <button class="btn btn-secondary" id="detail-invoice-btn">
+          <span data-i18n="generateInvoice">📄 Create Invoice</span>
+        </button>
         <button class="btn btn-primary" id="detail-edit-btn">
           <span data-i18n="edit">✏️ Edit</span>
         </button>
@@ -665,6 +668,41 @@
       <div class="modal-footer">
         <button class="btn btn-secondary" onclick="closeExpenseModal()" data-i18n="cancel">Cancel</button>
         <button class="btn btn-primary" onclick="window.saveExpense()" data-i18n="addExpense">Add Expense</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Invoice Builder Modal -->
+  <div class="modal-overlay" id="invoice-builder-modal" style="display:none;">
+    <div class="modal" style="max-width: 860px;">
+      <div class="modal-header">
+        <h3 class="modal-title">
+          <span class="modal-icon">🧾</span>
+          <span data-i18n="generateInvoice">Create Invoice</span>
+        </h3>
+        <button class="btn-close" onclick="closeInvoiceBuilderModal()">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="invoice-customer-meta" id="invoice-customer-meta"></div>
+        <div class="invoice-item-header">
+          <h4>Line Items</h4>
+          <button class="btn btn-secondary btn-sm" id="btn-add-invoice-item">＋ Add Item</button>
+        </div>
+        <div class="invoice-item-table">
+          <div class="invoice-item-table-head">
+            <span>Description</span>
+            <span>Qty</span>
+            <span>Unit Price</span>
+            <span>Amount</span>
+            <span></span>
+          </div>
+          <div id="invoice-items-container"></div>
+        </div>
+        <div class="invoice-summary" id="invoice-builder-summary"></div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeInvoiceBuilderModal()" data-i18n="cancel">Cancel</button>
+        <button class="btn btn-primary" id="btn-generate-custom-invoice">📄 Generate PDF</button>
       </div>
     </div>
   </div>
