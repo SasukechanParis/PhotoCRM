@@ -2008,11 +2008,13 @@
 
   async function bootstrapAuth() {
     try {
+      await window.FirebaseService.whenReady();
       const redirectResult = await window.FirebaseService.processRedirectResult();
       if (redirectResult?.user) {
         console.log('✅ Redirect login success:', redirectResult.user.uid);
       }
     } catch (err) {
+      console.error('Firebase Auth Error:', err.code, err.message);
       console.error('Redirect login failed', err);
       showToast('Googleログインに失敗しました。再度お試しください。');
     } finally {
@@ -2030,8 +2032,11 @@
 
   // Ensure DOM is ready before initializing
   document.addEventListener('DOMContentLoaded', async () => {
+    await window.FirebaseService.whenReady();
+
     const triggerGoogleLogin = () => {
       window.FirebaseService.signInWithGoogle().catch((err) => {
+        console.error('Firebase Auth Error:', err.code, err.message);
         console.error(err);
         showToast('Googleログインに失敗しました。');
       });
@@ -2045,11 +2050,11 @@
       window.FirebaseService.signOut();
     });
 
-    window.FirebaseService.onAuthChanged((user) => {
+    (await window.FirebaseService.onAuthChanged((user) => {
       handleAuthState(user).catch((err) => {
         console.error('Auth state refresh failed', err);
       });
-    });
+    }));
 
     await bootstrapAuth();
   });

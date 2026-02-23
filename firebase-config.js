@@ -10,9 +10,15 @@
     appId: "1:1022053730718:web:ca1349d94e1cac107b2e8f"
   };
 
-  firebase.initializeApp(firebaseConfig);
-  const auth = firebase.auth();
-  const db = firebase.firestore();
+  let auth;
+  let db;
+  const firebaseInitPromise = (async () => {
+    if (!firebase.apps.length) {
+      firebase.initializeApp(firebaseConfig);
+    }
+    auth = firebase.auth();
+    db = firebase.firestore();
+  })();
   const cache = {};
 
   const SETTINGS_KEYS = [
@@ -36,6 +42,10 @@
 
   let redirectResolved = false;
   let redirectResultPromise = null;
+
+  async function ensureInitialized() {
+    await firebaseInitPromise;
+  }
 
   function parseLocalValue(raw) {
     try {
@@ -67,6 +77,7 @@
   }
 
   function userRootRef(uid) {
+    if (!db) throw new Error('Firebase is not initialized yet.');
     return db.collection('users').doc(uid);
   }
 
@@ -220,7 +231,8 @@
     }, { merge: true });
   }
 
-  function processRedirectResult() {
+  async function processRedirectResult() {
+    await ensureInitialized();
     if (redirectResultPromise) return redirectResultPromise;
     redirectResultPromise = auth.getRedirectResult()
       .then((result) => {
@@ -235,8 +247,10 @@
   }
 
   window.FirebaseService = {
-    auth,
-    db,
+    async whenReady() {
+      await ensureInitialized();
+      return { auth, db };
+    },
     getCurrentUser() {
       return auth.currentUser;
     },
@@ -253,21 +267,27 @@
       return processRedirectResult();
     },
     async loadForUser(user) {
+      await ensureInitialized();
       return ensureCloudData(user);
     },
     async saveKey(key, value) {
+      await ensureInitialized();
       const user = auth.currentUser;
       if (!user) return;
       return updateKey(user, key, value);
     },
-    signInWithGoogle() {
+    async signInWithGoogle() {
+      await ensureInitialized();
       const provider = new firebase.auth.GoogleAuthProvider();
+      provider.setCustomParameters({ prompt: 'select_account' });
       return auth.signInWithRedirect(provider);
     },
-    signOut() {
+    async signOut() {
+      await ensureInitialized();
       return auth.signOut();
     },
-    onAuthChanged(callback) {
+    async onAuthChanged(callback) {
+      await ensureInitialized();
       return auth.onAuthStateChanged(callback);
     }
   };
