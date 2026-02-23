@@ -43,13 +43,6 @@ const INVOICE_I18N = {
     }
 };
 
-const CJK_FONT_URLS = [
-    'https://cdn.jsdelivr.net/gh/notofonts/noto-cjk@main/Sans/OTF/Japanese/NotoSansCJKjp-Regular.otf',
-    'https://raw.githubusercontent.com/notofonts/noto-cjk/main/Sans/OTF/Japanese/NotoSansCJKjp-Regular.otf'
-];
-const CJK_FONT_CACHE_KEY = 'photocrm_invoice_font_notosanscjk_regular_base64';
-let cjkFontBase64 = null;
-
 function getInvoiceLang() {
     return document.documentElement.lang || localStorage.getItem('photocrm_lang') || 'en';
 }
@@ -65,102 +58,161 @@ function formatInvoiceDate(value) {
     return new Intl.DateTimeFormat(getInvoiceLang()).format(date);
 }
 
-function containsUnicodeText(value) {
-    return /[^\u0000-\u00ff]/.test(String(value || ''));
+function escapeInvoiceHtml(value) {
+    return String(value || '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
 }
 
-function arrayBufferToBase64(arrayBuffer) {
-    const bytes = new Uint8Array(arrayBuffer);
-    let binary = '';
-    const chunkSize = 0x8000;
-    for (let i = 0; i < bytes.length; i += chunkSize) {
-        binary += String.fromCharCode.apply(null, bytes.subarray(i, i + chunkSize));
+function buildInvoiceMarkup(type, customer, settings, invoiceModel) {
+    const currency = typeof getCurrencySymbol === 'function' ? getCurrencySymbol() : '$';
+    const numberLabel = type === 'invoice' ? invoiceText('numberLabelInvoice') : invoiceText('numberLabelQuote');
+    const title = type === 'invoice' ? invoiceText('invoiceTitle') : invoiceText('quoteTitle');
+    const dueLabel = type === 'invoice' ? invoiceText('dueDate') : invoiceText('validUntil');
+
+    const itemsHtml = invoiceModel.items.map(item => `
+        <tr>
+            <td class="item-desc">${escapeInvoiceHtml(item.description)}</td>
+            <td class="item-num">${item.quantity}</td>
+            <td class="item-num">${escapeInvoiceHtml(`${currency}${item.unitPrice.toLocaleString(getInvoiceLang())}`)}</td>
+            <td class="item-num">${escapeInvoiceHtml(`${currency}${item.amount.toLocaleString(getInvoiceLang())}`)}</td>
+        </tr>
+    `).join('');
+
+    const paymentInfoHtml = settings.bank && type === 'invoice'
+        ? `<section class="payment"><h3>${invoiceText('paymentInfo')}</h3><p>${escapeInvoiceHtml(settings.bank).replace(/\n/g, '<br>')}</p></section>`
+        : '';
+
+    return `
+        <div class="invoice-print-root">
+            <style>
+                .invoice-print-root { width: 794px; background: #fff; color: #111827; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Yu Gothic', sans-serif; padding: 40px; box-sizing: border-box; }
+                .invoice-header { background: #1f2937; color: #fff; border-radius: 10px; padding: 24px; display: flex; justify-content: space-between; align-items: flex-start; gap: 20px; }
+                .invoice-header h1 { margin: 0; font-size: 32px; letter-spacing: 0.03em; }
+                .invoice-header p { margin: 6px 0 0; font-size: 14px; }
+                .invoice-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; margin-top: 24px; }
+                .invoice-card { background: #f9fafb; border-radius: 8px; padding: 12px; min-height: 90px; }
+                .invoice-card h3 { margin: 0 0 8px; font-size: 13px; color: #4b5563; }
+                .invoice-card p { margin: 0; font-size: 14px; line-height: 1.5; white-space: pre-wrap; word-break: break-word; }
+                .item-table { width: 100%; border-collapse: collapse; margin-top: 24px; table-layout: fixed; }
+                .item-table th, .item-table td { border-bottom: 1px solid #e5e7eb; padding: 10px 8px; font-size: 13px; vertical-align: top; }
+                .item-table th { background: #f3f4f6; text-align: left; color: #374151; }
+                .item-table .item-desc { width: 55%; white-space: pre-wrap; word-break: break-word; }
+                .item-table .item-num { text-align: right; white-space: nowrap; }
+                .summary { margin-top: 20px; margin-left: auto; width: 320px; background: #f9fafb; border-radius: 8px; padding: 14px; }
+                .summary-row { display: flex; justify-content: space-between; margin: 6px 0; font-size: 14px; }
+                .summary-row.total { margin-top: 12px; padding-top: 10px; border-top: 1px solid #d1d5db; font-size: 18px; font-weight: 700; }
+                .payment { margin-top: 18px; font-size: 13px; }
+                .payment h3 { margin: 0 0 6px; font-size: 13px; color: #374151; }
+                .payment p { margin: 0; line-height: 1.6; white-space: pre-wrap; word-break: break-word; }
+                .invoice-footer { text-align: center; margin-top: 28px; color: #6b7280; font-size: 12px; }
+            </style>
+            <header class="invoice-header">
+                <div>
+                    <h1>${escapeInvoiceHtml(title)}</h1>
+                    <p>${escapeInvoiceHtml(`${numberLabel}: ${customer.id}`)}</p>
+                </div>
+                <div style="text-align: right; font-size: 14px; line-height: 1.5;">
+                    <strong>${escapeInvoiceHtml(invoiceModel.senderName)}</strong><br>
+                    ${escapeInvoiceHtml(invoiceModel.senderContact || '')}
+                </div>
+            </header>
+            <section class="invoice-grid">
+                <article class="invoice-card">
+                    <h3>${invoiceText('billTo')}</h3>
+                    <p><strong>${escapeInvoiceHtml(invoiceModel.recipientName)}</strong>${invoiceModel.recipientContact ? `<br>${escapeInvoiceHtml(invoiceModel.recipientContact)}` : ''}</p>
+                </article>
+                <article class="invoice-card">
+                    <h3>${invoiceText('from')}</h3>
+                    <p><strong>${escapeInvoiceHtml(invoiceModel.senderName)}</strong>${invoiceModel.senderContact ? `<br>${escapeInvoiceHtml(invoiceModel.senderContact)}` : ''}</p>
+                </article>
+                <article class="invoice-card">
+                    <h3>${invoiceText('invoiceDate')}</h3>
+                    <p>${escapeInvoiceHtml(formatInvoiceDate(invoiceModel.issueDate))}<br>${escapeInvoiceHtml(`${dueLabel}: ${formatInvoiceDate(invoiceModel.dueDate)}`)}</p>
+                </article>
+            </section>
+            <table class="item-table">
+                <thead>
+                    <tr>
+                        <th>${invoiceText('description')}</th>
+                        <th style="text-align:right;">${invoiceText('qty')}</th>
+                        <th style="text-align:right;">${invoiceText('unitPrice')}</th>
+                        <th style="text-align:right;">${invoiceText('amount')}</th>
+                    </tr>
+                </thead>
+                <tbody>${itemsHtml}</tbody>
+            </table>
+            <section class="summary">
+                <div class="summary-row"><span>${invoiceText('subtotal')}</span><span>${escapeInvoiceHtml(`${currency}${invoiceModel.amounts.subtotal.toFixed(2)}`)}</span></div>
+                <div class="summary-row"><span>${escapeInvoiceHtml(settings.label || 'Tax')}</span><span>${escapeInvoiceHtml(`${currency}${invoiceModel.amounts.tax.toFixed(2)}`)}</span></div>
+                <div class="summary-row total"><span>${invoiceText('total')}</span><span>${escapeInvoiceHtml(`${currency}${invoiceModel.amounts.total.toFixed(2)}`)}</span></div>
+            </section>
+            ${paymentInfoHtml}
+            <footer class="invoice-footer">${invoiceText('thanks')}</footer>
+        </div>
+    `;
+}
+
+async function renderInvoiceDomToPdf(markup, filename) {
+    if (!window.html2canvas) {
+        throw new Error('html2canvas is not loaded.');
     }
 
-    return btoa(binary);
-}
-
-function registerCjkFont(doc, base64) {
-    doc.addFileToVFS('NotoSansCJKjp-Regular.otf', base64);
-    doc.addFont('NotoSansCJKjp-Regular.otf', 'NotoSansCJKjp', 'normal');
-    doc.setFont('NotoSansCJKjp', 'normal');
-}
-
-async function getCjkFontBase64() {
-    if (cjkFontBase64) return cjkFontBase64;
+    const { jsPDF } = window.jspdf;
+    const wrapper = document.createElement('div');
+    wrapper.style.position = 'fixed';
+    wrapper.style.left = '-10000px';
+    wrapper.style.top = '0';
+    wrapper.style.zIndex = '-1';
+    wrapper.innerHTML = markup;
+    document.body.appendChild(wrapper);
 
     try {
-        const cached = localStorage.getItem(CJK_FONT_CACHE_KEY);
-        if (cached) {
-            cjkFontBase64 = cached;
-            return cjkFontBase64;
+        const target = wrapper.firstElementChild;
+        const renderScale = Math.min(3, Math.max(2, window.devicePixelRatio || 1));
+        const canvas = await window.html2canvas(target, {
+            scale: renderScale,
+            useCORS: true,
+            backgroundColor: '#ffffff',
+        });
+
+        const doc = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4' });
+        const pageWidth = doc.internal.pageSize.getWidth();
+        const pageHeight = doc.internal.pageSize.getHeight();
+
+        const pagePixelHeight = Math.floor(canvas.width * (pageHeight / pageWidth));
+        let renderedHeight = 0;
+        let pageIndex = 0;
+
+        while (renderedHeight < canvas.height) {
+            const sliceHeight = Math.min(pagePixelHeight, canvas.height - renderedHeight);
+            const pageCanvas = document.createElement('canvas');
+            pageCanvas.width = canvas.width;
+            pageCanvas.height = sliceHeight;
+
+            const ctx = pageCanvas.getContext('2d');
+            ctx.drawImage(canvas, 0, renderedHeight, canvas.width, sliceHeight, 0, 0, canvas.width, sliceHeight);
+
+            const sliceData = pageCanvas.toDataURL('image/jpeg', 0.95);
+            const sliceHeightInPdf = (sliceHeight * pageWidth) / canvas.width;
+            if (pageIndex > 0) doc.addPage();
+            doc.addImage(sliceData, 'JPEG', 0, 0, pageWidth, sliceHeightInPdf, undefined, 'FAST');
+
+            renderedHeight += sliceHeight;
+            pageIndex += 1;
         }
-    } catch (err) {
-        console.warn('Unable to read cached CJK font.', err);
-    }
 
-    let lastError = null;
-    for (const fontUrl of CJK_FONT_URLS) {
-        try {
-            const response = await fetch(fontUrl);
-            if (!response.ok) {
-                throw new Error(`HTTP ${response.status}`);
-            }
-
-            const arrayBuffer = await response.arrayBuffer();
-            cjkFontBase64 = arrayBufferToBase64(arrayBuffer);
-
-            try {
-                localStorage.setItem(CJK_FONT_CACHE_KEY, cjkFontBase64);
-            } catch (err) {
-                console.warn('Unable to cache CJK font locally.', err);
-            }
-
-            return cjkFontBase64;
-        } catch (err) {
-            lastError = err;
-        }
-    }
-
-    throw lastError || new Error('Failed to load CJK font');
-}
-
-async function loadCjkFont(doc) {
-    const base64 = await getCjkFontBase64();
-    registerCjkFont(doc, base64);
-}
-
-function setInvoiceFontStyle(doc, fontMode, style = 'normal') {
-    if (fontMode === 'cjk') {
-        doc.setFont('NotoSansCJKjp', 'normal');
-        return;
-    }
-
-    doc.setFont('helvetica', style);
-}
-
-async function configureInvoiceFont(doc, sampleTexts = []) {
-    const lang = getInvoiceLang();
-    const languageNeedsCjk = ['ja', 'zh', 'zh-TW', 'ko'].includes(lang);
-    const contentNeedsCjk = sampleTexts.some(containsUnicodeText);
-    if (!languageNeedsCjk && !contentNeedsCjk) return 'latin';
-
-    try {
-        await loadCjkFont(doc);
-        return 'cjk';
-    } catch (err) {
-        console.warn('CJK font load failed, using fallback font.', err);
-        return 'latin';
+        doc.save(filename);
+    } finally {
+        wrapper.remove();
     }
 }
 
 async function generateInvoicePDF(customer, type = 'invoice', invoiceData = {}) {
-    const { jsPDF } = window.jspdf;
-    const doc = new jsPDF();
-
     const settings = getTaxSettings();
-    const pageWidth = doc.internal.pageSize.getWidth();
-    const currency = typeof getCurrencySymbol === 'function' ? getCurrencySymbol() : '$';
 
     const items = (invoiceData.items || customer.invoiceItems || [{
         description: `${customer.plan || invoiceText('defaultService')}`,
@@ -181,133 +233,26 @@ async function generateInvoicePDF(customer, type = 'invoice', invoiceData = {}) 
     const recipientName = invoiceData.recipientName || customer.invoiceRecipientName || customer.customerName || '—';
     const recipientContact = invoiceData.recipientContact || customer.invoiceRecipientContact || customer.contact || '';
     const issueDate = invoiceData.issueDate || customer.invoiceIssueDate || new Date().toISOString().slice(0, 10);
-    const dueDate = invoiceData.dueDate || customer.invoiceDueDate || '';
-    const fontMode = await configureInvoiceFont(doc, [
+    let dueDate = invoiceData.dueDate || customer.invoiceDueDate || '';
+    if (type === 'quote') {
+        const validDate = new Date(issueDate);
+        validDate.setDate(validDate.getDate() + 30);
+        dueDate = validDate;
+    }
+
+    const filename = `${type}-${(recipientName || 'customer').replace(/\s+/g, '-')}-${Date.now()}.pdf`;
+    const markup = buildInvoiceMarkup(type, customer, settings, {
         senderName,
         senderContact,
         recipientName,
         recipientContact,
-        settings.label,
-        settings.bank,
-        ...items.map(item => item.description),
-        ...Object.values(INVOICE_I18N[getInvoiceLang()] || {}),
-    ]);
-
-    // Header
-    doc.setFillColor(31, 41, 55);
-    doc.rect(0, 0, pageWidth, 35, 'F');
-
-    doc.setTextColor(255, 255, 255);
-    doc.setFontSize(22);
-    setInvoiceFontStyle(doc, fontMode, 'bold');
-    doc.text(type === 'invoice' ? invoiceText('invoiceTitle') : invoiceText('quoteTitle'), 20, 20);
-
-    doc.setFontSize(10);
-    setInvoiceFontStyle(doc, fontMode, 'normal');
-    doc.text(`${type === 'invoice' ? invoiceText('numberLabelInvoice') : invoiceText('numberLabelQuote')}: ${customer.id}`, 20, 28);
-
-    setInvoiceFontStyle(doc, fontMode, 'bold');
-    doc.text(senderName, pageWidth - 20, 17, { align: 'right' });
-    setInvoiceFontStyle(doc, fontMode, 'normal');
-    if (senderContact) doc.text(senderContact, pageWidth - 20, 23, { align: 'right' });
-
-    // Billing blocks
-    let y = 48;
-    doc.setTextColor(17, 24, 39);
-    doc.setFontSize(9);
-    setInvoiceFontStyle(doc, fontMode, 'bold');
-    doc.text(invoiceText('billTo'), 20, y);
-    doc.text(invoiceText('from'), 72, y);
-    doc.text(invoiceText('invoiceDate'), 125, y);
-    y += 6;
-
-    setInvoiceFontStyle(doc, fontMode, 'normal');
-    doc.setFontSize(10);
-    doc.text(recipientName, 20, y);
-    if (recipientContact) doc.text(recipientContact, 20, y + 5);
-    doc.text(senderName, 72, y);
-    if (senderContact) doc.text(senderContact, 72, y + 5);
-    doc.text(formatInvoiceDate(issueDate), 125, y);
-
-    if (dueDate && type === 'invoice') {
-        doc.text(`${invoiceText('dueDate')}: ${formatInvoiceDate(dueDate)}`, 125, y + 5);
-    }
-
-    if (type === 'quote') {
-        const validDate = new Date(issueDate);
-        validDate.setDate(validDate.getDate() + 30);
-        doc.text(`${invoiceText('validUntil')}: ${formatInvoiceDate(validDate)}`, 125, y + 5);
-    }
-
-    // Items table
-    const tableTop = 75;
-    const col = { desc: 20, qty: 120, unit: 142, amount: pageWidth - 20 };
-    doc.setFillColor(243, 244, 246);
-    doc.rect(20, tableTop, pageWidth - 40, 10, 'F');
-
-    setInvoiceFontStyle(doc, fontMode, 'bold');
-    doc.setFontSize(9);
-    doc.text(invoiceText('description'), col.desc + 2, tableTop + 6.5);
-    doc.text(invoiceText('qty'), col.qty, tableTop + 6.5, { align: 'right' });
-    doc.text(invoiceText('unitPrice'), col.unit, tableTop + 6.5, { align: 'right' });
-    doc.text(invoiceText('amount'), col.amount, tableTop + 6.5, { align: 'right' });
-
-    let rowY = tableTop + 15;
-    setInvoiceFontStyle(doc, fontMode, 'normal');
-    doc.setFontSize(10);
-
-    items.forEach(item => {
-        const wrapped = doc.splitTextToSize(item.description, 90);
-        const rowHeight = Math.max(8, wrapped.length * 5);
-
-        if (rowY + rowHeight > 240) {
-            doc.addPage();
-            rowY = 25;
-        }
-
-        doc.text(wrapped, col.desc + 2, rowY);
-        doc.text(String(item.quantity), col.qty, rowY, { align: 'right' });
-        doc.text(`${currency}${item.unitPrice.toLocaleString(getInvoiceLang())}`, col.unit, rowY, { align: 'right' });
-        doc.text(`${currency}${item.amount.toLocaleString(getInvoiceLang())}`, col.amount, rowY, { align: 'right' });
-
-        rowY += rowHeight;
-        doc.setDrawColor(229, 231, 235);
-        doc.line(20, rowY, pageWidth - 20, rowY);
-        rowY += 4;
+        issueDate,
+        dueDate,
+        items,
+        amounts,
     });
 
-    // Totals card
-    const totalsY = Math.max(rowY + 6, 195);
-    const boxX = pageWidth - 90;
-    doc.setFillColor(249, 250, 251);
-    doc.roundedRect(boxX, totalsY, 70, 38, 2, 2, 'F');
-
-    doc.setFontSize(9);
-    doc.text(invoiceText('subtotal'), boxX + 4, totalsY + 8);
-    doc.text(`${currency}${amounts.subtotal.toFixed(2)}`, boxX + 66, totalsY + 8, { align: 'right' });
-
-    doc.text(settings.label || 'Tax', boxX + 4, totalsY + 16);
-    doc.text(`${currency}${amounts.tax.toFixed(2)}`, boxX + 66, totalsY + 16, { align: 'right' });
-
-    setInvoiceFontStyle(doc, fontMode, 'bold');
-    doc.setFontSize(11);
-    doc.text(invoiceText('total'), boxX + 4, totalsY + 29);
-    doc.text(`${currency}${amounts.total.toFixed(2)}`, boxX + 66, totalsY + 29, { align: 'right' });
-
-    if (settings.bank && type === 'invoice') {
-        setInvoiceFontStyle(doc, fontMode, 'normal');
-        doc.setFontSize(9);
-        doc.text(invoiceText('paymentInfo'), 20, totalsY + 12);
-        const bankLines = doc.splitTextToSize(settings.bank, pageWidth - 120);
-        doc.text(bankLines, 20, totalsY + 18);
-    }
-
-    doc.setTextColor(107, 114, 128);
-    doc.setFontSize(8);
-    doc.text(invoiceText('thanks'), pageWidth / 2, 286, { align: 'center' });
-
-    const filename = `${type}-${(recipientName || 'customer').replace(/\s+/g, '-')}-${Date.now()}.pdf`;
-    doc.save(filename);
+    await renderInvoiceDomToPdf(markup, filename);
 }
 
 function generateQuotePDF(customer) {
