@@ -188,6 +188,25 @@ body {
   margin-bottom: 32px;
 }
 
+.dashboard-period-controls {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+#dashboard-month-picker {
+  background: var(--bg-input);
+  color: var(--text-primary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 8px 10px;
+}
+
+.yearly-overview {
+  margin-top: -8px;
+}
+
 .stat-card {
   background: var(--bg-card);
   border: 1px solid var(--border-color);
