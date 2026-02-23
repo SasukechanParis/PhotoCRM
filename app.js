@@ -10,10 +10,13 @@
   const LANG_KEY = 'photocrm_lang';
   const TAX_SETTINGS_KEY = 'photocrm_tax_settings';
   const EXPENSES_KEY = 'photocrm_expenses';
+  const CURRENCY_KEY = 'photocrm_currency';
+  const CUSTOM_FIELDS_KEY = 'photocrm_custom_fields';
   const FREE_PLAN_LIMIT = 30;
 
   // ===== Language Management =====
   let currentLang = localStorage.getItem(LANG_KEY) || 'en';
+  if (!window.LOCALE || !window.LOCALE[currentLang]) currentLang = 'en';
 
   function t(key, params = {}) {
     if (!window.LOCALE || !window.LOCALE[currentLang]) {
@@ -108,8 +111,6 @@
     plan: [],
     costume: ['ウェディングドレス', 'カラードレス', '和装', '私服'],
     hairMakeup: [],
-    assistant: [],
-    secondAssistant: [],
   };
 
   const OPTION_LABELS = {
@@ -132,6 +133,24 @@
     } catch { return { ...DEFAULT_OPTIONS }; }
   }
   function saveOptions(data) { localStorage.setItem(OPTIONS_KEY, JSON.stringify(data)); }
+
+  function loadCustomFieldDefinitions() {
+    try { return JSON.parse(localStorage.getItem(CUSTOM_FIELDS_KEY)) || []; }
+    catch { return []; }
+  }
+
+  function saveCustomFieldDefinitions(fields) {
+    localStorage.setItem(CUSTOM_FIELDS_KEY, JSON.stringify(fields));
+  }
+
+  function addCustomFieldDefinition(label) {
+    const definitions = loadCustomFieldDefinitions();
+    const id = 'custom_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+    const field = { id, label, type: 'text' };
+    definitions.push(field);
+    saveCustomFieldDefinitions(definitions);
+    return field;
+  }
 
   function generateId() {
     return Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
@@ -177,8 +196,6 @@
     { key: 'plan', label: 'プラン', type: 'select' },
     { key: 'costume', label: '衣装', type: 'select' },
     { key: 'hairMakeup', label: 'ヘアメイク', type: 'select' },
-    { key: 'assistant', label: 'アシスタント', type: 'text' },
-    { key: 'secondAssistant', label: '第二アシスタント', type: 'text' },
     { key: 'billingDate', label: '請求日', type: 'date' },
     { key: 'paymentChecked', label: '入金チェック', type: 'checkbox' },
     { key: 'details', label: '詳細', type: 'textarea' },
@@ -194,9 +211,40 @@
     const d = new Date(val);
     return `${d.getFullYear()}/${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')}`;
   }
-  function formatCurrency(val) {
-    return '¥' + (Number(val) || 0).toLocaleString('ja-JP');
+  const CURRENCY_CONFIG = {
+    USD: { symbol: '$', locale: 'en-US' },
+    JPY: { symbol: '¥', locale: 'ja-JP' },
+    EUR: { symbol: '€', locale: 'de-DE' },
+  };
+
+  let currentCurrency = localStorage.getItem(CURRENCY_KEY) || 'USD';
+  if (!CURRENCY_CONFIG[currentCurrency]) currentCurrency = 'USD';
+
+  function getCurrencySymbol() {
+    return CURRENCY_CONFIG[currentCurrency].symbol;
   }
+
+  function formatCurrency(val) {
+    const cfg = CURRENCY_CONFIG[currentCurrency] || CURRENCY_CONFIG.USD;
+    return cfg.symbol + (Number(val) || 0).toLocaleString(cfg.locale);
+  }
+
+  function updateCurrency(currency) {
+    if (!CURRENCY_CONFIG[currency]) return;
+    currentCurrency = currency;
+    localStorage.setItem(CURRENCY_KEY, currency);
+    const sel = document.getElementById('currency-select');
+    if (sel) sel.value = currency;
+
+    renderTable();
+    updateDashboard();
+    renderExpenses();
+    if (editingId) openDetail(editingId);
+  }
+
+  window.getCurrencySymbol = getCurrencySymbol;
+  window.formatCurrency = formatCurrency;
+  window.updateCurrency = updateCurrency;
   function escapeHtml(str) {
     const d = document.createElement('div');
     d.textContent = str;
@@ -366,6 +414,37 @@
       }
     });
   }
+
+  function renderCustomFields(customerData = {}) {
+    const container = $('#custom-fields-container');
+    if (!container) return;
+
+    container.innerHTML = '';
+    const definitions = loadCustomFieldDefinitions();
+    const values = customerData.customFields || {};
+
+    definitions.forEach(field => {
+      const div = document.createElement('div');
+      div.className = 'form-group';
+      div.innerHTML = `
+        <label>${escapeHtml(field.label)}</label>
+        <div style="display:flex; gap:6px;">
+          <input type="text" id="custom-field-${field.id}" value="${escapeHtml(values[field.id] || '')}" placeholder="${escapeHtml(field.label)}" style="flex:1;" />
+          <button type="button" class="btn-icon" title="Delete" onclick="removeCustomField('${field.id}')">🗑</button>
+        </div>
+      `;
+      container.appendChild(div);
+    });
+  }
+
+  function removeCustomField(fieldId) {
+    if (!confirm(t('confirmDeleteField') || 'Delete this field?')) return;
+    const filtered = loadCustomFieldDefinitions().filter(field => field.id !== fieldId);
+    saveCustomFieldDefinitions(filtered);
+    renderCustomFields();
+    showToast(t('customFieldRemoved') || 'Custom field removed');
+  }
+  window.removeCustomField = removeCustomField;
 
   // ===== Dashboard =====
   function updateDashboard() {
@@ -687,8 +766,10 @@
           el.value = c[f.key] || '';
         }
       });
+      renderCustomFields(c);
     } else {
       $('#modal-title').textContent = t('modalAddTitle');
+      renderCustomFields();
     }
     modalOverlay.style.display = 'flex';
     setTimeout(() => modalOverlay.classList.add('active'), 10);
@@ -714,6 +795,13 @@
       else if (f.type === 'number') data[f.key] = el.value ? Number(el.value) : null;
       else data[f.key] = el.value || '';
     });
+
+    const customFields = {};
+    loadCustomFieldDefinitions().forEach(field => {
+      const el = $(`#custom-field-${field.id}`);
+      if (el && el.value.trim()) customFields[field.id] = el.value.trim();
+    });
+    data.customFields = customFields;
 
     if (editingId) {
       const idx = customers.findIndex(c => c.id === editingId);
@@ -748,6 +836,18 @@
     $('#detail-revenue').textContent = formatCurrency(c.revenue);
     $('#detail-payment').innerHTML = c.paymentChecked ? `<span class="badge badge-success">${t('paid')}</span>` : `<span class="badge badge-warning">${t('unpaid')}</span>`;
     $('#detail-notes').textContent = c.notes || '—';
+
+    const detailContainer = $('#detail-body-container');
+    detailContainer.querySelectorAll('.custom-detail-field').forEach(el => el.remove());
+    const defs = loadCustomFieldDefinitions();
+    defs.forEach(field => {
+      const value = c.customFields && c.customFields[field.id];
+      if (!value) return;
+      const item = document.createElement('div');
+      item.className = 'detail-item custom-detail-field';
+      item.innerHTML = `<label class="detail-label">${escapeHtml(field.label)}</label><p class="detail-value">${escapeHtml(value)}</p>`;
+      detailContainer.insertBefore(item, detailContainer.querySelector('.full-width'));
+    });
 
     // Task Management
     renderTasks(c);
@@ -801,6 +901,8 @@
   function renderSettings() {
     const container = $('#settings-list');
     container.innerHTML = '';
+    const currencySelect = $('#currency-select');
+    if (currencySelect) currencySelect.value = currentCurrency;
     const keys = ['plan', 'costume', 'hairMakeup'];
     keys.forEach(key => {
       const section = document.createElement('div');
@@ -892,6 +994,14 @@
       }
     };
     reader.readAsText(file);
+  });
+
+  $('#btn-add-custom-field')?.addEventListener('click', () => {
+    const label = prompt(t('enterFieldName') || 'Enter custom field label');
+    if (!label || !label.trim()) return;
+    addCustomFieldDefinition(label.trim());
+    renderCustomFields();
+    showToast(t('customFieldAdded') || 'Custom field added');
   });
 
   // Team Management UI
@@ -1291,13 +1401,19 @@
     applyTheme(currentTheme);
     console.log('✅ Theme applied');
 
-    // 2. Set language
-    updateLanguage(currentLang);
+    // 2. Set defaults
+    updateLanguage(currentLang || 'en');
+    updateCurrency(currentCurrency);
 
     // 3. Attach event listeners
     const langSelect = document.getElementById('lang-select');
     if (langSelect) {
       langSelect.addEventListener('change', e => updateLanguage(e.target.value));
+    }
+
+    const currencySelect = document.getElementById('currency-select');
+    if (currencySelect) {
+      currencySelect.addEventListener('change', e => updateCurrency(e.target.value));
     }
 
     const themeBtn = document.getElementById('btn-theme');
