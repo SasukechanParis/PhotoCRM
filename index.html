@@ -229,11 +229,31 @@
 
     <!-- ===== Calendar View ===== -->
     <div class="calendar-view" id="calendar-view">
-      <div class="calendar-nav">
-        <button class="btn-icon" id="cal-prev" title="前月">◀</button>
-        <h2 id="cal-title">2026年2月</h2>
-        <button class="btn-icon" id="cal-next" title="次月">▶</button>
-        <button class="btn btn-secondary btn-sm" id="cal-today" data-i18n="calToday">今月</button>
+      <div class="calendar-nav-wrap">
+        <div class="calendar-nav">
+          <button class="btn-icon" id="cal-prev" title="前月">◀</button>
+          <h2 id="cal-title">2026年2月</h2>
+          <button class="btn-icon" id="cal-next" title="次月">▶</button>
+          <button class="btn btn-secondary btn-sm" id="cal-today" data-i18n="calToday">今月</button>
+        </div>
+        <div class="calendar-filters" aria-label="Calendar event filters">
+          <label class="calendar-filter-item">
+            <input type="checkbox" class="calendar-filter-input" value="inquiryDate" checked>
+            <span data-i18n="calendarFilterInquiry">問い合わせ日</span>
+          </label>
+          <label class="calendar-filter-item">
+            <input type="checkbox" class="calendar-filter-input" value="meetingDate" checked>
+            <span data-i18n="calendarFilterMeeting">打ち合わせ日</span>
+          </label>
+          <label class="calendar-filter-item">
+            <input type="checkbox" class="calendar-filter-input" value="shootingDate" checked>
+            <span data-i18n="calendarFilterShooting">撮影日</span>
+          </label>
+          <label class="calendar-filter-item">
+            <input type="checkbox" class="calendar-filter-input" value="billingDate" checked>
+            <span data-i18n="calendarFilterBilling">請求日</span>
+          </label>
+        </div>
       </div>
       <div class="calendar-grid" id="calendar-grid"></div>
       <div class="calendar-legend">

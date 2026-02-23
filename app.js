@@ -13,6 +13,7 @@
   const EXPENSES_KEY = 'photocrm_expenses';
   const CURRENCY_KEY = 'photocrm_currency';
   const CUSTOM_FIELDS_KEY = 'photocrm_custom_fields';
+  const CALENDAR_FILTERS_KEY = 'photocrm_calendar_filters';
   const DEFAULT_INVOICE_MESSAGE = 'この度はありがとうございます。';
   const FREE_PLAN_LIMIT = 30;
 
@@ -165,6 +166,27 @@
   let editingId = null;
   let deletingId = null;
   let calYear, calMonth;
+  const DEFAULT_CALENDAR_FILTERS = {
+    inquiryDate: true,
+    meetingDate: true,
+    shootingDate: true,
+    billingDate: true,
+  };
+
+  function loadCalendarFilters() {
+    try {
+      const saved = JSON.parse(localStorage.getItem(CALENDAR_FILTERS_KEY));
+      return { ...DEFAULT_CALENDAR_FILTERS, ...(saved || {}) };
+    } catch {
+      return { ...DEFAULT_CALENDAR_FILTERS };
+    }
+  }
+
+  function saveCalendarFilters(filters) {
+    localStorage.setItem(CALENDAR_FILTERS_KEY, JSON.stringify(filters));
+  }
+
+  let calendarFilters = loadCalendarFilters();
 
   // Init calendar to current month
   const now = new Date();
@@ -190,6 +212,7 @@
   const tableWrapper = $('#table-wrapper');
   const listView = $('#list-view');
   const calendarView = $('#calendar-view');
+  const calendarFilterInputs = $$('.calendar-filter-input');
 
   // ===== Field Config =====
   const fields = [
@@ -747,13 +770,14 @@
     const monthStr = `${calYear}-${String(calMonth + 1).padStart(2, '0')}`;
     const eventsByDay = {};
 
+    const dateFields = [
+      { key: 'shootingDate', cls: 'shooting', label: '📷' },
+      { key: 'meetingDate', cls: 'meeting', label: '🤝' },
+      { key: 'inquiryDate', cls: 'inquiry', label: '💌' },
+      { key: 'billingDate', cls: 'billing', label: '💳' },
+    ].filter(df => calendarFilters[df.key]);
+
     customers.forEach(c => {
-      const dateFields = [
-        { key: 'shootingDate', cls: 'shooting', label: '📷' },
-        { key: 'meetingDate', cls: 'meeting', label: '🤝' },
-        { key: 'inquiryDate', cls: 'inquiry', label: '💌' },
-        { key: 'billingDate', cls: 'billing', label: '💳' },
-      ];
       dateFields.forEach(df => {
         if (c[df.key] && c[df.key].startsWith(monthStr)) {
           const day = parseInt(c[df.key].split('-')[2], 10);
@@ -811,6 +835,25 @@
     });
   }
 
+  function syncCalendarFilterControls() {
+    calendarFilterInputs.forEach(input => {
+      if (!Object.prototype.hasOwnProperty.call(calendarFilters, input.value)) return;
+      input.checked = !!calendarFilters[input.value];
+    });
+  }
+
+  function initCalendarFilters() {
+    syncCalendarFilterControls();
+    calendarFilterInputs.forEach(input => {
+      input.addEventListener('change', () => {
+        if (!Object.prototype.hasOwnProperty.call(calendarFilters, input.value)) return;
+        calendarFilters[input.value] = input.checked;
+        saveCalendarFilters(calendarFilters);
+        renderCalendar();
+      });
+    });
+  }
+
   $('#cal-prev').addEventListener('click', () => {
     calMonth--;
     if (calMonth < 0) { calMonth = 11; calYear--; }
@@ -826,6 +869,8 @@
     calMonth = now.getMonth();
     renderCalendar();
   });
+
+  initCalendarFilters();
 
   // ===== Modal (Add / Edit) =====
   window.openModal = function (id) {
