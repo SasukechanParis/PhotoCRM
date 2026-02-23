@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="ja">
 <!-- PhotoCRM v2.2.3 - Fixed btoa encoding error - 2026-02-22 -->
 
 <head>
@@ -17,6 +17,7 @@
   <link rel="icon" href="icon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="icon.svg">
   <meta name="theme-color" content="#8b5cf6">
+  <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 </head>
@@ -31,10 +32,10 @@
     </div>
   </div>
   <div class="auth-banner" id="auth-banner">
-    <div class="auth-status" id="auth-status">🔐 Sign in to enable cloud sync</div>
+    <div class="auth-status" id="auth-status">🔄 ログイン状態を確認中...</div>
     <div class="auth-actions">
-      <button class="btn btn-primary btn-sm" id="btn-google-login">Google Login</button>
-      <button class="btn btn-secondary btn-sm" id="btn-logout" style="display:none;">Logout</button>
+      <button class="btn btn-primary btn-sm" id="btn-google-login">Googleでログイン</button>
+      <button class="btn btn-secondary btn-sm" id="btn-logout" style="display:none;">ログアウト</button>
     </div>
   </div>
   <div class="app-container">
