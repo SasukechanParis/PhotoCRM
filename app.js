@@ -9,6 +9,7 @@
   const THEME_KEY = 'photocrm_theme';
   const LANG_KEY = 'photocrm_lang';
   const TAX_SETTINGS_KEY = 'photocrm_tax_settings';
+  const INVOICE_SENDER_PROFILE_KEY = 'photocrm_invoice_sender_profile';
   const EXPENSES_KEY = 'photocrm_expenses';
   const CURRENCY_KEY = 'photocrm_currency';
   const CUSTOM_FIELDS_KEY = 'photocrm_custom_fields';
@@ -268,6 +269,21 @@
 
   function saveTaxSettings(settings) {
     localStorage.setItem(TAX_SETTINGS_KEY, JSON.stringify(settings));
+  }
+
+  function getInvoiceSenderProfile() {
+    try {
+      return JSON.parse(localStorage.getItem(INVOICE_SENDER_PROFILE_KEY)) || { name: '', contact: '' };
+    } catch {
+      return { name: '', contact: '' };
+    }
+  }
+
+  function saveInvoiceSenderProfile(profile) {
+    localStorage.setItem(INVOICE_SENDER_PROFILE_KEY, JSON.stringify({
+      name: (profile?.name || '').trim(),
+      contact: (profile?.contact || '').trim(),
+    }));
   }
 
   window.getTaxSettings = getTaxSettings; // Make global for generator
@@ -1282,6 +1298,7 @@
     renderInvoiceBuilderItems(items.length ? items : getDefaultInvoiceItems(customer));
 
     const settings = getTaxSettings();
+    const senderProfile = getInvoiceSenderProfile();
     const issueDateInput = document.getElementById('invoice-issue-date');
     const dueDateInput = document.getElementById('invoice-due-date');
     const senderNameInput = document.getElementById('invoice-sender-name');
@@ -1294,9 +1311,9 @@
 
     if (issueDateInput) issueDateInput.value = customer.invoiceIssueDate || today.toISOString().slice(0, 10);
     if (dueDateInput) dueDateInput.value = customer.invoiceDueDate || defaultDueDate.toISOString().slice(0, 10);
-    if (senderNameInput) senderNameInput.value = customer.invoiceSenderName || settings.companyName || '';
+    if (senderNameInput) senderNameInput.value = customer.invoiceSenderName || senderProfile.name || settings.companyName || '';
     if (recipientNameInput) recipientNameInput.value = customer.invoiceRecipientName || customer.customerName || '';
-    if (senderContactInput) senderContactInput.value = customer.invoiceSenderContact || settings.email || '';
+    if (senderContactInput) senderContactInput.value = customer.invoiceSenderContact || senderProfile.contact || settings.email || '';
     if (recipientContactInput) recipientContactInput.value = customer.invoiceRecipientContact || customer.contact || '';
 
     const modal = document.getElementById('invoice-builder-modal');
@@ -1347,6 +1364,10 @@
     customer.invoiceRecipientName = document.getElementById('invoice-recipient-name')?.value?.trim() || '';
     customer.invoiceSenderContact = document.getElementById('invoice-sender-contact')?.value?.trim() || '';
     customer.invoiceRecipientContact = document.getElementById('invoice-recipient-contact')?.value?.trim() || '';
+    saveInvoiceSenderProfile({
+      name: customer.invoiceSenderName,
+      contact: customer.invoiceSenderContact,
+    });
     customer.updatedAt = new Date().toISOString();
     saveCustomers(customers);
 
