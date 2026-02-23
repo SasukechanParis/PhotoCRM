@@ -1038,6 +1038,19 @@ tbody tr:hover {
   animation: fadeIn 0.3s ease-out;
 }
 
+.custom-fields-container {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+@media (max-width: 860px) {
+  .custom-fields-container {
+    grid-template-columns: 1fr;
+  }
+}
+
 /* Task List */
 .task-list {
   display: grid;

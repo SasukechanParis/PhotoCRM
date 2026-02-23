@@ -6,6 +6,8 @@ function generateInvoicePDF(customer, type = 'invoice') {
     const settings = getTaxSettings();
     const pageWidth = doc.internal.pageSize.getWidth();
 
+    const currency = typeof getCurrencySymbol === 'function' ? getCurrencySymbol() : '$';
+
     // Header
     doc.setFontSize(24);
     doc.setTextColor(139, 92, 246); // Purple
@@ -72,7 +74,7 @@ function generateInvoicePDF(customer, type = 'invoice') {
 
     doc.text(`${customer.plan} Photography Session`, 20, yPos);
     const revenue = parseFloat(customer.revenue) || 0;
-    doc.text(`$${revenue.toFixed(2)}`, rightX - 20, yPos, { align: 'right' });
+    doc.text(`${currency}${revenue.toFixed(2)}`, rightX - 20, yPos, { align: 'right' });
 
     if (customer.shootingDate) {
         yPos += 5;
@@ -101,12 +103,12 @@ function generateInvoicePDF(customer, type = 'invoice') {
 
     yPos += 10;
     doc.text('Subtotal:', rightX - 60, yPos);
-    doc.text(`$${amounts.subtotal.toFixed(2)}`, rightX - 20, yPos, { align: 'right' });
+    doc.text(`${currency}${amounts.subtotal.toFixed(2)}`, rightX - 20, yPos, { align: 'right' });
 
     if (settings.enabled) {
         yPos += 7;
         doc.text(`${settings.label} (${settings.rate}%):`, rightX - 60, yPos);
-        doc.text(`$${amounts.tax.toFixed(2)}`, rightX - 20, yPos, { align: 'right' });
+        doc.text(`${currency}${amounts.tax.toFixed(2)}`, rightX - 20, yPos, { align: 'right' });
     }
 
     yPos += 7;
@@ -117,7 +119,7 @@ function generateInvoicePDF(customer, type = 'invoice') {
     doc.setFont(undefined, 'bold');
     doc.setFontSize(12);
     doc.text('Total:', rightX - 60, yPos);
-    doc.text(`$${amounts.total.toFixed(2)}`, rightX - 20, yPos, { align: 'right' });
+    doc.text(`${currency}${amounts.total.toFixed(2)}`, rightX - 20, yPos, { align: 'right' });
 
     // Payment info
     if (settings.bank && type === 'invoice') {
@@ -146,6 +148,7 @@ function generateQuotePDF(customer) {
 
 function generateContract(customer, templateType = 'wedding') {
     const { jsPDF } = window.jspdf;
+    const currency = typeof getCurrencySymbol === 'function' ? getCurrencySymbol() : '$';
     const doc = new jsPDF();
     const settings = getTaxSettings();
     const pageWidth = doc.internal.pageSize.getWidth();
@@ -167,9 +170,9 @@ Duration: [X] hours
 
 2. PACKAGE & PRICING
 Package: ${customer.plan}
-Total Fee: $${customer.revenue}
-Deposit: $[Amount] (due by [Date])
-Balance: $[Amount] (due by [Date])
+Total Fee: ${currency}${customer.revenue}
+Deposit: ${currency}[Amount] (due by [Date])
+Balance: ${currency}[Amount] (due by [Date])
 
 3. DELIVERABLES
 - [Number] edited digital images
@@ -205,7 +208,7 @@ Location: ${customer.location || '[Location]'}
 Type: Portrait Session
 
 2. PRICING
-Session Fee: $${customer.revenue}
+Session Fee: ${currency}${customer.revenue}
 
 3. DELIVERABLES
 - [Number] edited digital images
@@ -234,7 +237,7 @@ Location: ${customer.location || '[Location]'}
 [Describe deliverables]
 
 3. FEES
-Total Project Fee: $${customer.revenue}
+Total Project Fee: ${currency}${customer.revenue}
 Usage Rights: [Specify]
 Term: [Duration]
 

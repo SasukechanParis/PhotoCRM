@@ -79,14 +79,14 @@
         <div class="stat-icon">💰</div>
         <div class="stat-info">
           <label data-i18n="cardMonthlyRevenue">Monthly Revenue</label>
-          <div class="stat-value" id="stat-revenue">¥0</div>
+          <div class="stat-value" id="stat-revenue">$0</div>
         </div>
       </div>
       <div class="stat-card">
         <div class="stat-icon">📈</div>
         <div class="stat-info">
           <label data-i18n="cardProfit">Profit</label>
-          <div class="stat-value" id="profit-month">¥0</div>
+          <div class="stat-value" id="profit-month">$0</div>
         </div>
       </div>
     </div>
@@ -104,15 +104,15 @@
         style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 20px; margin-bottom: 20px;">
         <div class="stat-card small">
           <label data-i18n="thisMonth">This Month</label>
-          <div class="stat-value sm" id="expense-month">¥0</div>
+          <div class="stat-value sm" id="expense-month">$0</div>
         </div>
         <div class="stat-card small">
           <label data-i18n="cardMonthlyRevenue">Revenue</label>
-          <div class="stat-value sm" id="revenue-month">¥0</div>
+          <div class="stat-value sm" id="revenue-month">$0</div>
         </div>
         <div class="stat-card small">
           <label data-i18n="cardProfit">Profit</label>
-          <div class="stat-value sm" id="profit-month-alt">¥0</div>
+          <div class="stat-value sm" id="profit-month-alt">$0</div>
         </div>
       </div>
       <div class="expense-list-container"
@@ -183,7 +183,7 @@
         </div>
         <div class="table-footer">
           <span id="table-count">0 件</span>
-          <span id="table-revenue-total">合計売上: ¥0</span>
+          <span id="table-revenue-total">Total: $0</span>
         </div>
       </div>
 
@@ -299,14 +299,11 @@
               <option value="" data-i18n="selectDefault">選択してください</option>
             </select>
           </div>
-          <div class="form-group">
-            <label for="form-assistant" data-i18n="labelAssistant">アシスタント</label>
-            <input type="text" id="form-assistant" placeholder="例: 田中太郎" data-i18n-placeholder="labelAssistant" />
-          </div>
-          <div class="form-group">
-            <label for="form-secondAssistant" data-i18n="labelSecondAssistant">第二アシスタント</label>
-            <input type="text" id="form-secondAssistant" placeholder="例: 佐藤花子"
-              data-i18n-placeholder="labelSecondAssistant" />
+          <div id="custom-fields-container" class="custom-fields-container"></div>
+          <div class="form-group full-width">
+            <button type="button" class="btn btn-secondary" id="btn-add-custom-field" style="width:100%;">
+              <span data-i18n="addCustomField">＋ Add Custom Field</span>
+            </button>
           </div>
 
           <div class="form-section-title" data-i18n="secPayment">支払い情報</div>
@@ -439,6 +436,16 @@
           <button class="settings-tab-btn" data-tab="team" data-i18n="teamManager">Team</button>
         </div>
         <div class="settings-tab-content active" id="settings-content-menu">
+          <div class="settings-section">
+            <h3 data-i18n="currency">Currency</h3>
+            <div class="settings-add-box">
+              <select id="currency-select">
+                <option value="USD">USD ($)</option>
+                <option value="JPY">JPY (¥)</option>
+                <option value="EUR">EUR (€)</option>
+              </select>
+            </div>
+          </div>
           <div class="settings-list" id="settings-list"></div>
         </div>
 
