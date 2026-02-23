@@ -134,9 +134,18 @@
 
   // ===== Storage Helpers =====
   function loadCustomers() {
-    return getCloudValue(STORAGE_KEY, []);
+    const loaded = getCloudValue(STORAGE_KEY, []);
+    return withCurrentUserId(loaded);
   }
-  function saveCustomers(data) { saveCloudValue(STORAGE_KEY, data); }
+  function withCurrentUserId(records) {
+    const uid = window.FirebaseService?.getCurrentUser?.()?.uid;
+    if (!uid || !Array.isArray(records)) return records;
+    return records.map((record) => ({ ...record, userId: uid }));
+  }
+
+  function saveCustomers(data) {
+    saveCloudValue(STORAGE_KEY, withCurrentUserId(data));
+  }
 
   function loadOptions() {
     return { ...DEFAULT_OPTIONS, ...(getCloudValue(OPTIONS_KEY, {}) || {}) };
@@ -1952,6 +1961,8 @@
 
   async function handleAuthState(user) {
     const appContainer = document.querySelector('.app-container');
+    const loginScreen = document.getElementById('login-screen');
+    const authBanner = document.getElementById('auth-banner');
     const authStatus = document.getElementById('auth-status');
     const loginBtn = document.getElementById('btn-google-login');
     const logoutBtn = document.getElementById('btn-logout');
@@ -1960,6 +1971,8 @@
       if (authStatus) authStatus.textContent = '🔐 Sign in to enable cloud sync';
       if (loginBtn) loginBtn.style.display = '';
       if (logoutBtn) logoutBtn.style.display = 'none';
+      if (loginScreen) loginScreen.style.display = 'flex';
+      if (authBanner) authBanner.style.display = 'none';
       if (appContainer) appContainer.style.display = 'none';
       return;
     }
@@ -1967,6 +1980,8 @@
     if (authStatus) authStatus.textContent = `✅ ${user.displayName || user.email} でログイン中`;
     if (loginBtn) loginBtn.style.display = 'none';
     if (logoutBtn) logoutBtn.style.display = '';
+    if (loginScreen) loginScreen.style.display = 'none';
+    if (authBanner) authBanner.style.display = 'flex';
 
     await window.FirebaseService.loadForUser(user);
     hydrateStateFromCloud();
@@ -1986,12 +2001,15 @@
 
   // Ensure DOM is ready before initializing
   document.addEventListener('DOMContentLoaded', () => {
-    document.getElementById('btn-google-login')?.addEventListener('click', () => {
+    const triggerGoogleLogin = () => {
       window.FirebaseService.signInWithGoogle().catch((err) => {
         console.error(err);
         showToast('Googleログインに失敗しました');
       });
-    });
+    };
+
+    document.getElementById('btn-google-login')?.addEventListener('click', triggerGoogleLogin);
+    document.getElementById('btn-google-login-screen')?.addEventListener('click', triggerGoogleLogin);
     document.getElementById('btn-logout')?.addEventListener('click', () => {
       window.FirebaseService.signOut();
     });

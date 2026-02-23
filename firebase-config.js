@@ -13,8 +13,6 @@
   firebase.initializeApp(firebaseConfig);
   const auth = firebase.auth();
   const db = firebase.firestore();
-
-  const CLOUD_DOC = 'state/main';
   const cache = {};
 
   function localMigrationPayload() {
@@ -46,14 +44,30 @@
     return payload;
   }
 
+  function normalizeMigrationDataForUser(payload, uid) {
+    const normalized = { ...payload };
+    if (Array.isArray(normalized.photocrm_customers)) {
+      normalized.photocrm_customers = normalized.photocrm_customers.map((customer) => ({
+        ...customer,
+        userId: uid,
+      }));
+    }
+    return normalized;
+  }
+
+  function getUserMainDocRef(uid) {
+    return db.collection('users').doc(uid).collection('app').doc('main');
+  }
+
   async function ensureCloudData(user) {
-    const ref = db.collection('users').doc(user.uid).collection('app').doc('main');
+    const ref = getUserMainDocRef(user.uid);
     const snap = await ref.get();
 
     if (!snap.exists) {
-      const migratedData = localMigrationPayload();
+      const migratedData = normalizeMigrationDataForUser(localMigrationPayload(), user.uid);
       await ref.set({
         ...migratedData,
+        userId: user.uid,
         __migratedFromLocalStorage: true,
         __updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
       }, { merge: true });
@@ -69,8 +83,9 @@
   async function updateKey(user, key, value) {
     if (!user) return;
     cache[key] = value;
-    const ref = db.collection('users').doc(user.uid).collection('app').doc('main');
+    const ref = getUserMainDocRef(user.uid);
     await ref.set({
+      userId: user.uid,
       [key]: value,
       __updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
     }, { merge: true });
