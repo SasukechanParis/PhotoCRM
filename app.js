@@ -1460,7 +1460,9 @@
     setTimeout(() => $('#expense-modal').style.display = 'none', 300);
   };
 
-  window.saveExpense = function () {
+  window.saveExpense = function (event) {
+    if (event) event.preventDefault();
+
     const item = $('#expense-item').value.trim();
     const amount = Number($('#expense-amount').value);
     if (!item || !amount) return;
@@ -1479,6 +1481,18 @@
     closeExpenseModal();
     showToast('Expense added');
   };
+
+  function bindExpenseModalEvents() {
+    const expenseForm = $('#expense-form');
+    if (expenseForm) {
+      expenseForm.addEventListener('submit', window.saveExpense);
+    }
+
+    const addExpenseBtn = $('#addExpenseBtn');
+    if (addExpenseBtn) {
+      addExpenseBtn.addEventListener('click', window.saveExpense);
+    }
+  }
 
   window.deleteExpense = function (id) {
     let expenses = getExpenses();
@@ -1687,6 +1701,7 @@
     // Initial render
     renderTable();
     renderExpenses();
+    bindExpenseModalEvents();
 
     // Check if expense view should be visible
     if ($('#expense-container')) {

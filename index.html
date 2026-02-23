@@ -96,7 +96,7 @@
       <div class="section-header"
         style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
         <h2 class="section-title" data-i18n="expenseTracking" style="margin-bottom: 0;">Expense Tracking</h2>
-        <button class="btn btn-primary" onclick="openExpenseModal()">
+        <button class="btn btn-primary" id="openExpenseModalBtn" type="button" onclick="openExpenseModal()">
           <span data-i18n="addExpense">➕ Add Expense</span>
         </button>
       </div>
@@ -647,7 +647,7 @@
         <h3 class="modal-title" data-i18n="addExpense">Add Expense</h3>
         <button class="btn-close" onclick="closeExpenseModal()">✕</button>
       </div>
-      <div class="modal-body">
+      <form class="modal-body" id="expense-form">
         <div class="form-group">
           <label data-i18n="dueDate">Date</label>
           <input type="date" id="expense-date">
@@ -672,10 +672,10 @@
           <label data-i18n="amount">Amount</label>
           <input type="number" id="expense-amount" placeholder="0.00">
         </div>
-      </div>
+      </form>
       <div class="modal-footer">
-        <button class="btn btn-secondary" onclick="closeExpenseModal()" data-i18n="cancel">Cancel</button>
-        <button class="btn btn-primary" onclick="window.saveExpense()" data-i18n="addExpense">Add Expense</button>
+        <button class="btn btn-secondary" type="button" onclick="closeExpenseModal()" data-i18n="cancel">Cancel</button>
+        <button class="btn btn-primary" id="addExpenseBtn" type="submit" form="expense-form" data-i18n="addExpense">Add Expense</button>
       </div>
     </div>
   </div>
