@@ -468,7 +468,7 @@
     // Also update expense section stats if visible
     if ($('#expense-month')) $('#expense-month').textContent = formatCurrency(monthlyExpenses);
     if ($('#revenue-month')) $('#revenue-month').textContent = formatCurrency(monthlyRevenue);
-    if ($('#profit-month-expense')) $('#profit-month-expense').textContent = formatCurrency(monthlyProfit);
+    if ($('#profit-month-alt')) $('#profit-month-alt').textContent = formatCurrency(monthlyProfit);
   }
 
   // ===== Month Filter =====
