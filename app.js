@@ -2032,6 +2032,12 @@
 
   // Ensure DOM is ready before initializing
   document.addEventListener('DOMContentLoaded', async () => {
+    if (!window.FirebaseService) {
+      console.error('FirebaseService is not available. Please check script loading order.');
+      showToast('Firebase設定の読み込みに失敗しました。');
+      return;
+    }
+
     await window.FirebaseService.whenReady();
 
     const triggerGoogleLogin = () => {
