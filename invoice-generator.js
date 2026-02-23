@@ -4,10 +4,6 @@ const INVOICE_I18N = {
     ja: {
         invoiceTitle: '請求書',
         quoteTitle: '見積書',
-        numberLabelInvoice: '請求書番号',
-        numberLabelQuote: '見積書番号',
-        billTo: '請求先',
-        from: '発行者',
         invoiceDate: '請求日',
         dueDate: '支払期限',
         validUntil: '有効期限',
@@ -17,6 +13,8 @@ const INVOICE_I18N = {
         amount: '金額',
         subtotal: '小計',
         total: '合計',
+        billTo: '請求先',
+        from: '発行者',
         paymentInfo: 'お支払い情報',
         thanks: 'この度はありがとうございます。',
         defaultService: '撮影セッション',
@@ -24,10 +22,6 @@ const INVOICE_I18N = {
     en: {
         invoiceTitle: 'INVOICE',
         quoteTitle: 'QUOTE',
-        numberLabelInvoice: 'Invoice #',
-        numberLabelQuote: 'Quote #',
-        billTo: 'Bill To',
-        from: 'From',
         invoiceDate: 'Invoice Date',
         dueDate: 'Due Date',
         validUntil: 'Valid Until',
@@ -37,10 +31,60 @@ const INVOICE_I18N = {
         amount: 'Amount',
         subtotal: 'Subtotal',
         total: 'Total',
+        billTo: 'Bill To',
+        from: 'From',
         paymentInfo: 'Payment Information',
         thanks: 'Thank you for your business.',
         defaultService: 'Photography Session',
     }
+};
+
+const INVOICE_LOCALE_KEY_MAP = {
+    billTo: 'invoicePdfBillTo',
+    from: 'invoicePdfFrom',
+    qty: 'invoicePdfQty',
+    unitPrice: 'invoicePdfUnitPrice',
+    amount: 'invoicePdfAmount',
+    subtotal: 'invoicePdfSubtotal',
+    total: 'invoicePdfTotal',
+};
+
+const INVOICE_TEMPLATE_STYLES = {
+    modern: {
+        rootClass: 'template-modern',
+        css: `
+            .invoice-print-root.template-modern .invoice-header { background: #1f2937; color: #fff; border-radius: 10px; padding: 24px; }
+            .invoice-print-root.template-modern .invoice-card,
+            .invoice-print-root.template-modern .summary { background: #f9fafb; border-radius: 8px; }
+            .invoice-print-root.template-modern .item-table th { background: #f3f4f6; }
+        `,
+    },
+    classic: {
+        rootClass: 'template-classic',
+        css: `
+            .invoice-print-root.template-classic { border: 2px solid #111827; }
+            .invoice-print-root.template-classic .invoice-header { border: 2px solid #111827; background: #fff; color: #111827; padding: 18px 20px; }
+            .invoice-print-root.template-classic .invoice-card,
+            .invoice-print-root.template-classic .summary { border: 1px solid #9ca3af; border-radius: 0; background: #fff; }
+            .invoice-print-root.template-classic .item-table,
+            .invoice-print-root.template-classic .item-table th,
+            .invoice-print-root.template-classic .item-table td { border: 1px solid #9ca3af; }
+            .invoice-print-root.template-classic .item-table th { background: #f8fafc; }
+            .invoice-print-root.template-classic .seal-space { display: block; }
+        `,
+    },
+    minimal: {
+        rootClass: 'template-minimal',
+        css: `
+            .invoice-print-root.template-minimal { padding: 30px; color: #111827; }
+            .invoice-print-root.template-minimal .invoice-header { background: transparent; color: #111827; border-bottom: 1px solid #d1d5db; padding: 0 0 14px; border-radius: 0; }
+            .invoice-print-root.template-minimal .invoice-grid { margin-top: 18px; gap: 10px; }
+            .invoice-print-root.template-minimal .invoice-card,
+            .invoice-print-root.template-minimal .summary { background: transparent; border: 1px solid #e5e7eb; border-radius: 4px; }
+            .invoice-print-root.template-minimal .item-table th { background: transparent; border-bottom: 2px solid #d1d5db; }
+            .invoice-print-root.template-minimal .item-table td { border-bottom: 1px solid #e5e7eb; }
+        `,
+    },
 };
 
 function getInvoiceLang() {
@@ -48,8 +92,33 @@ function getInvoiceLang() {
 }
 
 function invoiceText(key) {
+    const localeKey = INVOICE_LOCALE_KEY_MAP[key];
+    if (localeKey && typeof window.t === 'function') {
+        const translated = window.t(localeKey);
+        if (translated && translated !== localeKey) return translated;
+    }
+
     const lang = getInvoiceLang();
     return (INVOICE_I18N[lang] && INVOICE_I18N[lang][key]) || INVOICE_I18N.en[key] || key;
+}
+
+function getActiveCurrencyCode() {
+    return typeof getCurrentCurrency === 'function'
+        ? getCurrentCurrency()
+        : (localStorage.getItem('photocrm_currency') || 'USD');
+}
+
+function formatInvoiceMoney(value) {
+    const amount = Number(value) || 0;
+    const lang = getInvoiceLang();
+    const currencyCode = getActiveCurrencyCode();
+    const isJpy = currencyCode === 'JPY';
+    return new Intl.NumberFormat(lang, {
+        style: 'currency',
+        currency: currencyCode,
+        minimumFractionDigits: isJpy ? 0 : 2,
+        maximumFractionDigits: isJpy ? 0 : 2,
+    }).format(amount);
 }
 
 function formatInvoiceDate(value) {
@@ -68,17 +137,17 @@ function escapeInvoiceHtml(value) {
 }
 
 function buildInvoiceMarkup(type, customer, settings, invoiceModel) {
-    const currency = typeof getCurrencySymbol === 'function' ? getCurrencySymbol() : '$';
-    const numberLabel = type === 'invoice' ? invoiceText('numberLabelInvoice') : invoiceText('numberLabelQuote');
     const title = type === 'invoice' ? invoiceText('invoiceTitle') : invoiceText('quoteTitle');
     const dueLabel = type === 'invoice' ? invoiceText('dueDate') : invoiceText('validUntil');
+    const templateName = settings.invoiceTemplate || 'modern';
+    const template = INVOICE_TEMPLATE_STYLES[templateName] || INVOICE_TEMPLATE_STYLES.modern;
 
     const itemsHtml = invoiceModel.items.map(item => `
         <tr>
             <td class="item-desc">${escapeInvoiceHtml(item.description)}</td>
             <td class="item-num">${item.quantity}</td>
-            <td class="item-num">${escapeInvoiceHtml(`${currency}${item.unitPrice.toLocaleString(getInvoiceLang())}`)}</td>
-            <td class="item-num">${escapeInvoiceHtml(`${currency}${item.amount.toLocaleString(getInvoiceLang())}`)}</td>
+            <td class="item-num">${escapeInvoiceHtml(formatInvoiceMoney(item.unitPrice))}</td>
+            <td class="item-num">${escapeInvoiceHtml(formatInvoiceMoney(item.amount))}</td>
         </tr>
     `).join('');
 
@@ -87,35 +156,36 @@ function buildInvoiceMarkup(type, customer, settings, invoiceModel) {
         : '';
 
     return `
-        <div class="invoice-print-root">
+        <div class="invoice-print-root ${template.rootClass}">
             <style>
                 .invoice-print-root { width: 794px; background: #fff; color: #111827; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Yu Gothic', sans-serif; padding: 40px; box-sizing: border-box; }
-                .invoice-header { background: #1f2937; color: #fff; border-radius: 10px; padding: 24px; display: flex; justify-content: space-between; align-items: flex-start; gap: 20px; }
+                .invoice-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 20px; }
                 .invoice-header h1 { margin: 0; font-size: 32px; letter-spacing: 0.03em; }
                 .invoice-header p { margin: 6px 0 0; font-size: 14px; }
                 .invoice-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; margin-top: 24px; }
-                .invoice-card { background: #f9fafb; border-radius: 8px; padding: 12px; min-height: 90px; }
+                .invoice-card { padding: 12px; min-height: 90px; }
                 .invoice-card h3 { margin: 0 0 8px; font-size: 13px; color: #4b5563; }
                 .invoice-card p { margin: 0; font-size: 14px; line-height: 1.5; white-space: pre-wrap; word-break: break-word; }
                 .item-table { width: 100%; border-collapse: collapse; margin-top: 24px; table-layout: fixed; }
                 .item-table th, .item-table td { border-bottom: 1px solid #e5e7eb; padding: 10px 8px; font-size: 13px; vertical-align: top; }
-                .item-table th { background: #f3f4f6; text-align: left; color: #374151; }
+                .item-table th { text-align: left; color: #374151; }
                 .item-table .item-desc { width: 55%; white-space: pre-wrap; word-break: break-word; }
                 .item-table .item-num { text-align: right; white-space: nowrap; }
-                .summary { margin-top: 20px; margin-left: auto; width: 320px; background: #f9fafb; border-radius: 8px; padding: 14px; }
-                .summary-row { display: flex; justify-content: space-between; margin: 6px 0; font-size: 14px; }
+                .summary { margin-top: 20px; margin-left: auto; width: 340px; padding: 14px; }
+                .summary-row { display: flex; justify-content: space-between; gap: 12px; margin: 6px 0; font-size: 14px; }
                 .summary-row.total { margin-top: 12px; padding-top: 10px; border-top: 1px solid #d1d5db; font-size: 18px; font-weight: 700; }
                 .payment { margin-top: 18px; font-size: 13px; }
                 .payment h3 { margin: 0 0 6px; font-size: 13px; color: #374151; }
                 .payment p { margin: 0; line-height: 1.6; white-space: pre-wrap; word-break: break-word; }
+                .seal-space { display: none; margin-top: 18px; margin-left: auto; width: 180px; height: 90px; border: 1px dashed #6b7280; text-align: center; line-height: 90px; color: #6b7280; font-size: 12px; }
                 .invoice-footer { text-align: center; margin-top: 28px; color: #6b7280; font-size: 12px; }
+                ${template.css}
             </style>
             <header class="invoice-header">
                 <div>
                     <h1>${escapeInvoiceHtml(title)}</h1>
-                    <p>${escapeInvoiceHtml(`${numberLabel}: ${customer.id}`)}</p>
                 </div>
-                <div style="text-align: right; font-size: 14px; line-height: 1.5;">
+                <div style="text-align: right; font-size: 14px; line-height: 1.5; max-width: 45%;">
                     <strong>${escapeInvoiceHtml(invoiceModel.senderName)}</strong><br>
                     ${escapeInvoiceHtml(invoiceModel.senderContact || '')}
                 </div>
@@ -146,10 +216,11 @@ function buildInvoiceMarkup(type, customer, settings, invoiceModel) {
                 <tbody>${itemsHtml}</tbody>
             </table>
             <section class="summary">
-                <div class="summary-row"><span>${invoiceText('subtotal')}</span><span>${escapeInvoiceHtml(`${currency}${invoiceModel.amounts.subtotal.toFixed(2)}`)}</span></div>
-                <div class="summary-row"><span>${escapeInvoiceHtml(settings.label || 'Tax')}</span><span>${escapeInvoiceHtml(`${currency}${invoiceModel.amounts.tax.toFixed(2)}`)}</span></div>
-                <div class="summary-row total"><span>${invoiceText('total')}</span><span>${escapeInvoiceHtml(`${currency}${invoiceModel.amounts.total.toFixed(2)}`)}</span></div>
+                <div class="summary-row"><span>${invoiceText('subtotal')}</span><span>${escapeInvoiceHtml(formatInvoiceMoney(invoiceModel.amounts.subtotal))}</span></div>
+                <div class="summary-row"><span>${escapeInvoiceHtml(settings.label || 'Tax')}</span><span>${escapeInvoiceHtml(formatInvoiceMoney(invoiceModel.amounts.tax))}</span></div>
+                <div class="summary-row total"><span>${invoiceText('total')}</span><span>${escapeInvoiceHtml(formatInvoiceMoney(invoiceModel.amounts.total))}</span></div>
             </section>
+            <div class="seal-space">SEAL</div>
             ${paymentInfoHtml}
             <footer class="invoice-footer">${invoiceText('thanks')}</footer>
         </div>

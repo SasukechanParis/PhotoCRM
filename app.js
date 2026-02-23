@@ -225,6 +225,10 @@
     return CURRENCY_CONFIG[currentCurrency].symbol;
   }
 
+  function getCurrentCurrency() {
+    return currentCurrency;
+  }
+
   function formatCurrency(val) {
     const cfg = CURRENCY_CONFIG[currentCurrency] || CURRENCY_CONFIG.USD;
     return cfg.symbol + (Number(val) || 0).toLocaleString(cfg.locale);
@@ -244,6 +248,7 @@
   }
 
   window.getCurrencySymbol = getCurrencySymbol;
+  window.getCurrentCurrency = getCurrentCurrency;
   window.formatCurrency = formatCurrency;
   window.updateCurrency = updateCurrency;
   function escapeHtml(str) {
@@ -264,6 +269,7 @@
       email: '',
       phone: '',
       bank: '',
+      invoiceTemplate: 'modern',
     };
   }
 
@@ -1540,6 +1546,8 @@
     $('#invoice-email').value = settings.email || '';
     $('#invoice-phone').value = settings.phone || '';
     $('#invoice-bank').value = settings.bank || '';
+    const templateSelect = $('#invoice-template');
+    if (templateSelect) templateSelect.value = settings.invoiceTemplate || 'modern';
   }
 
   $('#tax-enabled').onchange = (e) => {
@@ -1561,7 +1569,8 @@
       address: $('#invoice-address').value,
       email: $('#invoice-email').value,
       phone: $('#invoice-phone').value,
-      bank: $('#invoice-bank').value
+      bank: $('#invoice-bank').value,
+      invoiceTemplate: $('#invoice-template').value || 'modern',
     };
     saveTaxSettings(settings);
     showToast(t('msgSettingsSaved'));
