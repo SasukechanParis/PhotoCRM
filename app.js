@@ -17,8 +17,19 @@
   const DEFAULT_INVOICE_MESSAGE = 'この度はありがとうございます。';
   const FREE_PLAN_LIMIT = 30;
 
+  function getCloudValue(key, fallback) {
+    const value = window.FirebaseService?.getCachedData(key);
+    return value === undefined ? fallback : value;
+  }
+
+  function saveCloudValue(key, value) {
+    window.FirebaseService?.saveKey(key, value).catch((err) => {
+      console.error(`Failed to save ${key}`, err);
+    });
+  }
+
   // ===== Language Management =====
-  let currentLang = localStorage.getItem(LANG_KEY) || 'en';
+  let currentLang = getCloudValue(LANG_KEY, 'en');
   if (!window.LOCALE || !window.LOCALE[currentLang]) currentLang = 'en';
 
   function t(key, params = {}) {
@@ -49,10 +60,9 @@
     }
 
     currentLang = lang;
-    localStorage.setItem(LANG_KEY, lang);
+    saveCloudValue(LANG_KEY, lang);
     document.documentElement.lang = lang;
 
-    console.log('🌍 Saved language to localStorage:', localStorage.getItem(LANG_KEY));
 
     // Update all text content with data-i18n
     const elementsWithI18n = document.querySelectorAll('[data-i18n]');
@@ -124,26 +134,21 @@
 
   // ===== Storage Helpers =====
   function loadCustomers() {
-    try { return JSON.parse(localStorage.getItem(STORAGE_KEY)) || []; }
-    catch { return []; }
+    return getCloudValue(STORAGE_KEY, []);
   }
-  function saveCustomers(data) { localStorage.setItem(STORAGE_KEY, JSON.stringify(data)); }
+  function saveCustomers(data) { saveCloudValue(STORAGE_KEY, data); }
 
   function loadOptions() {
-    try {
-      const d = JSON.parse(localStorage.getItem(OPTIONS_KEY));
-      return d || { ...DEFAULT_OPTIONS };
-    } catch { return { ...DEFAULT_OPTIONS }; }
+    return { ...DEFAULT_OPTIONS, ...(getCloudValue(OPTIONS_KEY, {}) || {}) };
   }
-  function saveOptions(data) { localStorage.setItem(OPTIONS_KEY, JSON.stringify(data)); }
+  function saveOptions(data) { saveCloudValue(OPTIONS_KEY, data); }
 
   function loadCustomFieldDefinitions() {
-    try { return JSON.parse(localStorage.getItem(CUSTOM_FIELDS_KEY)) || []; }
-    catch { return []; }
+    return getCloudValue(CUSTOM_FIELDS_KEY, []);
   }
 
   function saveCustomFieldDefinitions(fields) {
-    localStorage.setItem(CUSTOM_FIELDS_KEY, JSON.stringify(fields));
+    saveCloudValue(CUSTOM_FIELDS_KEY, fields);
   }
 
   function addCustomFieldDefinition(label) {
@@ -174,16 +179,12 @@
   };
 
   function loadCalendarFilters() {
-    try {
-      const saved = JSON.parse(localStorage.getItem(CALENDAR_FILTERS_KEY));
-      return { ...DEFAULT_CALENDAR_FILTERS, ...(saved || {}) };
-    } catch {
-      return { ...DEFAULT_CALENDAR_FILTERS };
-    }
+    const saved = getCloudValue(CALENDAR_FILTERS_KEY, {});
+    return { ...DEFAULT_CALENDAR_FILTERS, ...(saved || {}) };
   }
 
   function saveCalendarFilters(filters) {
-    localStorage.setItem(CALENDAR_FILTERS_KEY, JSON.stringify(filters));
+    saveCloudValue(CALENDAR_FILTERS_KEY, filters);
   }
 
   let calendarFilters = loadCalendarFilters();
@@ -246,7 +247,7 @@
     EUR: { symbol: '€', locale: 'de-DE' },
   };
 
-  let currentCurrency = localStorage.getItem(CURRENCY_KEY) || 'USD';
+  let currentCurrency = getCloudValue(CURRENCY_KEY, 'USD');
   if (!CURRENCY_CONFIG[currentCurrency]) currentCurrency = 'USD';
 
   function getCurrencySymbol() {
@@ -265,7 +266,7 @@
   function updateCurrency(currency) {
     if (!CURRENCY_CONFIG[currency]) return;
     currentCurrency = currency;
-    localStorage.setItem(CURRENCY_KEY, currency);
+    saveCloudValue(CURRENCY_KEY, currency);
     const sel = document.getElementById('currency-select');
     if (sel) sel.value = currency;
 
@@ -300,27 +301,26 @@
       invoiceFooterMessage: DEFAULT_INVOICE_MESSAGE,
     };
 
-    const saved = localStorage.getItem(TAX_SETTINGS_KEY);
-    return saved ? { ...defaults, ...JSON.parse(saved) } : defaults;
+    return { ...defaults, ...(getCloudValue(TAX_SETTINGS_KEY, {}) || {}) };
   }
 
   function saveTaxSettings(settings) {
-    localStorage.setItem(TAX_SETTINGS_KEY, JSON.stringify(settings));
+    saveCloudValue(TAX_SETTINGS_KEY, settings);
   }
 
   function getInvoiceSenderProfile() {
     try {
-      return JSON.parse(localStorage.getItem(INVOICE_SENDER_PROFILE_KEY)) || { name: '', contact: '' };
+      return getCloudValue(INVOICE_SENDER_PROFILE_KEY, { name: '', contact: '' });
     } catch {
       return { name: '', contact: '' };
     }
   }
 
   function saveInvoiceSenderProfile(profile) {
-    localStorage.setItem(INVOICE_SENDER_PROFILE_KEY, JSON.stringify({
+    saveCloudValue(INVOICE_SENDER_PROFILE_KEY, {
       name: (profile?.name || '').trim(),
       contact: (profile?.contact || '').trim(),
-    }));
+    });
   }
 
   window.getTaxSettings = getTaxSettings; // Make global for generator
@@ -344,12 +344,12 @@
   window.calculateTax = calculateTax;
 
   // ===== Theme Management =====
-  let currentTheme = localStorage.getItem(THEME_KEY) || 'dark';
+  let currentTheme = getCloudValue(THEME_KEY, 'dark');
 
   function applyTheme(theme) {
     currentTheme = theme;
     document.documentElement.setAttribute('data-theme', theme);
-    localStorage.setItem(THEME_KEY, theme);
+    saveCloudValue(THEME_KEY, theme);
 
     // Update theme button icon
     const themeBtn = document.getElementById('btn-theme');
@@ -367,10 +367,9 @@
   window.toggleTheme = toggleTheme;
 
   function getExpenses() {
-    try { return JSON.parse(localStorage.getItem(EXPENSES_KEY)) || []; }
-    catch { return []; }
+    return getCloudValue(EXPENSES_KEY, []);
   }
-  function saveExpenses(expenses) { localStorage.setItem(EXPENSES_KEY, JSON.stringify(expenses)); }
+  function saveExpenses(expenses) { saveCloudValue(EXPENSES_KEY, expenses); }
 
   // ===== Populate Select Options =====
   function populateSelects() {
@@ -728,7 +727,7 @@
       tab.classList.add('active');
       const view = tab.dataset.view;
 
-      localStorage.setItem('preferred_view', view);
+      saveCloudValue('preferred_view', view);
 
       if (view === 'calendar') {
         listView.classList.remove('active');
@@ -1133,10 +1132,10 @@
     const file = e.target.files[0];
     if (!file) return;
     const reader = new FileReader();
-    reader.onload = e => {
+    reader.onload = async e => {
       try {
         const data = JSON.parse(e.target.result);
-        const stats = window.SyncManager.mergeData(data);
+        const stats = await window.SyncManager.mergeData(data);
         customers = loadCustomers();
         options = loadOptions();
         updateLanguage(currentLang);
@@ -1923,7 +1922,7 @@
     }
 
     // Load saved view preference
-    const savedView = localStorage.getItem('preferred_view') || 'list';
+    const savedView = getCloudValue('preferred_view', 'list');
     const activeTab = $(`.view-tab[data-view="${savedView}"]`);
     if (activeTab) activeTab.click();
 
@@ -1933,14 +1932,75 @@
     }
   }
 
+  function hydrateStateFromCloud() {
+    currentLang = getCloudValue(LANG_KEY, 'en');
+    if (!window.LOCALE || !window.LOCALE[currentLang]) currentLang = 'en';
+    currentTheme = getCloudValue(THEME_KEY, 'dark');
+    currentCurrency = getCloudValue(CURRENCY_KEY, 'USD');
+    if (!CURRENCY_CONFIG[currentCurrency]) currentCurrency = 'USD';
+    customers = loadCustomers();
+    options = loadOptions();
+    calendarFilters = loadCalendarFilters();
+  }
+
   // Hook for "Other" in selects
   const keys_to_hook = ['plan', 'costume', 'hairMakeup'];
   keys_to_hook.forEach(k => hookSelectOther(k));
   hookPhotographerOther();
 
+  let appInitialized = false;
+
+  async function handleAuthState(user) {
+    const appContainer = document.querySelector('.app-container');
+    const authStatus = document.getElementById('auth-status');
+    const loginBtn = document.getElementById('btn-google-login');
+    const logoutBtn = document.getElementById('btn-logout');
+
+    if (!user) {
+      if (authStatus) authStatus.textContent = '🔐 Sign in to enable cloud sync';
+      if (loginBtn) loginBtn.style.display = '';
+      if (logoutBtn) logoutBtn.style.display = 'none';
+      if (appContainer) appContainer.style.display = 'none';
+      return;
+    }
+
+    if (authStatus) authStatus.textContent = `✅ ${user.displayName || user.email} でログイン中`;
+    if (loginBtn) loginBtn.style.display = 'none';
+    if (logoutBtn) logoutBtn.style.display = '';
+
+    await window.FirebaseService.loadForUser(user);
+    hydrateStateFromCloud();
+
+    if (appContainer) appContainer.style.display = '';
+
+    if (!appInitialized) {
+      init();
+      appInitialized = true;
+    } else {
+      renderTable();
+      renderExpenses();
+      updateDashboard();
+      populateSelects();
+    }
+  }
+
   // Ensure DOM is ready before initializing
   document.addEventListener('DOMContentLoaded', () => {
-    init();
+    document.getElementById('btn-google-login')?.addEventListener('click', () => {
+      window.FirebaseService.signInWithGoogle().catch((err) => {
+        console.error(err);
+        showToast('Googleログインに失敗しました');
+      });
+    });
+    document.getElementById('btn-logout')?.addEventListener('click', () => {
+      window.FirebaseService.signOut();
+    });
+
+    window.FirebaseService.onAuthChanged((user) => {
+      handleAuthState(user).catch((err) => {
+        console.error('Auth bootstrap failed', err);
+      });
+    });
   });
 
 })();

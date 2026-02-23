@@ -1,10 +1,14 @@
-const CACHE_NAME = 'photocrm-v7'; // v2.2.3 - Fixed btoa encoding error
+const CACHE_NAME = 'photocrm-v8'; // Firebase + auth bootstrap
 const ASSETS = [
     './',
     './index.html',
     './style.css',
     './locales.js',
     './app.js',
+    './firebase-config.js',
+    './sync-manager.js',
+    './team-manager.js',
+    './invoice-generator.js',
     './manifest.json',
     './icon.svg',
 ];

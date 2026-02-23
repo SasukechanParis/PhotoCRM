@@ -90,7 +90,7 @@ const INVOICE_TEMPLATE_STYLES = {
 };
 
 function getInvoiceLang() {
-    return document.documentElement.lang || localStorage.getItem('photocrm_lang') || 'en';
+    return document.documentElement.lang || window.FirebaseService?.getCachedData('photocrm_lang') || 'en';
 }
 
 function invoiceText(key) {
@@ -107,7 +107,7 @@ function invoiceText(key) {
 function getActiveCurrencyCode() {
     return typeof getCurrentCurrency === 'function'
         ? getCurrentCurrency()
-        : (localStorage.getItem('photocrm_currency') || 'USD');
+        : (window.FirebaseService?.getCachedData('photocrm_currency') || 'USD');
 }
 
 function formatInvoiceMoney(value) {
