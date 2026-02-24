@@ -873,14 +873,31 @@
     renderCalendar();
   });
   $('#cal-today').addEventListener('click', () => {
-    calYear = now.getFullYear();
-    calMonth = now.getMonth();
+    const d = new Date();
+    calYear = d.getFullYear();
+    calMonth = d.getMonth();
     renderCalendar();
   });
 
-  initCalendarFilters();
+  // ===== Toolbar Filters =====
+  searchInput.addEventListener('input', renderTable);
+  filterPayment.addEventListener('change', renderTable);
+  filterMonth.addEventListener('change', renderTable);
+  $('#filter-photographer').addEventListener('change', renderTable);
 
-  // ===== Modal (Add / Edit) =====
+  // ===== Add / Edit Modal =====
+  function checkCustomerLimit() {
+    const currentUser = window.FirebaseService?.getCurrentUser();
+    if (!currentUser) return false;
+
+    const userPlan = currentUser.photoCRMPlan || 'free';
+    if (userPlan !== 'pro' && customers.length >= FREE_PLAN_LIMIT) {
+      showToast(`無料プランでは最大${FREE_PLAN_LIMIT}件まで登録可能です。PROプランにアップグレードしてください。`, 'warning');
+      return false;
+    }
+    return true;
+  }
+
   window.openModal = function (id) {
     if (!id && !checkCustomerLimit()) return;
     editingId = id || null;
@@ -1757,7 +1774,6 @@
 
   function loadInvoiceSettings() {
     const settings = getTaxSettings();
-    $('#tax-enabled').checked = settings.enabled;
     $('#tax-rate').value = settings.rate;
     $('#tax-label').value = settings.label === 'Tax' || settings.label === 'VAT' || settings.label === 'GST' || settings.label === 'Sales Tax' || settings.label === '消費税' ? settings.label : 'Custom';
 
@@ -2032,6 +2048,12 @@
 
   // Ensure DOM is ready before initializing
   document.addEventListener('DOMContentLoaded', async () => {
+    if (!window.FirebaseService) {
+      console.error('FirebaseService is not available. Please check script loading order.');
+      showToast('Firebase設定の読み込みに失敗しました。');
+      return;
+    }
+
     await window.FirebaseService.whenReady();
 
     const triggerGoogleLogin = () => {
