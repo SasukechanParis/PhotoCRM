@@ -43,9 +43,23 @@
 
   let redirectResolved = false;
   let redirectResultPromise = null;
+  let initialAuthStatePromise = null;
 
   async function ensureInitialized() {
     await firebaseInitPromise;
+  }
+
+  function ensureInitialAuthStatePromise() {
+    if (initialAuthStatePromise) return initialAuthStatePromise;
+
+    initialAuthStatePromise = new Promise((resolve) => {
+      const unsubscribe = auth.onAuthStateChanged((user) => {
+        unsubscribe();
+        resolve(user);
+      });
+    });
+
+    return initialAuthStatePromise;
   }
 
   function parseLocalValue(raw) {
@@ -266,6 +280,10 @@
     },
     async processRedirectResult() {
       return processRedirectResult();
+    },
+    async waitForInitialAuthState() {
+      await ensureInitialized();
+      return ensureInitialAuthStatePromise();
     },
     async loadForUser(user) {
       await ensureInitialized();

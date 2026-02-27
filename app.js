@@ -1971,8 +1971,10 @@
 
   let appInitialized = false;
   let authReady = false;
+  let authStateRequestId = 0;
 
   async function handleAuthState(user) {
+    const requestId = ++authStateRequestId;
     const appContainer = document.querySelector('.app-container');
     const loginScreen = document.getElementById('login-screen');
     const authBanner = document.getElementById('auth-banner');
@@ -2006,8 +2008,15 @@
     if (loginScreen) loginScreen.style.display = 'none';
     if (authBanner) authBanner.style.display = 'flex';
 
-    await window.FirebaseService.loadForUser(user);
-    hydrateStateFromCloud();
+    try {
+      await window.FirebaseService.loadForUser(user);
+      if (requestId !== authStateRequestId) return;
+      hydrateStateFromCloud();
+    } catch (err) {
+      console.error('Cloud data load failed', err);
+      showToast('クラウドデータの読み込みに失敗しました。再度お試しください。');
+      return;
+    }
 
     if (appContainer) appContainer.style.display = '';
 
@@ -2035,7 +2044,8 @@
       showToast('Googleログインに失敗しました。再度お試しください。');
     } finally {
       authReady = true;
-      await handleAuthState(window.FirebaseService.getCurrentUser());
+      const currentUser = await window.FirebaseService.waitForInitialAuthState();
+      await handleAuthState(currentUser);
     }
   }
 
