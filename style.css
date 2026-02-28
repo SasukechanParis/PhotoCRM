@@ -333,8 +333,8 @@ body {
 /* ===== Stat Cards ===== */
 .dashboard {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-  gap: 16px;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
   margin-bottom: 0;
 }
 
@@ -381,7 +381,7 @@ body {
   background: var(--bg-card);
   border: 1px solid var(--border-color);
   border-radius: var(--radius-lg);
-  padding: 20px;
+  padding: 14px 16px;
   transition: all var(--transition);
   animation: slideUp 0.5s ease-out both;
 }
@@ -409,12 +409,12 @@ body {
 }
 
 .stat-icon {
-  font-size: 24px;
-  margin-bottom: 8px;
+  font-size: 20px;
+  margin-bottom: 4px;
 }
 
 .stat-value {
-  font-size: 24px;
+  font-size: 20px;
   font-weight: 700;
 }
 
@@ -682,20 +682,25 @@ tbody tr:hover {
 
 #customer-table th {
   background: rgba(255, 255, 255, 0.02);
-  padding: 16px;
+  padding: 10px 12px;
   text-align: left;
   font-weight: 600;
   color: var(--text-secondary);
   border-bottom: 2px solid var(--border-color);
-  font-size: 0.8rem;
+  font-size: 0.75rem;
 }
 
 #customer-table td {
-  padding: 16px;
+  padding: 10px 12px;
   border-bottom: 1px solid var(--border-color);
   color: var(--text-primary);
   word-break: break-word;
   overflow-wrap: anywhere;
+}
+
+#customer-table th:last-child,
+#customer-table td:last-child {
+  width: 220px;
 }
 
 #customer-table tbody tr:hover {
@@ -703,23 +708,24 @@ tbody tr:hover {
 }
 
 .table-action-group {
-  display: flex;
-  gap: 6px;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 4px;
 }
 
 .table-action-btn {
-  border: 1px solid var(--border-color);
+  border: 1px solid rgba(148, 163, 184, 0.22);
   background: var(--bg-glass);
   color: var(--text-primary);
-  border-radius: 10px;
-  min-width: 66px;
-  padding: 4px 6px;
+  border-radius: 8px;
+  min-width: 0;
+  min-height: 28px;
+  padding: 3px 5px;
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   align-items: center;
   justify-content: center;
-  gap: 2px;
+  gap: 4px;
   cursor: pointer;
   transition: all var(--transition);
 }
@@ -730,12 +736,12 @@ tbody tr:hover {
 }
 
 .table-action-icon {
-  font-size: 0.95rem;
+  font-size: 0.72rem;
   line-height: 1;
 }
 
 .table-action-label {
-  font-size: 0.62rem;
+  font-size: 0.56rem;
   line-height: 1.1;
   color: var(--text-secondary);
   white-space: nowrap;
@@ -1009,14 +1015,24 @@ tbody tr:hover {
     word-break: break-word;
   }
 
+  #customer-table th:last-child,
+  #customer-table td:last-child {
+    width: auto;
+  }
+
   .table-action-btn {
-    min-width: 58px;
+    min-width: 0;
     min-height: 44px;
-    padding: 3px 5px;
+    padding: 6px 8px;
   }
 
   .table-action-label {
-    font-size: 0.56rem;
+    font-size: 0.62rem;
+  }
+
+  .table-action-group {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 6px;
   }
 
   .calendar-cell {

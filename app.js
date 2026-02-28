@@ -1287,25 +1287,25 @@
         <td><span class="badge badge-cyan">${escapeHtml(getPhotographerName(c.assignedTo))}</span></td>
         <td>
           <div class="table-action-group">
-            <button type="button" class="table-action-btn btn-edit" title="${t('edit')}" aria-label="${t('edit')}" data-id="${c.id}">
+            <button type="button" class="table-action-btn btn-edit" title="編集" aria-label="編集" onclick="openModal('${c.id}')">
               <span class="table-action-icon">✏️</span>
-              <span class="table-action-label">${t('edit')}</span>
+              <span class="table-action-label">編集</span>
             </button>
-            <button type="button" class="table-action-btn" title="${t('generateInvoice')}" aria-label="${t('generateInvoice')}" onclick="generateInvoiceByID('${c.id}')">
+            <button type="button" class="table-action-btn" title="詳細" aria-label="詳細" onclick="openCustomerDetailByID('${c.id}')">
               <span class="table-action-icon">📄</span>
-              <span class="table-action-label">${t('generateInvoice')}</span>
+              <span class="table-action-label">詳細</span>
             </button>
-            <button type="button" class="table-action-btn" title="${t('generateQuote')}" aria-label="${t('generateQuote')}" onclick="generateQuoteByID('${c.id}')">
+            <button type="button" class="table-action-btn" title="契約書" aria-label="契約書" onclick="openContractModalByID('${c.id}')">
               <span class="table-action-icon">📋</span>
-              <span class="table-action-label">${t('generateQuote')}</span>
+              <span class="table-action-label">契約書</span>
             </button>
-            <button type="button" class="table-action-btn" title="${t('generateContract')}" aria-label="${t('generateContract')}" onclick="openContractModalByID('${c.id}')">
+            <button type="button" class="table-action-btn" title="履歴" aria-label="履歴" onclick="openCustomerHistoryByID('${c.id}')">
               <span class="table-action-icon">📜</span>
-              <span class="table-action-label">${t('generateContract')}</span>
+              <span class="table-action-label">履歴</span>
             </button>
-            <button type="button" class="table-action-btn btn-del" title="${t('delete')}" aria-label="${t('delete')}" data-id="${c.id}">
+            <button type="button" class="table-action-btn btn-del" title="削除" aria-label="削除" onclick="openConfirm('${c.id}')">
               <span class="table-action-icon">🗑</span>
-              <span class="table-action-label">${t('delete')}</span>
+              <span class="table-action-label">削除</span>
             </button>
           </div>
         </td>
@@ -2719,6 +2719,22 @@
     if (customer && window.generateQuotePDF) {
       window.generateQuotePDF(customer);
     }
+  };
+
+  window.openCustomerDetailByID = function(customerId) {
+    const customer = customers.find(c => c.id === customerId);
+    if (!customer) return;
+    openDetail(customer.id);
+  };
+
+  window.openCustomerHistoryByID = function(customerId) {
+    const customer = customers.find(c => c.id === customerId);
+    if (!customer) return;
+    openDetail(customer.id);
+    setTimeout(() => {
+      const taskList = document.getElementById('task-list');
+      if (taskList) taskList.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 280);
   };
 
   window.openContractModalByID = function(customerId) {
