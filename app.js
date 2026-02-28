@@ -147,6 +147,11 @@
       langSelect.value = lang;
     }
 
+    const appTitle = document.getElementById('app-title-fixed');
+    if (appTitle) appTitle.textContent = '顧客管理';
+    const legacySubtitle = document.querySelector('.logo-copy .subtitle');
+    if (legacySubtitle) legacySubtitle.style.display = 'none';
+
     const customerTable = document.getElementById('customer-table');
     if (customerTable) customerTable.style.tableLayout = 'auto';
     const customerTableWrapper = document.getElementById('table-wrapper');
@@ -1099,6 +1104,8 @@
     isListColumnsMenuOpen = !!isOpen;
     if (isListColumnsMenuOpen) {
       renderListColumnsMenu();
+      listColumnsMenu.style.zIndex = '99999';
+      listColumnsMenu.style.backgroundColor = '#ffffff';
       listColumnsMenu.style.display = 'block';
       listColumnsMenu.classList.add('active');
     } else {

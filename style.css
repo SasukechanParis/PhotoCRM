@@ -227,6 +227,7 @@ body {
 .logo {
   display: flex;
   align-items: center;
+  flex-wrap: nowrap;
   gap: 12px;
 }
 
@@ -235,6 +236,10 @@ body {
   flex-direction: column;
   gap: 2px;
   position: relative;
+}
+
+.logo-copy h1 {
+  white-space: nowrap;
 }
 
 .logo-icon {
@@ -246,7 +251,7 @@ body {
   border: 1px solid var(--border-color);
   background: var(--bg-glass);
   color: var(--text-secondary);
-  border-radius: 10px;
+  border-radius: 8px;
   padding: 7px 12px;
   font-size: clamp(0.7rem, 1.8vw, 0.82rem);
   font-weight: 600;
@@ -343,7 +348,7 @@ body {
   justify-content: center;
   gap: 6px;
   padding: 6px 12px;
-  border-radius: 10px;
+  border-radius: 8px;
   border: 1px solid var(--border-color);
   background: var(--bg-glass);
   color: var(--text-primary);
@@ -385,8 +390,8 @@ body {
 }
 
 .btn-sm {
-  padding: 6px 10px;
-  font-size: clamp(0.7rem, 1.8vw, 0.78rem);
+  padding: 6px 12px;
+  font-size: 0.85rem;
 }
 
 .btn-lg {
@@ -398,7 +403,7 @@ body {
 .theme-toggle {
   width: 38px;
   height: 38px;
-  border-radius: 10px;
+  border-radius: 8px;
   border: 1px solid var(--border-color);
   background: var(--bg-glass);
   color: var(--text-primary);
@@ -522,6 +527,9 @@ body {
   flex-wrap: wrap;
   gap: 12px;
   margin-bottom: 16px;
+  position: relative;
+  overflow: visible;
+  z-index: 20;
   animation: fadeIn 0.6s ease-out 0.5s both;
 }
 
@@ -554,17 +562,35 @@ body {
   opacity: 0.5;
 }
 
-.filter-select {
+.filter-select,
+#btn-list-columns {
   padding: 8px 12px;
+  min-height: 38px;
+  font-size: 0.85rem;
+  line-height: 1.2;
   background: var(--bg-input);
   border: 1px solid var(--border-color);
-  border-radius: var(--radius-md);
+  border-radius: 8px;
   color: var(--text-primary);
+}
+
+.filter-select {
   cursor: pointer;
+}
+
+#btn-list-columns {
+  box-shadow: none;
+}
+
+#btn-list-columns:hover {
+  background: var(--bg-secondary);
+  border-color: var(--accent);
+  transform: none;
 }
 
 .list-columns-menu-wrap {
   position: relative;
+  z-index: 10000;
 }
 
 .list-columns-menu {
@@ -572,11 +598,11 @@ body {
   top: calc(100% + 8px);
   right: 0;
   width: min(340px, calc(100vw - 32px));
-  background: var(--bg-card);
-  border: 1px solid var(--border-color);
+  background: #ffffff;
+  border: 1px solid #d8deea;
   border-radius: 12px;
-  box-shadow: var(--shadow-lg);
-  z-index: 90;
+  box-shadow: 0 18px 38px rgba(15, 16, 35, 0.24);
+  z-index: 99999 !important;
   padding: 8px;
   opacity: 0;
   transform: translateY(-6px);
@@ -599,7 +625,7 @@ body {
 
 .list-columns-menu-hint {
   font-size: 0.75rem;
-  color: var(--text-muted);
+  color: #6b7280;
   padding: 6px 8px 4px;
 }
 
@@ -621,7 +647,7 @@ body {
   align-items: center;
   gap: 8px;
   font-size: 0.84rem;
-  color: var(--text-primary);
+  color: #1f2937;
 }
 
 .list-columns-toggle input[type="checkbox"] {
@@ -850,7 +876,7 @@ tbody tr:hover {
 }
 
 #customer-table {
-  width: 100%;
+  width: max-content;
   border-collapse: collapse;
   table-layout: auto;
   min-width: 100%;
@@ -860,6 +886,8 @@ tbody tr:hover {
   background: rgba(255, 255, 255, 0.02);
   padding: 12px 8px;
   text-align: left;
+  min-width: 120px;
+  white-space: nowrap;
   font-weight: 600;
   color: var(--text-secondary);
   border-bottom: 2px solid var(--border-color);
@@ -894,24 +922,24 @@ tbody tr:hover {
 #customer-table td[data-column-key="customerName"],
 #customer-table th[data-column-key="contact"],
 #customer-table td[data-column-key="contact"] {
-  min-width: 150px;
+  min-width: 160px;
 }
 
 #customer-table th[data-column-key="plan"],
 #customer-table td[data-column-key="plan"],
 #customer-table th[data-column-key="revenue"],
 #customer-table td[data-column-key="revenue"] {
-  min-width: 100px;
+  min-width: 110px;
 }
 
 #customer-table th[data-column-key="paymentChecked"],
 #customer-table td[data-column-key="paymentChecked"] {
-  min-width: 100px;
+  min-width: 110px;
 }
 
 #customer-table th[data-column-key="assignedTo"],
 #customer-table td[data-column-key="assignedTo"] {
-  min-width: 120px;
+  min-width: 130px;
 }
 
 #customer-table th[data-column-key="actions"],
@@ -1331,6 +1359,11 @@ tbody tr:hover {
   .header-actions {
     width: 100%;
     justify-content: flex-end;
+  }
+
+  #btn-list-columns {
+    width: 100%;
+    justify-content: center;
   }
 
   .dashboard {
