@@ -5,24 +5,14 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title data-i18n="appTitle">PhotoCRM - Professional Photographer CRM</title>
+  <title>DEBUG_CHECK_123</title>
   <meta name="description"
     content="Customer management for photographers. Manage everything from inquiries to payments."
     data-i18n="metaDescription">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=999">
-  <style>
-    .display-settings-menu {
-      z-index: 2147483647 !important;
-      position: fixed !important;
-      display: block !important;
-    }
-    .header-title {
-      display: none !important;
-    }
-  </style>
+  <link rel="stylesheet" href="style.css">
   <link rel="manifest" href="manifest.json">
   <link rel="icon" href="icon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="icon.svg">
@@ -51,7 +41,43 @@
   <div class="app-container" id="app-container">
 
     <!-- ===== Header ===== -->
-    <header class="app-header"></header>
+    <header class="app-header">
+      <div class="logo">
+        <div class="logo-icon">📷</div>
+        <div class="logo-copy">
+          <button class="stats-toggle-btn" id="btn-toggle-dashboard" type="button"
+            title="統計を隠す" aria-expanded="true">📊 統計を隠す</button>
+          <div class="dashboard-quick-menu" id="dashboard-quick-menu" style="display:none;">
+            <div class="dashboard-quick-menu-content" id="dashboard-quick-menu-content"></div>
+          </div>
+        </div>
+      </div>
+      <div class="header-actions">
+        <!-- Language Switcher -->
+        <select id="lang-select" class="btn btn-secondary btn-sm" style="padding: 6px 8px; min-width:auto;">
+          <option value="en">🇺🇸 English</option>
+          <option value="ja">🇯🇵 日本語</option>
+          <option value="fr">🇫🇷 Français</option>
+          <option value="zh-CN">🇨🇳 简体中文</option>
+          <option value="zh-TW">🇹🇼 繁體中文</option>
+          <option value="ko">🇰🇷 한국어</option>
+        </select>
+
+        <button class="theme-toggle" id="btn-theme" title="Toggle Theme">🌙</button>
+        <button class="btn btn-secondary btn-sm" id="btn-settings" title="Settings" data-i18n="settings">⚙
+          Settings</button>
+        <button class="btn btn-secondary btn-sm" id="btn-sync-export" title="バックアップ (JSON)" data-i18n="exportSync"
+          data-i18n-title="exportSync">バックアップ (JSON)</button>
+        <button class="btn btn-secondary btn-sm" id="btn-sync-import" title="データ復元" data-i18n="importSync"
+          data-i18n-title="importSync">データ復元</button>
+        <input type="file" id="import-file" accept=".json" style="display:none;" />
+        <button class="btn btn-secondary btn-sm" id="btn-ics-export" title="カレンダー連携 (iCal)" data-i18n="exportIcs"
+          data-i18n-title="exportIcs">カレンダー連携 (iCal)</button>
+        <button class="btn btn-secondary btn-sm" id="btn-export" title="売上集計 (CSV)" data-i18n="exportCsv"
+          data-i18n-title="exportCsv">売上集計 (CSV)</button>
+        <button class="btn btn-primary" id="btn-add" data-i18n="addCustomer">＋ Add New</button>
+      </div>
+    </header>
 
     <!-- ===== Dashboard ===== -->
     <div class="dashboard-collapsible" id="dashboard-collapsible">
@@ -161,19 +187,19 @@
           <span class="search-icon">🔍</span>
           <input type="text" id="search-input" placeholder="お客様名・連絡先で検索..." data-i18n-placeholder="searchPlaceholder" />
         </div>
-        <select class="filter-select" id="filter-payment">
+        <select class="filter-select ui-button-standard" id="filter-payment">
           <option value="all" data-i18n="filterAll">すべて</option>
           <option value="paid" data-i18n="filterPaid">入金済み</option>
           <option value="unpaid" data-i18n="filterUnpaid">未入金</option>
         </select>
-        <select class="filter-select" id="filter-photographer">
+        <select class="filter-select ui-button-standard" id="filter-photographer">
           <option value="all" data-i18n="filterPhotographer">Filter by Staff</option>
         </select>
-        <select class="filter-select" id="filter-month">
+        <select class="filter-select ui-button-standard" id="filter-month">
           <option value="all" data-i18n="filterPeriodAll">全期間</option>
         </select>
         <div class="list-columns-menu-wrap" id="list-columns-menu-wrap">
-          <button class="filter-select list-columns-trigger" id="btn-list-columns" type="button" aria-expanded="false">
+          <button class="list-columns-trigger ui-button-standard" id="btn-list-columns" type="button" aria-expanded="false">
             ⚙ 表示項目設定
           </button>
           <div class="list-columns-menu" id="list-columns-menu" style="display:none;">
@@ -883,15 +909,7 @@
   <script src="invoice-generator.js"></script>
   <script src="team-manager.js"></script>
   <script src="sync-manager.js"></script>
-  <script>
-    window.__FORCE_UI_REFRESH_ACTIVE_MARKER__ = false;
-    setTimeout(() => {
-      if (!window.__FORCE_UI_REFRESH_ACTIVE_MARKER__) {
-        console.warn('WARNING: FORCE_UI_REFRESH_ACTIVE marker not detected. You may be loading a stale app.js file.');
-      }
-    }, 2200);
-  </script>
-  <script src="app.js?v=999"></script>
+  <script src="app.js"></script>
 </body>
 
 </html>

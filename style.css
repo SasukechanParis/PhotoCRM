@@ -218,6 +218,7 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  width: 100%;
   gap: 16px;
   margin-bottom: 0;
   padding-bottom: 24px;
@@ -238,10 +239,6 @@ body {
   flex-direction: column;
   gap: 2px;
   position: relative;
-}
-
-.logo-copy h1 {
-  white-space: nowrap;
 }
 
 .logo-icon {
@@ -338,6 +335,7 @@ body {
   display: flex;
   flex-wrap: wrap;
   justify-content: flex-end;
+  margin-left: auto;
   gap: 8px;
   align-items: center;
   row-gap: 8px;
@@ -566,7 +564,7 @@ body {
   opacity: 0.5;
 }
 
-.filter-select {
+.ui-button-standard {
   padding: 8px 12px;
   min-height: 38px;
   height: 38px;
@@ -580,34 +578,22 @@ body {
   cursor: pointer;
 }
 
-#btn-list-columns {
-  all: unset;
-  box-sizing: border-box;
+.filter-select {
+  appearance: auto;
+}
+
+.list-columns-trigger {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 110px !important;
-  min-width: 110px !important;
-  padding: 0 !important;
-  min-height: 38px !important;
-  height: 38px;
-  font-size: 0.85rem;
-  line-height: 1.2;
-  background: var(--bg-input);
-  border: 1px solid var(--border-color);
-  border-radius: 8px;
-  color: var(--text-primary);
-  box-shadow: none;
-  cursor: pointer;
-  white-space: nowrap;
 }
 
-#btn-list-columns:focus-visible {
+.list-columns-trigger:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
 
-#btn-list-columns:hover {
+.list-columns-trigger:hover {
   background: var(--bg-secondary);
   border-color: var(--accent);
   transform: none;
@@ -615,19 +601,20 @@ body {
 
 .list-columns-menu-wrap {
   position: relative;
-  z-index: 1;
+  z-index: 100;
 }
 
 .list-columns-menu {
-  position: fixed !important;
-  top: 0;
-  left: 0;
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  left: auto;
   width: min(340px, calc(100vw - 32px));
   background: #ffffff;
   border: 1px solid #d8deea;
   border-radius: 12px;
   box-shadow: 0 18px 38px rgba(15, 16, 35, 0.24);
-  z-index: 2147483647 !important;
+  z-index: 100;
   padding: 8px;
   opacity: 0;
   transform: translateY(-6px);
@@ -911,8 +898,8 @@ tbody tr:hover {
   background: rgba(255, 255, 255, 0.02);
   padding: 12px 8px;
   text-align: left;
-  min-width: 140px !important;
-  white-space: nowrap !important;
+  min-width: 120px;
+  white-space: nowrap;
   font-weight: 600;
   color: var(--text-secondary);
   border-bottom: 2px solid var(--border-color);
@@ -929,8 +916,8 @@ tbody tr:hover {
 
 #customer-table th,
 #customer-table td {
-  white-space: nowrap !important;
-  min-width: 140px !important;
+  white-space: nowrap;
+  min-width: 120px;
 }
 
 #customer-table th[data-column-key="inquiryDate"],
@@ -1387,7 +1374,7 @@ tbody tr:hover {
     justify-content: flex-end;
   }
 
-  #btn-list-columns {
+  .list-columns-trigger {
     width: auto;
     justify-content: center;
   }

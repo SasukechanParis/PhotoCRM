@@ -2,9 +2,9 @@
 
 (function () {
   'use strict';
-  window.__FORCE_UI_REFRESH_ACTIVE_MARKER__ = true;
   console.log('Loading PhotoCRM v2.2.4-FIXED...');
-  console.log("FORCE_UI_REFRESH_ACTIVE");
+  console.error("CURRENT_FILE_PATH: " + window.location.href);
+  console.error("LAST_MODIFIED: " + document.lastModified);
 
   // ===== Storage Keys =====
   const STORAGE_KEY = 'photocrm_customers';
@@ -105,42 +105,6 @@
   }
   window.t = t;
 
-  function ensureAppHeaderMarkup() {
-    const header = document.querySelector('.app-header');
-    if (!header) return;
-    header.innerHTML = `
-      <div class="logo">
-        <div class="logo-icon">📷</div>
-        <div class="logo-copy">
-          <h1 id="app-title-fixed"></h1>
-          <button class="stats-toggle-btn" id="btn-toggle-dashboard" type="button" title="統計を隠す" aria-expanded="true">📊 統計を隠す</button>
-          <div class="dashboard-quick-menu" id="dashboard-quick-menu" style="display:none;">
-            <div class="dashboard-quick-menu-content" id="dashboard-quick-menu-content"></div>
-          </div>
-        </div>
-      </div>
-      <div class="header-actions">
-        <select id="lang-select" class="btn btn-secondary btn-sm" style="padding: 6px 8px; min-width:auto;">
-          <option value="en">🇺🇸 English</option>
-          <option value="ja">🇯🇵 日本語</option>
-          <option value="fr">🇫🇷 Français</option>
-          <option value="zh-CN">🇨🇳 简体中文</option>
-          <option value="zh-TW">🇹🇼 繁體中文</option>
-          <option value="ko">🇰🇷 한국어</option>
-        </select>
-        <button class="theme-toggle" id="btn-theme" title="Toggle Theme">🌙</button>
-        <button class="btn btn-secondary btn-sm" id="btn-settings" title="Settings" data-i18n="settings">⚙ Settings</button>
-        <button class="btn btn-secondary btn-sm" id="btn-sync-export" title="バックアップ (JSON)" data-i18n="exportSync" data-i18n-title="exportSync">バックアップ (JSON)</button>
-        <button class="btn btn-secondary btn-sm" id="btn-sync-import" title="データ復元" data-i18n="importSync" data-i18n-title="importSync">データ復元</button>
-        <input type="file" id="import-file" accept=".json" style="display:none;" />
-        <button class="btn btn-secondary btn-sm" id="btn-ics-export" title="カレンダー連携 (iCal)" data-i18n="exportIcs" data-i18n-title="exportIcs">カレンダー連携 (iCal)</button>
-        <button class="btn btn-secondary btn-sm" id="btn-export" title="売上集計 (CSV)" data-i18n="exportCsv" data-i18n-title="exportCsv">売上集計 (CSV)</button>
-        <button class="btn btn-primary" id="btn-add" data-i18n="addCustomer">＋ Add New</button>
-      </div>
-    `;
-  }
-  ensureAppHeaderMarkup();
-
   function updateLanguage(lang) {
     if (!window.LOCALE || !window.LOCALE[lang]) {
       console.warn(`Unsupported language "${lang}". Falling back to English.`);
@@ -185,11 +149,6 @@
     if (langSelect) {
       langSelect.value = lang;
     }
-
-    const appTitle = document.getElementById('app-title-fixed');
-    if (appTitle) appTitle.textContent = "";
-    const legacySubtitle = document.querySelector('.logo-copy .subtitle');
-    if (legacySubtitle) legacySubtitle.style.display = 'none';
 
     const customerTable = document.getElementById('customer-table');
     if (customerTable) customerTable.style.tableLayout = 'auto';
@@ -604,30 +563,6 @@
   const calendarView = $('#calendar-view');
   const calendarFilterInputs = $$('.calendar-filter-input');
   const eventBindingRegistry = new WeakMap();
-  const STYLE_CACHE_BUSTER = '999';
-
-  function refreshMainStylesheetCache() {
-    const styleLink = document.querySelector('link[rel="stylesheet"][href*="style.css"]');
-    if (!styleLink) return;
-    try {
-      const styleUrl = new URL(styleLink.getAttribute('href') || styleLink.href, window.location.href);
-      if (styleUrl.searchParams.get('v') === STYLE_CACHE_BUSTER) return;
-      styleUrl.searchParams.set('v', STYLE_CACHE_BUSTER);
-      styleLink.href = styleUrl.toString();
-    } catch {
-      const href = styleLink.getAttribute('href') || 'style.css';
-      if (!href.includes(`v=${STYLE_CACHE_BUSTER}`)) {
-        styleLink.setAttribute('href', `${href}${href.includes('?') ? '&' : '?'}v=${STYLE_CACHE_BUSTER}`);
-      }
-    }
-  }
-
-  function ensureListColumnsMenuMountedToBody() {
-    if (!listColumnsMenu || !document.body) return;
-    if (listColumnsMenu.parentElement !== document.body) {
-      document.body.insertAdjacentElement('beforeend', listColumnsMenu);
-    }
-  }
 
   function bindEventOnce(element, eventName, handler, bindingKey = null, options = undefined) {
     if (!element || typeof handler !== 'function') return;
@@ -1162,49 +1097,14 @@
     });
   }
 
-  function positionListColumnsMenu() {
-    if (!listColumnsMenu || !listColumnsButton) return;
-    const buttonRect = listColumnsButton.getBoundingClientRect();
-    const viewportPadding = 8;
-    const maxWidth = Math.min(360, window.innerWidth - (viewportPadding * 2));
-    listColumnsMenu.style.width = `${Math.max(260, maxWidth)}px`;
-
-    let left = buttonRect.right - Math.max(260, maxWidth);
-    left = Math.max(viewportPadding, left);
-    if (left + Math.max(260, maxWidth) > window.innerWidth - viewportPadding) {
-      left = window.innerWidth - Math.max(260, maxWidth) - viewportPadding;
-    }
-
-    let top = buttonRect.bottom + 8;
-    const estimatedHeight = listColumnsMenu.offsetHeight || 320;
-    if (top + estimatedHeight > window.innerHeight - viewportPadding) {
-      top = Math.max(viewportPadding, buttonRect.top - estimatedHeight - 8);
-    }
-
-    listColumnsMenu.style.left = `${left}px`;
-    listColumnsMenu.style.top = `${top}px`;
-  }
-
-  function handleListColumnsViewportChange() {
-    if (!isListColumnsMenuOpen) return;
-    positionListColumnsMenu();
-  }
-
   function setListColumnsMenuOpen(isOpen) {
     if (!listColumnsMenu || !listColumnsButton) return;
     isListColumnsMenuOpen = !!isOpen;
     if (isListColumnsMenuOpen) {
-      ensureListColumnsMenuMountedToBody();
-      console.log('Menu Opening...');
       renderListColumnsMenu();
-      listColumnsMenu.classList.add('display-settings-menu');
-      listColumnsMenu.style.zIndex = '2147483647';
-      listColumnsMenu.style.backgroundColor = '#ffffff';
       listColumnsMenu.style.display = 'block';
       listColumnsMenu.classList.add('active');
-      positionListColumnsMenu();
     } else {
-      listColumnsMenu.classList.remove('display-settings-menu');
       listColumnsMenu.classList.remove('active');
       listColumnsMenu.style.display = 'none';
     }
@@ -3294,8 +3194,6 @@
     bindEventOnce(document, 'click', handleListColumnsOutsideClick, 'list-columns-outside-click');
     bindEventOnce(document, 'keydown', handleDashboardQuickMenuEscape, 'dashboard-quick-menu-escape');
     bindEventOnce(document, 'keydown', handleListColumnsEscape, 'list-columns-escape');
-    bindEventOnce(window, 'resize', handleListColumnsViewportChange, 'list-columns-viewport-resize');
-    bindEventOnce(window, 'scroll', handleListColumnsViewportChange, 'list-columns-viewport-scroll', true);
     bindEventOnce(document.getElementById('form-plan'), 'change', handlePlanSelectChange, 'form-plan-select-change');
     bindEventOnce(document.getElementById('form-costume'), 'change', updateCostumePriceFromSelection, 'form-costume-select-change');
     bindEventOnce(document.getElementById('form-hairMakeup'), 'change', updateHairMakeupPriceFromSelection, 'form-hairmakeup-select-change');
@@ -3350,7 +3248,6 @@
     updateCurrency(currentCurrency);
     setDashboardVisibility(dashboardVisible);
     applyDashboardConfig();
-    ensureListColumnsMenuMountedToBody();
 
     // 3. Attach event listeners
     bindCoreUIEventListeners();
@@ -3510,7 +3407,6 @@
 
   // Ensure DOM is ready before initializing
   document.addEventListener('DOMContentLoaded', async () => {
-    refreshMainStylesheetCache();
     init();
     setAuthScreenState('checking');
     registerPwaServiceWorker();
