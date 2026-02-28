@@ -49,6 +49,9 @@
           <p class="subtitle" data-i18n="appSubtitle">Photographer CRM</p>
           <button class="stats-toggle-btn" id="btn-toggle-dashboard" type="button"
             title="統計を隠す" aria-expanded="true">📊 統計を隠す</button>
+          <div class="dashboard-quick-menu" id="dashboard-quick-menu" style="display:none;">
+            <div class="dashboard-quick-menu-content" id="dashboard-quick-menu-content"></div>
+          </div>
         </div>
       </div>
       <div class="header-actions">
@@ -270,7 +273,9 @@
           </label>
         </div>
       </div>
-      <div class="calendar-grid" id="calendar-grid"></div>
+      <div class="calendar-grid-scroll">
+        <div class="calendar-grid" id="calendar-grid"></div>
+      </div>
       <div class="calendar-legend">
         <div class="legend-item">
           <span class="legend-dot" style="background: var(--accent);"></span>

@@ -147,6 +147,13 @@ body {
   transition: background-color var(--transition), color var(--transition);
 }
 
+html,
+body {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
 .login-screen {
   min-height: 100vh;
   display: flex;
@@ -199,9 +206,11 @@ body {
 }
 
 .app-container {
-  max-width: 1440px;
+  width: 100%;
+  max-width: 100%;
   margin: 0 auto;
   padding: 24px 32px;
+  overflow-x: hidden;
 }
 
 /* ===== Header ===== */
@@ -225,6 +234,7 @@ body {
   display: flex;
   flex-direction: column;
   gap: 2px;
+  position: relative;
 }
 
 .logo-icon {
@@ -251,6 +261,69 @@ body {
   background: var(--accent-glow);
 }
 
+.dashboard-quick-menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  width: min(320px, calc(100vw - 40px));
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  box-shadow: var(--shadow-lg);
+  z-index: 80;
+  padding: 8px;
+  opacity: 0;
+  transform: translateY(-6px);
+  pointer-events: none;
+  transition: opacity var(--transition), transform var(--transition);
+}
+
+.dashboard-quick-menu.active {
+  opacity: 1;
+  transform: translateY(0);
+  pointer-events: auto;
+}
+
+.dashboard-quick-menu-content {
+  display: grid;
+  gap: 2px;
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+.dashboard-quick-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 10px;
+  border-radius: 8px;
+  font-size: 0.85rem;
+  color: var(--text-primary);
+  cursor: pointer;
+  user-select: none;
+}
+
+.dashboard-quick-item:hover {
+  background: var(--bg-glass);
+}
+
+.dashboard-quick-item input[type="checkbox"] {
+  accent-color: var(--accent);
+  width: 16px;
+  height: 16px;
+}
+
+.dashboard-quick-item-main {
+  font-weight: 600;
+}
+
+.dashboard-quick-divider {
+  height: 1px;
+  margin: 4px 6px;
+  background: var(--border-color);
+}
+
 .header-actions {
   display: flex;
   gap: 12px;
@@ -260,7 +333,7 @@ body {
 /* ===== Stat Cards ===== */
 .dashboard {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
   gap: 16px;
   margin-bottom: 0;
 }
@@ -604,6 +677,7 @@ tbody tr:hover {
 #customer-table {
   width: 100%;
   border-collapse: collapse;
+  table-layout: fixed;
 }
 
 #customer-table th {
@@ -620,6 +694,8 @@ tbody tr:hover {
   padding: 16px;
   border-bottom: 1px solid var(--border-color);
   color: var(--text-primary);
+  word-break: break-word;
+  overflow-wrap: anywhere;
 }
 
 #customer-table tbody tr:hover {
@@ -758,13 +834,26 @@ tbody tr:hover {
 
 .calendar-grid {
   display: grid;
-  grid-template-columns: repeat(7, 1fr);
+  grid-template-columns: repeat(7, minmax(0, 1fr));
   gap: 1px;
   background: var(--border-color);
   border-radius: var(--radius-lg);
   overflow: hidden;
   box-shadow: var(--shadow-lg);
   border: 1px solid var(--border-color);
+  width: 100%;
+  max-width: 100%;
+}
+
+.calendar-grid-scroll {
+  width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+}
+
+.calendar-grid-scroll .calendar-grid {
+  min-width: 100%;
 }
 
 .calendar-day-header {
@@ -880,6 +969,11 @@ tbody tr:hover {
 @media (max-width: 768px) {
   .app-container {
     padding: 16px;
+    max-width: 100%;
+  }
+
+  .dashboard {
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
   }
 
   .stats-toggle-btn {
@@ -905,11 +999,19 @@ tbody tr:hover {
   }
 
   table {
-    min-width: 900px;
+    min-width: 100%;
+    table-layout: fixed;
+  }
+
+  #customer-table th,
+  #customer-table td {
+    white-space: normal;
+    word-break: break-word;
   }
 
   .table-action-btn {
     min-width: 58px;
+    min-height: 44px;
     padding: 3px 5px;
   }
 
@@ -920,6 +1022,14 @@ tbody tr:hover {
   .calendar-cell {
     min-height: 80px;
     padding: 6px;
+  }
+
+  .calendar-grid {
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+  }
+
+  .calendar-grid-scroll {
+    overflow-x: auto;
   }
 
   .day-number {
@@ -941,6 +1051,37 @@ tbody tr:hover {
 
   .calendar-legend {
     gap: 12px;
+  }
+
+  .modal-overlay {
+    padding: 12px;
+  }
+
+  .dashboard-quick-menu {
+    width: min(340px, calc(100vw - 32px));
+  }
+
+  .modal {
+    width: 95%;
+    max-width: 95%;
+    margin: 0 auto;
+  }
+
+  button:not(.btn-close):not(.btn-remove-line),
+  .btn,
+  .btn-icon,
+  .btn-icon-sm,
+  .theme-toggle,
+  input:not([type="checkbox"]):not([type="radio"]),
+  select,
+  textarea {
+    min-height: 44px;
+  }
+
+  .form-group input,
+  .form-group select,
+  .form-group textarea {
+    padding: 12px 14px;
   }
 }
 
@@ -1250,6 +1391,7 @@ tbody tr:hover {
 @media (max-width: 768px) {
   .modal {
     width: 95%;
+    max-width: 95%;
     max-height: 95vh;
   }
 

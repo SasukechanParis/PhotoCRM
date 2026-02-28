@@ -140,6 +140,7 @@
     if (typeof populateSelects === 'function') populateSelects();
     if (typeof updateDashboard === 'function') updateDashboard();
     if (typeof renderExpenses === 'function') renderExpenses();
+    if (typeof renderDashboardQuickMenu === 'function') renderDashboardQuickMenu();
 
   }
   window.updateLanguage = updateLanguage;
@@ -444,8 +445,9 @@
   }
 
   let calendarFilters = loadCalendarFilters();
-  let dashboardVisible = getLocalValue(DASHBOARD_VISIBILITY_KEY, true) !== false;
+  let dashboardVisible = getCloudValue(DASHBOARD_VISIBILITY_KEY, getLocalValue(DASHBOARD_VISIBILITY_KEY, true)) !== false;
   let dashboardConfig = loadDashboardConfig();
+  let isDashboardQuickMenuOpen = false;
   let contractTemplateText = loadContractTemplate();
 
   // Init calendar to current month
@@ -577,35 +579,41 @@
     return basePrice + getCurrentCostumePrice() + getCurrentHairMakeupPrice();
   }
 
+  function updateGrandTotal() {
+    const totalPriceInput = $('#form-total-price');
+    const revenueInput = $('#form-revenue');
+    const adjustmentInput = $('#form-price-adjustment');
+    const basePrice = toSafeNumber($('#form-base-price')?.value, 0);
+    const costumePrice = getCurrentCostumePrice();
+    const hairMakeupPrice = getCurrentHairMakeupPrice();
+    const adjustment = toSafeNumber(adjustmentInput?.value, 0);
+    const grandTotal = basePrice + costumePrice + hairMakeupPrice + adjustment;
+
+    if (totalPriceInput) totalPriceInput.value = String(grandTotal);
+    if (revenueInput) revenueInput.value = String(grandTotal);
+    return grandTotal;
+  }
+
   function updateCostumePriceFromSelection(event) {
     const selectedValue = event?.target?.value || '';
     const input = $('#form-costume-price');
     if (input) input.value = String(getPricedOptionPrice('costume', selectedValue, 0));
-    syncTotalsFromPlanPricing();
+    updateGrandTotal();
   }
 
   function updateHairMakeupPriceFromSelection(event) {
     const selectedValue = event?.target?.value || '';
     const input = $('#form-hairmakeup-price');
     if (input) input.value = String(getPricedOptionPrice('hairMakeup', selectedValue, 0));
-    syncTotalsFromPlanPricing();
+    updateGrandTotal();
   }
 
   function syncTotalsFromPlanPricing() {
-    const adjustmentInput = $('#form-price-adjustment');
-    const totalPriceInput = $('#form-total-price');
-    const revenueInput = $('#form-revenue');
-    if (!adjustmentInput) return;
-
-    const adjustment = toSafeNumber(adjustmentInput.value, 0);
-    const totalPrice = getCurrentPricingBaseTotal() + adjustment;
-    if (totalPriceInput) totalPriceInput.value = String(totalPrice);
-    if (revenueInput) revenueInput.value = String(totalPrice);
+    return updateGrandTotal();
   }
 
   function syncAdjustmentFromRevenueInput() {
     const adjustmentInput = $('#form-price-adjustment');
-    const totalPriceInput = $('#form-total-price');
     const revenueInput = $('#form-revenue');
     if (!adjustmentInput || !revenueInput) return;
 
@@ -613,20 +621,19 @@
     const revenue = toSafeNumber(revenueInput.value, 0);
     const adjustment = revenue - baseTotal;
     adjustmentInput.value = String(adjustment);
-    if (totalPriceInput) totalPriceInput.value = String(revenue);
+    updateGrandTotal();
   }
 
   function syncAdjustmentFromTotalInput() {
     const adjustmentInput = $('#form-price-adjustment');
     const totalPriceInput = $('#form-total-price');
-    const revenueInput = $('#form-revenue');
     if (!adjustmentInput || !totalPriceInput) return;
 
     const baseTotal = getCurrentPricingBaseTotal();
     const total = toSafeNumber(totalPriceInput.value, 0);
     const adjustment = total - baseTotal;
     adjustmentInput.value = String(adjustment);
-    if (revenueInput) revenueInput.value = String(total);
+    updateGrandTotal();
   }
 
   function handlePlanSelectChange(event) {
@@ -643,7 +650,7 @@
     if (basePriceInput) basePriceInput.value = String(toSafeNumber(selectedPlan.price, 0));
     if (optionsInput && !optionsInput.value.trim()) optionsInput.value = '';
     if (adjustmentInput) adjustmentInput.value = '0';
-    syncTotalsFromPlanPricing();
+    updateGrandTotal();
   }
 
   function updateCurrency(currency) {
@@ -752,7 +759,9 @@
   window.toggleTheme = toggleTheme;
 
   function setDashboardVisibility(isVisible) {
-    dashboardVisible = !!isVisible;
+    const nextVisible = !!isVisible;
+    const visibilityChanged = dashboardVisible !== nextVisible;
+    dashboardVisible = nextVisible;
     const collapsible = document.getElementById('dashboard-collapsible');
     const toggleBtn = document.getElementById('btn-toggle-dashboard');
 
@@ -768,10 +777,85 @@
     }
 
     saveLocalValue(DASHBOARD_VISIBILITY_KEY, dashboardVisible);
+    if (visibilityChanged) {
+      saveCloudValue(DASHBOARD_VISIBILITY_KEY, dashboardVisible);
+    }
+    renderDashboardQuickMenu();
   }
 
-  function toggleDashboardVisibility() {
-    setDashboardVisibility(!dashboardVisible);
+  function renderDashboardQuickMenu() {
+    const menuContent = document.getElementById('dashboard-quick-menu-content');
+    if (!menuContent) return;
+
+    const rows = [];
+    rows.push(`
+      <label class="dashboard-quick-item dashboard-quick-item-main">
+        <input type="checkbox" id="dashboard-quick-visible" ${dashboardVisible ? 'checked' : ''}>
+        <span>統計エリアを表示</span>
+      </label>
+      <div class="dashboard-quick-divider"></div>
+    `);
+
+    dashboardConfig.forEach((item) => {
+      rows.push(`
+        <label class="dashboard-quick-item">
+          <input type="checkbox" data-dashboard-key="${item.key}" ${item.visible ? 'checked' : ''}>
+          <span>${escapeHtml(getDashboardCardLabel(item.key))}</span>
+        </label>
+      `);
+    });
+
+    menuContent.innerHTML = rows.join('');
+
+    const visibleInput = menuContent.querySelector('#dashboard-quick-visible');
+    bindEventOnce(visibleInput, 'change', (e) => {
+      setDashboardVisibility(!!e.target.checked);
+    }, 'dashboard-quick-visible-change');
+
+    menuContent.querySelectorAll('input[data-dashboard-key]').forEach((input) => {
+      const key = input.dataset.dashboardKey;
+      bindEventOnce(input, 'change', (e) => {
+        updateDashboardCardVisibility(key, !!e.target.checked);
+      }, `dashboard-quick-${key}`);
+    });
+  }
+
+  function setDashboardQuickMenuOpen(isOpen) {
+    const menu = document.getElementById('dashboard-quick-menu');
+    const toggleBtn = document.getElementById('btn-toggle-dashboard');
+    if (!menu || !toggleBtn) return;
+
+    isDashboardQuickMenuOpen = !!isOpen;
+    if (isDashboardQuickMenuOpen) {
+      renderDashboardQuickMenu();
+      menu.style.display = 'block';
+      menu.classList.add('active');
+    } else {
+      menu.classList.remove('active');
+      menu.style.display = 'none';
+    }
+    toggleBtn.setAttribute('data-menu-open', isDashboardQuickMenuOpen ? 'true' : 'false');
+  }
+
+  function handleDashboardToggleButtonClick(event) {
+    event.preventDefault();
+    event.stopPropagation();
+    setDashboardQuickMenuOpen(!isDashboardQuickMenuOpen);
+  }
+
+  function handleDashboardQuickMenuOutsideClick(event) {
+    if (!isDashboardQuickMenuOpen) return;
+    const menu = document.getElementById('dashboard-quick-menu');
+    const toggleBtn = document.getElementById('btn-toggle-dashboard');
+    if (!menu || !toggleBtn) return;
+    if (menu.contains(event.target) || toggleBtn.contains(event.target)) return;
+    setDashboardQuickMenuOpen(false);
+  }
+
+  function handleDashboardQuickMenuEscape(event) {
+    if (event.key === 'Escape' && isDashboardQuickMenuOpen) {
+      setDashboardQuickMenuOpen(false);
+    }
   }
 
   function applyDashboardConfig() {
@@ -804,6 +888,7 @@
 
     if (grid) grid.style.display = visibleCount > 0 ? 'grid' : 'none';
     if (expenseContainer) expenseContainer.style.display = isExpenseVisible ? 'block' : 'none';
+    renderDashboardQuickMenu();
   }
 
   function updateDashboardCardVisibility(itemKey, visible) {
@@ -812,6 +897,7 @@
     ));
     saveDashboardConfig(dashboardConfig);
     applyDashboardConfig();
+    renderDashboardQuickMenu();
     renderSettings();
   }
 
@@ -826,6 +912,7 @@
     next.splice(targetIndex, 0, picked);
     saveDashboardConfig(next);
     applyDashboardConfig();
+    renderDashboardQuickMenu();
     renderSettings();
   }
 
@@ -944,12 +1031,12 @@
         if (key === 'costume') {
           const costumePriceInput = $('#form-costume-price');
           if (costumePriceInput) costumePriceInput.value = '0';
-          syncTotalsFromPlanPricing();
+          updateGrandTotal();
         }
         if (key === 'hairMakeup') {
           const hairPriceInput = $('#form-hairmakeup-price');
           if (hairPriceInput) hairPriceInput.value = '0';
-          syncTotalsFromPlanPricing();
+          updateGrandTotal();
         }
         const input = document.createElement('input');
         input.type = 'text';
@@ -978,7 +1065,7 @@
               const hairPriceInput = $('#form-hairmakeup-price');
               if (hairPriceInput) hairPriceInput.value = '0';
             }
-            syncTotalsFromPlanPricing();
+            updateGrandTotal();
           }
         });
       }
@@ -1491,7 +1578,7 @@
       if (adjustmentInput) adjustmentInput.value = String(planDetails.totalPrice - fixedTotal);
       if (optionsInput) optionsInput.value = planDetails.options;
       if (totalPriceInput) totalPriceInput.value = String(planDetails.totalPrice);
-      syncTotalsFromPlanPricing();
+      updateGrandTotal();
 
       renderCustomFields(c);
     } else {
@@ -1510,7 +1597,7 @@
       if (adjustmentInput) adjustmentInput.value = '0';
       if (optionsInput) optionsInput.value = '';
       if (totalPriceInput) totalPriceInput.value = '';
-      syncTotalsFromPlanPricing();
+      updateGrandTotal();
       renderCustomFields();
     }
     modalOverlay.style.display = 'flex';
@@ -1567,7 +1654,7 @@
     const hairMakeupPrice = toSafeNumber(hairPriceInput?.value, 0);
     const adjustment = toSafeNumber(adjustmentInput?.value, 0);
     const totalFromAdjustment = basePrice + costumePrice + hairMakeupPrice + adjustment;
-    const finalRevenue = totalFromAdjustment;
+    const finalRevenue = toSafeNumber(updateGrandTotal(), totalFromAdjustment);
     if (totalPriceInput) totalPriceInput.value = String(finalRevenue);
     if (revenueInput) revenueInput.value = String(finalRevenue);
     data.revenue = finalRevenue;
@@ -2662,6 +2749,7 @@
   }
 
   function handleOpenSettingsClick() {
+    setDashboardQuickMenuOpen(false);
     renderSettings();
     loadContractTemplateSettings();
     settingsOverlay?.classList.add('active');
@@ -2721,10 +2809,6 @@
       authUnsubscribe = null;
     }
     isLoggedIn = false;
-    if (authNullTimer) {
-      clearTimeout(authNullTimer);
-      authNullTimer = null;
-    }
     window.FirebaseService?.signOut?.().catch((err) => {
       console.error('Google logout failed', err);
     });
@@ -2737,12 +2821,14 @@
     bindEventOnce(document.getElementById('lang-select'), 'change', handleLanguageSelectChange, 'lang-select-change');
     bindEventOnce(document.getElementById('currency-select'), 'change', handleCurrencySelectChange, 'currency-select-change');
     bindEventOnce(document.getElementById('btn-theme'), 'click', toggleTheme, 'theme-toggle-click');
-    bindEventOnce(document.getElementById('btn-toggle-dashboard'), 'click', toggleDashboardVisibility, 'dashboard-visibility-toggle');
+    bindEventOnce(document.getElementById('btn-toggle-dashboard'), 'click', handleDashboardToggleButtonClick, 'dashboard-visibility-toggle');
+    bindEventOnce(document, 'click', handleDashboardQuickMenuOutsideClick, 'dashboard-quick-menu-outside-click');
+    bindEventOnce(document, 'keydown', handleDashboardQuickMenuEscape, 'dashboard-quick-menu-escape');
     bindEventOnce(document.getElementById('form-plan'), 'change', handlePlanSelectChange, 'form-plan-select-change');
     bindEventOnce(document.getElementById('form-costume'), 'change', updateCostumePriceFromSelection, 'form-costume-select-change');
     bindEventOnce(document.getElementById('form-hairMakeup'), 'change', updateHairMakeupPriceFromSelection, 'form-hairmakeup-select-change');
-    bindEventOnce(document.getElementById('form-base-price'), 'input', syncTotalsFromPlanPricing, 'form-base-price-input');
-    bindEventOnce(document.getElementById('form-price-adjustment'), 'input', syncTotalsFromPlanPricing, 'form-price-adjustment-input');
+    bindEventOnce(document.getElementById('form-base-price'), 'input', updateGrandTotal, 'form-base-price-input');
+    bindEventOnce(document.getElementById('form-price-adjustment'), 'input', updateGrandTotal, 'form-price-adjustment-input');
     bindEventOnce(document.getElementById('form-revenue'), 'input', syncAdjustmentFromRevenueInput, 'form-revenue-input');
     bindEventOnce(document.getElementById('form-total-price'), 'input', syncAdjustmentFromTotalInput, 'form-total-price-input');
     bindEventOnce(document.getElementById('btn-add'), 'click', handleAddCustomerClick, 'add-customer-click');
@@ -2849,15 +2935,15 @@
       savePlanMaster(planMaster);
     }
     calendarFilters = loadCalendarFilters();
+    dashboardVisible = getCloudValue(DASHBOARD_VISIBILITY_KEY, getLocalValue(DASHBOARD_VISIBILITY_KEY, true)) !== false;
     dashboardConfig = loadDashboardConfig();
     contractTemplateText = loadContractTemplate();
     applyDashboardConfig();
+    setDashboardVisibility(dashboardVisible);
   }
 
   let appInitialized = false;
-  let authStateRequestId = 0;
   let isLoggedIn = false;
-  let authNullTimer = null;
   let authWatcherDisabled = false;
   let authUnsubscribe = null;
 
@@ -2892,10 +2978,6 @@
 
     if (state === 'loggedOut') {
       isLoggedIn = false;
-      if (authNullTimer) {
-        clearTimeout(authNullTimer);
-        authNullTimer = null;
-      }
       if (authStatus) authStatus.textContent = '🔐 Googleでログインしてクラウド同期を開始';
       if (loginBtn) loginBtn.style.display = '';
       if (logoutBtn) logoutBtn.style.display = 'none';
@@ -2915,40 +2997,6 @@
       if (loginScreen) loginScreen.style.display = 'none';
       if (authBanner) authBanner.style.display = 'flex';
       if (appContainer) appContainer.style.display = 'block';
-    }
-  }
-
-  function debugHideLoginScreen() {
-    const appContainer = getAppContainerElement();
-    const loginScreen = document.getElementById('login-screen');
-    const authBanner = document.getElementById('auth-banner');
-    const authStatus = document.getElementById('auth-status');
-
-    if (loginScreen) loginScreen.style.display = 'none';
-    if (appContainer) appContainer.style.display = 'block';
-    if (authBanner) authBanner.style.display = 'flex';
-    if (authStatus) authStatus.textContent = '🛠 Debug: login screen was manually hidden';
-
-    console.warn('[DEBUG] debugHideLoginScreen() applied');
-  }
-
-  window.debugHideLoginScreen = debugHideLoginScreen;
-
-  function forceShowLoggedInUi() {
-    const authScreen = document.getElementById('auth-screen');
-    const appContainer = document.getElementById('app-container');
-    if (authScreen) authScreen.style.display = 'none';
-    if (appContainer) appContainer.style.display = 'block';
-  }
-
-  async function handleAuthStateSafely(user) {
-    try {
-      await handleAuthState(user);
-    } catch (err) {
-      console.error('Auth update error:', err);
-      showToast('クラウドデータの読み込みに失敗しました。再度お試しください。');
-    } finally {
-      forceShowLoggedInUi();
     }
   }
 
@@ -3013,20 +3061,16 @@
       authUnsubscribe();
       authUnsubscribe = null;
     }
-    authUnsubscribe = await window.FirebaseService.onAuthChanged((user) => {
+    authUnsubscribe = window.FirebaseService.onAuthChanged((user) => {
       if (authWatcherDisabled) return;
       console.log("🔔 Auth State Changed. User:", user ? user.email : "LoggedOut");
 
       if (user) {
         isLoggedIn = true;
-        const appContainer = getAppContainerElement();
-        const loginScreen = document.getElementById('login-screen');
-        const isLoginScreenActive = !!loginScreen && loginScreen.style.display !== 'none';
-        const isDashboardActive = !!appContainer && appContainer.style.display === 'block';
-        if (isLoginScreenActive || !isDashboardActive) {
-          setAuthScreenState('loggedIn', user);
-          handleAuthStateSafely(user);
-        }
+        setAuthScreenState('loggedIn', user);
+        handleAuthState(user).catch((err) => {
+          console.error('Auth update error:', err);
+        });
         return;
       }
 
