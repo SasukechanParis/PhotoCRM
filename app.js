@@ -78,14 +78,6 @@
       lang = 'en';
     }
 
-    console.log('🌍 === updateLanguage START ===');
-    console.log('🌍 Requested language:', lang);
-    console.log('🌍 window.LOCALE exists:', !!window.LOCALE);
-    if (window.LOCALE) {
-      console.log('🌍 Available languages:', Object.keys(window.LOCALE));
-      console.log('🌍 Has requested language:', !!window.LOCALE[lang]);
-    }
-
     currentLang = lang;
     saveLocalValue(LANG_KEY, lang);
     saveCloudValue(LANG_KEY, lang);
@@ -94,24 +86,14 @@
 
     // Update all text content with data-i18n
     const elementsWithI18n = document.querySelectorAll('[data-i18n]');
-    console.log(`🌍 Found ${elementsWithI18n.length} elements with [data-i18n]`);
 
-    let successCount = 0;
-    elementsWithI18n.forEach((el, index) => {
+    elementsWithI18n.forEach((el) => {
       const key = el.getAttribute('data-i18n');
       if (key) {
         const translation = t(key);
-        const oldText = el.textContent;
         el.textContent = translation;
-        successCount++;
-
-        // Log first 5 translations for debugging
-        if (index < 5) {
-          console.log(`🌍 [${index}] "${key}": "${oldText}" → "${translation}"`);
-        }
       }
     });
-    console.log(`🌍 Successfully translated ${successCount} elements`);
 
     // Update placeholders
     document.querySelectorAll('[data-i18n-placeholder]').forEach(el => {
@@ -143,7 +125,6 @@
     if (typeof updateDashboard === 'function') updateDashboard();
     if (typeof renderExpenses === 'function') renderExpenses();
 
-    console.log('🌍 === updateLanguage COMPLETE ===\n');
   }
   window.updateLanguage = updateLanguage;
 
@@ -1942,7 +1923,9 @@
 
   function handleGoogleLogoutClick() {
     if (!window.FirebaseService) return;
+    isLoggedIn = false;
     window.FirebaseService.signOut().catch((err) => {
+      isLoggedIn = true;
       console.error('Google logout failed', err);
       showToast('ログアウトに失敗しました。');
     });
@@ -1987,17 +1970,8 @@
   function init() {
     if (appInitialized) return;
 
-    console.log('🚀 ========================================');
-    console.log('🚀 PhotoCRM v2.2.3 Initializing...');
-    console.log('🚀 ========================================');
-    console.log('🚀 Theme:', currentTheme);
-    console.log('🚀 Language:', currentLang);
-    console.log('🚀 Locale loaded:', !!window.LOCALE);
-    console.log('🚀 Message Analyzer: Removed');
-
     // 1. Apply theme first (prevents flash)
     applyTheme(currentTheme);
-    console.log('✅ Theme applied');
 
     // 2. Set defaults
     updateLanguage(currentLang || 'en');

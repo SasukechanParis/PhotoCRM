@@ -57,6 +57,7 @@ const LOCALE = {
         paid: "✓ 済",
         unpaid: "未",
         emptyStateTitle: "まだ顧客データがありません",
+        emptyStateDesc: "データがありません",
         emptyStateBtn: "＋ 最初の顧客を登録",
 
         // Calendar
@@ -77,6 +78,9 @@ const LOCALE = {
         modalAddTitle: "新規顧客登録",
         cancel: "キャンセル",
         save: "保存",
+        close: "閉じる",
+        edit: "編集",
+        delete: "削除",
 
         // Modal - Parser (Form-based parser)
         parseSummary: "メッセージから自動入力",
@@ -104,6 +108,7 @@ const LOCALE = {
         labelSecondAssistant: "第二アシスタント",
         labelRevenue: "売上（円）",
         labelBillingDate: "請求日",
+        labelPayment: "支払い",
         labelCharterPrepaid: "チャーター事前払い",
         labelPaymentChecked: "入金チェック済み",
         labelDetails: "詳細",
@@ -137,6 +142,7 @@ const LOCALE = {
         // Confirm Modal
         confirmTitle: "削除の確認",
         confirmDesc: "この顧客データを削除しますか？この操作は元に戻せません。",
+        confirmDeleteMessage: "本当に削除しますか？",
         confirmDelete: "削除する",
 
         // Toasts & Messages
@@ -248,8 +254,10 @@ const LOCALE = {
         taxRate: '税率 (%)',
         taxRateHelp: 'お住まいの地域の税率を入力してください',
         taxLabel: '税金の名称',
+        taxLabelJapan: '消費税',
         taxIncluded: '価格に税金を含める',
         invoiceSettings: '請求書設定',
+        saveSettings: '設定を保存',
         invoiceTemplate: '請求書テンプレート',
         invoiceTemplateModern: 'Modern（モダン）',
         invoiceTemplateClassic: 'Classic（クラシック）',
@@ -385,6 +393,7 @@ const LOCALE = {
         paid: "✓ Paid",
         unpaid: "No",
         emptyStateTitle: "No customers yet",
+        emptyStateDesc: "No data available",
         emptyStateBtn: "＋ Add First Customer",
 
         // Calendar
@@ -405,6 +414,9 @@ const LOCALE = {
         modalAddTitle: "New Customer",
         cancel: "Cancel",
         save: "Save",
+        close: "Close",
+        edit: "Edit",
+        delete: "Delete",
 
         // Modal - Parser
         parseSummary: "Auto-fill from message",
@@ -432,6 +444,7 @@ const LOCALE = {
         labelSecondAssistant: "2nd Assistant",
         labelRevenue: "Revenue",
         labelBillingDate: "Billing Date",
+        labelPayment: "Payment",
         labelCharterPrepaid: "Charter Prepaid",
         labelPaymentChecked: "Payment Checked",
         labelDetails: "Details",
@@ -465,6 +478,7 @@ const LOCALE = {
         // Confirm Modal
         confirmTitle: "Confirm Delete",
         confirmDesc: "Are you sure you want to delete this customer? This cannot be undone.",
+        confirmDeleteMessage: "Are you sure?",
         confirmDelete: "Delete",
 
         // Toasts & Messages
@@ -577,8 +591,10 @@ const LOCALE = {
         taxRate: 'Tax Rate (%)',
         taxRateHelp: 'Enter your local tax rate',
         taxLabel: 'Tax Label',
+        taxLabelJapan: 'Tax',
         taxIncluded: 'Prices include tax',
         invoiceSettings: 'Invoice Settings',
+        saveSettings: 'Save Settings',
         invoiceTemplate: 'Invoice Template',
         invoiceTemplateModern: 'Modern',
         invoiceTemplateClassic: 'Classic',
@@ -714,6 +730,7 @@ const LOCALE = {
         paid: "✓ Oui",
         unpaid: "Non",
         emptyStateTitle: "Aucun client",
+        emptyStateDesc: "Aucune donnée disponible",
         emptyStateBtn: "＋ Ajouter un premier client",
 
         // Calendar
@@ -730,6 +747,9 @@ const LOCALE = {
         modalAddTitle: "Nouveau Client",
         cancel: "Annuler",
         save: "Enregistrer",
+        close: "Fermer",
+        edit: "Modifier",
+        delete: "Supprimer",
 
         // Modal - Parser
         parseSummary: "Remplissage auto depuis message",
@@ -757,6 +777,7 @@ const LOCALE = {
         labelSecondAssistant: "2ème Assistant",
         labelRevenue: "Revenu",
         labelBillingDate: "Date Facture",
+        labelPayment: "Paiement",
         labelCharterPrepaid: "Acompte Payé",
         labelPaymentChecked: "Paiement Vérifié",
         labelDetails: "Détails",
@@ -790,6 +811,7 @@ const LOCALE = {
         // Confirm Modal
         confirmTitle: "Confirmer Suppression",
         confirmDesc: "Voulez-vous vraiment supprimer ce client ? Cette action est irréversible.",
+        confirmDeleteMessage: "Êtes-vous sûr ?",
         confirmDelete: "Supprimer",
 
         // Toasts & Messages
@@ -902,8 +924,10 @@ const LOCALE = {
         taxRate: 'Taux de taxe (%)',
         taxRateHelp: 'Entrez votre taux de taxe local',
         taxLabel: 'Libellé de la taxe',
+        taxLabelJapan: 'Taxe',
         taxIncluded: 'Les prix incluent la taxe',
         invoiceSettings: 'Paramètres de facture',
+        saveSettings: 'Enregistrer',
         invoiceTemplate: 'Modèle de facture',
         invoiceTemplateModern: 'Moderne',
         invoiceTemplateClassic: 'Classique',
