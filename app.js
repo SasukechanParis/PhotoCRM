@@ -2059,6 +2059,7 @@
 
   let appInitialized = false;
   let authStateRequestId = 0;
+  let isLoggedIn = false;
 
   function getAppContainerElement() {
     const byId = document.getElementById('app-container');
@@ -2123,19 +2124,12 @@
   window.debugHideLoginScreen = debugHideLoginScreen;
 
   async function handleAuthState(user) {
-    const requestId = ++authStateRequestId;
+    // UI control is handled by onAuthChanged. This function handles data loading only.
     const resolvedUser = user || window.FirebaseService?.getCurrentUser?.() || null;
-
-    if (!resolvedUser) {
-      setAuthScreenState('loggedOut');
-      return;
-    }
-
-    setAuthScreenState('checking');
+    if (!resolvedUser) return;
 
     try {
       await window.FirebaseService.loadForUser(resolvedUser);
-      if (requestId !== authStateRequestId) return;
       hydrateStateFromCloud();
       applyTheme(currentTheme);
       updateLanguage(currentLang || 'en');
@@ -2146,12 +2140,9 @@
       populateSelects();
       syncCalendarFilterControls();
       if (calendarView.classList.contains('active')) renderCalendar();
-      setAuthScreenState('loggedIn', resolvedUser);
     } catch (err) {
       console.error('Cloud data load failed', err);
       showToast('クラウドデータの読み込みに失敗しました。再度お試しください。');
-      if (requestId !== authStateRequestId) return;
-      setAuthScreenState('loggedIn', resolvedUser);
     }
   }
 
@@ -2186,23 +2177,29 @@
 
     try {
       await window.FirebaseService.processRedirectResult();
+      console.log("✅ processRedirectResult completed");
     } catch (err) {
       console.error('Redirect login failed', err);
       showToast('Googleログインに失敗しました。再度お試しください。');
     }
 
+    isLoggedIn = false;
     window.FirebaseService.onAuthChanged((user) => {
       console.log("🔔 Auth State Changed. User:", user ? "LoggedIn" : "LoggedOut");
-      
+
       if (user) {
-        // 1. まず物理的に画面を切り替える（最優先）
-        document.getElementById('auth-screen').style.display = 'none';
-        document.getElementById('app-container').style.display = 'block';
-        
-        // 2. その後、アプリの状態を更新する
+        isLoggedIn = true;
+        const authScreen = document.getElementById('auth-screen');
+        const appContainer = document.getElementById('app-container');
+        if (authScreen) authScreen.style.display = 'none';
+        if (appContainer) appContainer.style.display = 'block';
         setAuthScreenState('loggedIn', user);
         handleAuthState(user).catch(err => console.error('Auth update error:', err));
       } else {
+        if (isLoggedIn) {
+          console.log("🔔 Ignoring transient null auth state (already logged in)");
+          return;
+        }
         setAuthScreenState('loggedOut');
       }
     });
