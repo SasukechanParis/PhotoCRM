@@ -1973,26 +1973,33 @@
   let authReady = false;
   let authStateRequestId = 0;
 
-  async function handleAuthState(user) {
-    const requestId = ++authStateRequestId;
-    const appContainer = document.querySelector('.app-container');
+  function getAppContainerElement() {
+    const byId = document.getElementById('app-container');
+    if (byId) return byId;
+    const byClass = document.querySelector('.app-container');
+    if (byClass && !byClass.id) byClass.id = 'app-container';
+    return byClass;
+  }
+
+  function setAuthScreenState(state, user = null) {
+    const appContainer = getAppContainerElement();
     const loginScreen = document.getElementById('login-screen');
     const authBanner = document.getElementById('auth-banner');
     const authStatus = document.getElementById('auth-status');
     const loginBtn = document.getElementById('btn-google-login');
     const logoutBtn = document.getElementById('btn-logout');
 
-    if (!user) {
-      if (!authReady) {
-        if (authStatus) authStatus.textContent = '🔄 ログイン状態を確認中...';
-        if (loginBtn) loginBtn.style.display = 'none';
-        if (logoutBtn) logoutBtn.style.display = 'none';
-        if (loginScreen) loginScreen.style.display = 'none';
-        if (authBanner) authBanner.style.display = 'flex';
-        if (appContainer) appContainer.style.display = 'none';
-        return;
-      }
+    if (state === 'checking') {
+      if (authStatus) authStatus.textContent = '🔄 ログイン状態を確認中...';
+      if (loginBtn) loginBtn.style.display = 'none';
+      if (logoutBtn) logoutBtn.style.display = 'none';
+      if (loginScreen) loginScreen.style.display = 'none';
+      if (authBanner) authBanner.style.display = 'flex';
+      if (appContainer) appContainer.style.display = 'none';
+      return;
+    }
 
+    if (state === 'loggedOut') {
       if (authStatus) authStatus.textContent = '🔐 Googleでログインしてクラウド同期を開始';
       if (loginBtn) loginBtn.style.display = '';
       if (logoutBtn) logoutBtn.style.display = 'none';
@@ -2002,23 +2009,62 @@
       return;
     }
 
-    if (authStatus) authStatus.textContent = `✅ ${user.displayName || user.email} でログイン中`;
-    if (loginBtn) loginBtn.style.display = 'none';
-    if (logoutBtn) logoutBtn.style.display = '';
-    if (loginScreen) loginScreen.style.display = 'none';
-    if (authBanner) authBanner.style.display = 'flex';
+    if (state === 'loggedIn') {
+      if (authStatus) authStatus.textContent = `✅ ${user?.displayName || user?.email || 'ログイン中'} でログイン中`;
+      if (loginBtn) loginBtn.style.display = 'none';
+      if (logoutBtn) logoutBtn.style.display = '';
+      if (loginScreen) loginScreen.style.display = 'none';
+      if (authBanner) authBanner.style.display = 'flex';
+      if (appContainer) appContainer.style.display = 'block';
+    }
+  }
 
-    try {
-      await window.FirebaseService.loadForUser(user);
-      if (requestId !== authStateRequestId) return;
-      hydrateStateFromCloud();
-    } catch (err) {
-      console.error('Cloud data load failed', err);
-      showToast('クラウドデータの読み込みに失敗しました。再度お試しください。');
+  function debugHideLoginScreen() {
+    const appContainer = getAppContainerElement();
+    const loginScreen = document.getElementById('login-screen');
+    const authBanner = document.getElementById('auth-banner');
+    const authStatus = document.getElementById('auth-status');
+
+    if (loginScreen) loginScreen.style.display = 'none';
+    if (appContainer) appContainer.style.display = 'block';
+    if (authBanner) authBanner.style.display = 'flex';
+    if (authStatus) authStatus.textContent = '🛠 Debug: login screen was manually hidden';
+
+    console.warn('[DEBUG] debugHideLoginScreen() applied');
+  }
+
+  window.debugHideLoginScreen = debugHideLoginScreen;
+
+  async function handleAuthState(user) {
+    const requestId = ++authStateRequestId;
+
+    const resolvedUser = user || window.FirebaseService?.getCurrentUser?.() || null;
+
+    if (!resolvedUser) {
+      if (!authReady) {
+        setAuthScreenState('checking');
+        return;
+      }
+
+      setAuthScreenState('loggedOut');
       return;
     }
 
-    if (appContainer) appContainer.style.display = '';
+    setAuthScreenState('loggedIn', resolvedUser);
+
+    try {
+      await window.FirebaseService.loadForUser(resolvedUser);
+      if (requestId !== authStateRequestId) return;
+      hydrateStateFromCloud();
+      setAuthScreenState('loggedIn', resolvedUser);
+    } catch (err) {
+      console.error('Cloud data load failed', err);
+      showToast('クラウドデータの読み込みに失敗しました。再度お試しください。');
+      if (requestId !== authStateRequestId) return;
+      setAuthScreenState('loggedIn', resolvedUser);
+    }
+
+    if (requestId !== authStateRequestId) return;
 
     if (!appInitialized) {
       init();
@@ -2032,11 +2078,14 @@
   }
 
   async function bootstrapAuth() {
+    let redirectUser = null;
     try {
       await window.FirebaseService.whenReady();
       const redirectResult = await window.FirebaseService.processRedirectResult();
       if (redirectResult?.user) {
+        redirectUser = redirectResult.user;
         console.log('✅ Redirect login success:', redirectResult.user.uid);
+        setAuthScreenState('loggedIn', redirectResult.user);
       }
     } catch (err) {
       console.error('Firebase Auth Error:', err.code, err.message);
@@ -2045,7 +2094,11 @@
     } finally {
       authReady = true;
       const currentUser = await window.FirebaseService.waitForInitialAuthState();
-      await handleAuthState(currentUser);
+      const resolvedUser = redirectUser || currentUser || window.FirebaseService.getCurrentUser();
+      if (resolvedUser) {
+        setAuthScreenState('loggedIn', resolvedUser);
+      }
+      await handleAuthState(resolvedUser);
     }
   }
 
