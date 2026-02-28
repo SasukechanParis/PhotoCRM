@@ -2191,14 +2191,20 @@
       showToast('Googleログインに失敗しました。再度お試しください。');
     }
 
-    await window.FirebaseService.onAuthChanged((user) => {
+    window.FirebaseService.onAuthChanged((user) => {
+      console.log("🔔 Auth State Changed. User:", user ? "LoggedIn" : "LoggedOut");
+      
       if (user) {
-        // Force UI transition immediately on login success to avoid auth timing gaps.
+        // 1. まず物理的に画面を切り替える（最優先）
+        document.getElementById('auth-screen').style.display = 'none';
+        document.getElementById('app-container').style.display = 'block';
+        
+        // 2. その後、アプリの状態を更新する
         setAuthScreenState('loggedIn', user);
+        handleAuthState(user).catch(err => console.error('Auth update error:', err));
+      } else {
+        setAuthScreenState('loggedOut');
       }
-      handleAuthState(user).catch((err) => {
-        console.error('Auth state refresh failed', err);
-      });
     });
   });
 
