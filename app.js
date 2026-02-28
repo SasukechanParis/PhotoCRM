@@ -2,6 +2,9 @@
 
 (function () {
   'use strict';
+  window.__FORCE_UI_REFRESH_ACTIVE_MARKER__ = true;
+  console.log('Loading PhotoCRM v2.2.4-FIXED...');
+  console.log("FORCE_UI_REFRESH_ACTIVE");
 
   // ===== Storage Keys =====
   const STORAGE_KEY = 'photocrm_customers';
@@ -102,6 +105,42 @@
   }
   window.t = t;
 
+  function ensureAppHeaderMarkup() {
+    const header = document.querySelector('.app-header');
+    if (!header) return;
+    header.innerHTML = `
+      <div class="logo">
+        <div class="logo-icon">📷</div>
+        <div class="logo-copy">
+          <h1 id="app-title-fixed"></h1>
+          <button class="stats-toggle-btn" id="btn-toggle-dashboard" type="button" title="統計を隠す" aria-expanded="true">📊 統計を隠す</button>
+          <div class="dashboard-quick-menu" id="dashboard-quick-menu" style="display:none;">
+            <div class="dashboard-quick-menu-content" id="dashboard-quick-menu-content"></div>
+          </div>
+        </div>
+      </div>
+      <div class="header-actions">
+        <select id="lang-select" class="btn btn-secondary btn-sm" style="padding: 6px 8px; min-width:auto;">
+          <option value="en">🇺🇸 English</option>
+          <option value="ja">🇯🇵 日本語</option>
+          <option value="fr">🇫🇷 Français</option>
+          <option value="zh-CN">🇨🇳 简体中文</option>
+          <option value="zh-TW">🇹🇼 繁體中文</option>
+          <option value="ko">🇰🇷 한국어</option>
+        </select>
+        <button class="theme-toggle" id="btn-theme" title="Toggle Theme">🌙</button>
+        <button class="btn btn-secondary btn-sm" id="btn-settings" title="Settings" data-i18n="settings">⚙ Settings</button>
+        <button class="btn btn-secondary btn-sm" id="btn-sync-export" title="バックアップ (JSON)" data-i18n="exportSync" data-i18n-title="exportSync">バックアップ (JSON)</button>
+        <button class="btn btn-secondary btn-sm" id="btn-sync-import" title="データ復元" data-i18n="importSync" data-i18n-title="importSync">データ復元</button>
+        <input type="file" id="import-file" accept=".json" style="display:none;" />
+        <button class="btn btn-secondary btn-sm" id="btn-ics-export" title="カレンダー連携 (iCal)" data-i18n="exportIcs" data-i18n-title="exportIcs">カレンダー連携 (iCal)</button>
+        <button class="btn btn-secondary btn-sm" id="btn-export" title="売上集計 (CSV)" data-i18n="exportCsv" data-i18n-title="exportCsv">売上集計 (CSV)</button>
+        <button class="btn btn-primary" id="btn-add" data-i18n="addCustomer">＋ Add New</button>
+      </div>
+    `;
+  }
+  ensureAppHeaderMarkup();
+
   function updateLanguage(lang) {
     if (!window.LOCALE || !window.LOCALE[lang]) {
       console.warn(`Unsupported language "${lang}". Falling back to English.`);
@@ -148,7 +187,7 @@
     }
 
     const appTitle = document.getElementById('app-title-fixed');
-    if (appTitle) appTitle.textContent = '顧客管理';
+    if (appTitle) appTitle.textContent = "";
     const legacySubtitle = document.querySelector('.logo-copy .subtitle');
     if (legacySubtitle) legacySubtitle.style.display = 'none';
 
@@ -565,7 +604,7 @@
   const calendarView = $('#calendar-view');
   const calendarFilterInputs = $$('.calendar-filter-input');
   const eventBindingRegistry = new WeakMap();
-  const STYLE_CACHE_BUSTER = '20260228-rcq';
+  const STYLE_CACHE_BUSTER = '999';
 
   function refreshMainStylesheetCache() {
     const styleLink = document.querySelector('link[rel="stylesheet"][href*="style.css"]');
@@ -586,7 +625,7 @@
   function ensureListColumnsMenuMountedToBody() {
     if (!listColumnsMenu || !document.body) return;
     if (listColumnsMenu.parentElement !== document.body) {
-      document.body.appendChild(listColumnsMenu);
+      document.body.insertAdjacentElement('beforeend', listColumnsMenu);
     }
   }
 
@@ -1158,12 +1197,14 @@
       ensureListColumnsMenuMountedToBody();
       console.log('Menu Opening...');
       renderListColumnsMenu();
+      listColumnsMenu.classList.add('display-settings-menu');
       listColumnsMenu.style.zIndex = '2147483647';
       listColumnsMenu.style.backgroundColor = '#ffffff';
       listColumnsMenu.style.display = 'block';
       listColumnsMenu.classList.add('active');
       positionListColumnsMenu();
     } else {
+      listColumnsMenu.classList.remove('display-settings-menu');
       listColumnsMenu.classList.remove('active');
       listColumnsMenu.style.display = 'none';
     }

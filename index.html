@@ -12,7 +12,17 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="style.css?v=999">
+  <style>
+    .display-settings-menu {
+      z-index: 2147483647 !important;
+      position: fixed !important;
+      display: block !important;
+    }
+    .header-title {
+      display: none !important;
+    }
+  </style>
   <link rel="manifest" href="manifest.json">
   <link rel="icon" href="icon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="icon.svg">
@@ -41,44 +51,7 @@
   <div class="app-container" id="app-container">
 
     <!-- ===== Header ===== -->
-    <header class="app-header">
-      <div class="logo">
-        <div class="logo-icon">📷</div>
-        <div class="logo-copy">
-          <h1 id="app-title-fixed">顧客管理</h1>
-          <button class="stats-toggle-btn" id="btn-toggle-dashboard" type="button"
-            title="統計を隠す" aria-expanded="true">📊 統計を隠す</button>
-          <div class="dashboard-quick-menu" id="dashboard-quick-menu" style="display:none;">
-            <div class="dashboard-quick-menu-content" id="dashboard-quick-menu-content"></div>
-          </div>
-        </div>
-      </div>
-      <div class="header-actions">
-        <!-- Language Switcher -->
-        <select id="lang-select" class="btn btn-secondary btn-sm" style="padding: 6px 8px; min-width:auto;">
-          <option value="en">🇺🇸 English</option>
-          <option value="ja">🇯🇵 日本語</option>
-          <option value="fr">🇫🇷 Français</option>
-          <option value="zh-CN">🇨🇳 简体中文</option>
-          <option value="zh-TW">🇹🇼 繁體中文</option>
-          <option value="ko">🇰🇷 한국어</option>
-        </select>
-
-        <button class="theme-toggle" id="btn-theme" title="Toggle Theme">🌙</button>
-        <button class="btn btn-secondary btn-sm" id="btn-settings" title="Settings" data-i18n="settings">⚙
-          Settings</button>
-        <button class="btn btn-secondary btn-sm" id="btn-sync-export" title="バックアップ (JSON)" data-i18n="exportSync"
-          data-i18n-title="exportSync">バックアップ (JSON)</button>
-        <button class="btn btn-secondary btn-sm" id="btn-sync-import" title="データ復元" data-i18n="importSync"
-          data-i18n-title="importSync">データ復元</button>
-        <input type="file" id="import-file" accept=".json" style="display:none;" />
-        <button class="btn btn-secondary btn-sm" id="btn-ics-export" title="カレンダー連携 (iCal)" data-i18n="exportIcs"
-          data-i18n-title="exportIcs">カレンダー連携 (iCal)</button>
-        <button class="btn btn-secondary btn-sm" id="btn-export" title="売上集計 (CSV)" data-i18n="exportCsv"
-          data-i18n-title="exportCsv">売上集計 (CSV)</button>
-        <button class="btn btn-primary" id="btn-add" data-i18n="addCustomer">＋ Add New</button>
-      </div>
-    </header>
+    <header class="app-header"></header>
 
     <!-- ===== Dashboard ===== -->
     <div class="dashboard-collapsible" id="dashboard-collapsible">
@@ -898,8 +871,8 @@
     </div>
   </div>
 
-  <!-- PhotoCRM Scripts v2.2.3 -->
-  <script>console.log('📦 Loading PhotoCRM v2.2.3 (Fixed btoa encoding error)...');</script>
+  <!-- PhotoCRM Scripts v2.2.4-FIXED -->
+  <script>console.log('📦 Loading PhotoCRM v2.2.4-FIXED...');</script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
@@ -910,7 +883,15 @@
   <script src="invoice-generator.js"></script>
   <script src="team-manager.js"></script>
   <script src="sync-manager.js"></script>
-  <script src="app.js"></script>
+  <script>
+    window.__FORCE_UI_REFRESH_ACTIVE_MARKER__ = false;
+    setTimeout(() => {
+      if (!window.__FORCE_UI_REFRESH_ACTIVE_MARKER__) {
+        console.warn('WARNING: FORCE_UI_REFRESH_ACTIVE marker not detected. You may be loading a stale app.js file.');
+      }
+    }, 2200);
+  </script>
+  <script src="app.js?v=999"></script>
 </body>
 
 </html>
