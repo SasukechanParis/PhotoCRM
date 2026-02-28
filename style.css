@@ -329,8 +329,12 @@ body {
 
 .header-actions {
   display: flex;
-  gap: 12px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
   align-items: center;
+  row-gap: 8px;
+  max-width: min(100%, 960px);
 }
 
 .btn {
@@ -338,12 +342,12 @@ body {
   align-items: center;
   justify-content: center;
   gap: 6px;
-  padding: 8px 12px;
+  padding: 6px 12px;
   border-radius: 10px;
   border: 1px solid var(--border-color);
   background: var(--bg-glass);
   color: var(--text-primary);
-  font-size: clamp(0.72rem, 1.2vw, 0.84rem);
+  font-size: 0.85rem;
   font-weight: 600;
   line-height: 1.2;
   cursor: pointer;
@@ -854,12 +858,14 @@ tbody tr:hover {
 
 #customer-table th {
   background: rgba(255, 255, 255, 0.02);
-  padding: 8px 10px;
+  padding: 12px 8px;
   text-align: left;
   font-weight: 600;
   color: var(--text-secondary);
   border-bottom: 2px solid var(--border-color);
   font-size: 0.75rem;
+  line-height: 1.25;
+  vertical-align: middle;
 }
 
 #customer-table td {
@@ -898,10 +904,25 @@ tbody tr:hover {
   min-width: 100px;
 }
 
+#customer-table th[data-column-key="paymentChecked"],
+#customer-table td[data-column-key="paymentChecked"] {
+  min-width: 100px;
+}
+
+#customer-table th[data-column-key="assignedTo"],
+#customer-table td[data-column-key="assignedTo"] {
+  min-width: 120px;
+}
+
 #customer-table th[data-column-key="actions"],
 #customer-table td[data-column-key="actions"] {
   width: 190px;
   min-width: 180px;
+}
+
+#customer-table th .sort-arrow {
+  margin-left: 4px;
+  font-size: 0.68rem;
 }
 
 #customer-table tbody tr:hover {
@@ -1299,6 +1320,17 @@ tbody tr:hover {
   .app-container {
     padding: 16px;
     max-width: 100%;
+  }
+
+  .app-header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+  }
+
+  .header-actions {
+    width: 100%;
+    justify-content: flex-end;
   }
 
   .dashboard {

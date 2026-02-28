@@ -1002,9 +1002,9 @@
   }
 
   function getListSettingsButtonLabel() {
-    if (currentLang === 'fr') return 'Affichage Colonnes';
-    if (currentLang === 'en') return 'Display Settings';
-    return '表示設定';
+    if (currentLang === 'fr') return '⚙ Configuration Colonnes';
+    if (currentLang === 'en') return '⚙ Column Settings';
+    return '⚙ 表示項目設定';
   }
 
   function getListSettingsHintLabel() {
