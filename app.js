@@ -22,6 +22,28 @@
     return value === undefined ? fallback : value;
   }
 
+  function getLocalValue(key, fallback) {
+    try {
+      const raw = localStorage.getItem(key);
+      if (raw === null) return fallback;
+      try {
+        return JSON.parse(raw);
+      } catch {
+        return raw;
+      }
+    } catch {
+      return fallback;
+    }
+  }
+
+  function saveLocalValue(key, value) {
+    try {
+      localStorage.setItem(key, JSON.stringify(value));
+    } catch (err) {
+      console.warn(`Failed to save local value: ${key}`, err);
+    }
+  }
+
   function saveCloudValue(key, value) {
     window.FirebaseService?.saveKey(key, value).catch((err) => {
       console.error(`Failed to save ${key}`, err);
@@ -29,7 +51,7 @@
   }
 
   // ===== Language Management =====
-  let currentLang = getCloudValue(LANG_KEY, 'en');
+  let currentLang = getCloudValue(LANG_KEY, getLocalValue(LANG_KEY, 'en'));
   if (!window.LOCALE || !window.LOCALE[currentLang]) currentLang = 'en';
 
   function t(key, params = {}) {
@@ -51,6 +73,11 @@
   window.t = t;
 
   function updateLanguage(lang) {
+    if (!window.LOCALE || !window.LOCALE[lang]) {
+      console.warn(`Unsupported language "${lang}". Falling back to English.`);
+      lang = 'en';
+    }
+
     console.log('🌍 === updateLanguage START ===');
     console.log('🌍 Requested language:', lang);
     console.log('🌍 window.LOCALE exists:', !!window.LOCALE);
@@ -60,6 +87,7 @@
     }
 
     currentLang = lang;
+    saveLocalValue(LANG_KEY, lang);
     saveCloudValue(LANG_KEY, lang);
     document.documentElement.lang = lang;
 
@@ -223,6 +251,23 @@
   const listView = $('#list-view');
   const calendarView = $('#calendar-view');
   const calendarFilterInputs = $$('.calendar-filter-input');
+  const eventBindingRegistry = new WeakMap();
+
+  function bindEventOnce(element, eventName, handler, bindingKey = null, options = undefined) {
+    if (!element || typeof handler !== 'function') return;
+
+    let boundKeys = eventBindingRegistry.get(element);
+    if (!boundKeys) {
+      boundKeys = new Set();
+      eventBindingRegistry.set(element, boundKeys);
+    }
+
+    const key = bindingKey || `${eventName}:${handler.name || 'anonymous'}`;
+    if (boundKeys.has(key)) return;
+
+    element.addEventListener(eventName, handler, options);
+    boundKeys.add(key);
+  }
 
   // ===== Field Config =====
   const fields = [
@@ -256,7 +301,7 @@
     EUR: { symbol: '€', locale: 'de-DE' },
   };
 
-  let currentCurrency = getCloudValue(CURRENCY_KEY, 'USD');
+  let currentCurrency = getCloudValue(CURRENCY_KEY, getLocalValue(CURRENCY_KEY, 'USD'));
   if (!CURRENCY_CONFIG[currentCurrency]) currentCurrency = 'USD';
 
   function getCurrencySymbol() {
@@ -275,6 +320,7 @@
   function updateCurrency(currency) {
     if (!CURRENCY_CONFIG[currency]) return;
     currentCurrency = currency;
+    saveLocalValue(CURRENCY_KEY, currency);
     saveCloudValue(CURRENCY_KEY, currency);
     const sel = document.getElementById('currency-select');
     if (sel) sel.value = currency;
@@ -353,11 +399,12 @@
   window.calculateTax = calculateTax;
 
   // ===== Theme Management =====
-  let currentTheme = getCloudValue(THEME_KEY, 'dark');
+  let currentTheme = getCloudValue(THEME_KEY, getLocalValue(THEME_KEY, 'dark'));
 
   function applyTheme(theme) {
     currentTheme = theme;
     document.documentElement.setAttribute('data-theme', theme);
+    saveLocalValue(THEME_KEY, theme);
     saveCloudValue(THEME_KEY, theme);
 
     // Update theme button icon
@@ -1142,7 +1189,7 @@
 
   // ===== Message Analyzer Integration =====
   // ===== Import/Export =====
-  $('#btn-sync-export').addEventListener('click', () => {
+  function handleSyncExportClick() {
     const data = { customers, options, exportedAt: new Date().toISOString() };
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
@@ -1151,16 +1198,19 @@
     a.download = `photocrm_backup_${new Date().toISOString().slice(0, 10)}.json`;
     a.click();
     showToast(t('msgExported') || 'Exported');
-  });
+  }
 
-  $('#btn-sync-import').addEventListener('click', () => $('#import-file').click());
-  $('#import-file').addEventListener('change', e => {
+  function handleSyncImportClick() {
+    $('#import-file')?.click();
+  }
+
+  function handleImportFileChange(e) {
     const file = e.target.files[0];
     if (!file) return;
     const reader = new FileReader();
-    reader.onload = async e => {
+    reader.onload = async (event) => {
       try {
-        const data = JSON.parse(e.target.result);
+        const data = JSON.parse(event.target.result);
         const stats = await window.SyncManager.mergeData(data);
         customers = loadCustomers();
         options = loadOptions();
@@ -1172,15 +1222,19 @@
       }
     };
     reader.readAsText(file);
-  });
+  }
 
-  $('#btn-add-custom-field')?.addEventListener('click', () => {
+  bindEventOnce($('#btn-sync-export'), 'click', handleSyncExportClick, 'sync-export-click');
+  bindEventOnce($('#btn-sync-import'), 'click', handleSyncImportClick, 'sync-import-click');
+  bindEventOnce($('#import-file'), 'change', handleImportFileChange, 'import-file-change');
+
+  bindEventOnce($('#btn-add-custom-field'), 'click', () => {
     const label = prompt(t('enterFieldName') || 'Enter custom field label');
     if (!label || !label.trim()) return;
     addCustomFieldDefinition(label.trim());
     renderCustomFields();
     showToast(t('customFieldAdded') || 'Custom field added');
-  });
+  }, 'add-custom-field-click');
 
   // Team Management UI
   function renderTeamList() {
@@ -1284,7 +1338,7 @@
     return events;
   }
 
-  $('#btn-ics-export').addEventListener('click', () => {
+  function handleIcsExportClick() {
     const events = createICSEventsForCalendarView();
     if (events.length === 0) {
       showToast('書き出し対象の予定がありません');
@@ -1310,10 +1364,12 @@
     a.download = `photocrm-calendar-${calYear}${String(calMonth + 1).padStart(2, '0')}.ics`;
     a.click();
     URL.revokeObjectURL(url);
-  });
+  }
+
+  bindEventOnce($('#btn-ics-export'), 'click', handleIcsExportClick, 'ics-export-click');
 
   // CSV Export
-  $('#btn-export').addEventListener('click', () => {
+  function handleCsvExportClick() {
     const headers = fields.map(f => f.label).join(',');
     const rows = customers.map(c => fields.map(f => {
       let v = c[f.key] ?? '';
@@ -1327,7 +1383,10 @@
     a.href = url;
     a.download = 'customers.csv';
     a.click();
-  });
+    URL.revokeObjectURL(url);
+  }
+
+  bindEventOnce($('#btn-export'), 'click', handleCsvExportClick, 'csv-export-click');
 
   // ===== Task Management Logic =====
   function renderTasks(customer) {
@@ -1846,6 +1905,72 @@
     }
   };
 
+  function handleLanguageSelectChange(event) {
+    const selected = event?.target?.value;
+    if (!selected) return;
+    updateLanguage(selected);
+  }
+
+  function handleCurrencySelectChange(event) {
+    const selected = event?.target?.value;
+    if (!selected) return;
+    updateCurrency(selected);
+  }
+
+  function handleOpenSettingsClick() {
+    renderSettings();
+    settingsOverlay?.classList.add('active');
+  }
+
+  function handleAddCustomerClick() {
+    openModal();
+  }
+
+  function handleTeamAddClick() {
+    const name = $('#team-new-name')?.value.trim();
+    const role = $('#team-new-role')?.value;
+    if (!name) return;
+    window.TeamManager.addPhotographer({ name, role });
+    $('#team-new-name').value = '';
+    renderTeamList();
+    populateSelects();
+    showToast(t('msgMemberAdded'));
+  }
+
+  function bindSettingsTabListeners() {
+    settingsOverlay?.querySelectorAll('.settings-tab-btn').forEach((btn) => {
+      const tabName = btn.dataset.tab || 'default';
+      bindEventOnce(btn, 'click', () => {
+        settingsOverlay.querySelectorAll('.settings-tab-btn').forEach((b) => b.classList.remove('active'));
+        settingsOverlay.querySelectorAll('.settings-tab-content').forEach((c) => c.classList.remove('active'));
+        btn.classList.add('active');
+        const tab = btn.dataset.tab;
+        $(`#settings-content-${tab}`)?.classList.add('active');
+        if (tab === 'team') renderTeamList();
+      }, `settings-tab-${tabName}`);
+    });
+  }
+
+  function bindCoreUIEventListeners() {
+    bindEventOnce(document.getElementById('lang-select'), 'change', handleLanguageSelectChange, 'lang-select-change');
+    bindEventOnce(document.getElementById('currency-select'), 'change', handleCurrencySelectChange, 'currency-select-change');
+    bindEventOnce(document.getElementById('btn-theme'), 'click', toggleTheme, 'theme-toggle-click');
+    bindEventOnce(document.getElementById('btn-add'), 'click', handleAddCustomerClick, 'add-customer-click');
+    bindEventOnce(document.getElementById('btn-settings'), 'click', handleOpenSettingsClick, 'open-settings-click');
+    bindEventOnce(document.getElementById('btn-sync-export'), 'click', handleSyncExportClick, 'sync-export-click');
+    bindEventOnce(document.getElementById('btn-sync-import'), 'click', handleSyncImportClick, 'sync-import-click');
+    bindEventOnce(document.getElementById('import-file'), 'change', handleImportFileChange, 'import-file-change');
+    bindEventOnce(document.getElementById('btn-export'), 'click', handleCsvExportClick, 'csv-export-click');
+    bindEventOnce(document.getElementById('btn-ics-export'), 'click', handleIcsExportClick, 'ics-export-click');
+    bindEventOnce(document.getElementById('btn-team-add'), 'click', handleTeamAddClick, 'team-add-click');
+    bindEventOnce(document.getElementById('filter-photographer'), 'change', renderTable, 'filter-photographer-change');
+    bindEventOnce(searchInput, 'input', renderTable, 'search-input');
+    bindEventOnce(filterPayment, 'change', renderTable, 'filter-payment-change');
+    bindEventOnce(filterMonth, 'change', renderTable, 'filter-month-change');
+
+    bindSettingsTabListeners();
+  }
+
   // ===== Initialization =====
   function init() {
     console.log('🚀 ========================================');
@@ -1865,75 +1990,25 @@
     updateCurrency(currentCurrency);
 
     // 3. Attach event listeners
-    const langSelect = document.getElementById('lang-select');
-    if (langSelect) {
-      langSelect.addEventListener('change', e => updateLanguage(e.target.value));
-    }
-
-    const currencySelect = document.getElementById('currency-select');
-    if (currencySelect) {
-      currencySelect.addEventListener('change', e => updateCurrency(e.target.value));
-    }
-
-    const themeBtn = document.getElementById('btn-theme');
-    if (themeBtn) {
-      themeBtn.addEventListener('click', toggleTheme);
-    }
-
-    // Team Tab switching
-    settingsOverlay.querySelectorAll('.settings-tab-btn').forEach(btn => {
-      btn.addEventListener('click', () => {
-        settingsOverlay.querySelectorAll('.settings-tab-btn').forEach(b => b.classList.remove('active'));
-        settingsOverlay.querySelectorAll('.settings-tab-content').forEach(c => c.classList.remove('active'));
-        btn.classList.add('active');
-        const tab = btn.dataset.tab;
-        $(`#settings-content-${tab}`).classList.add('active');
-        if (tab === 'team') renderTeamList();
-      });
-    });
-
-    // Add member
-    $('#btn-team-add').addEventListener('click', () => {
-      const name = $('#team-new-name').value.trim();
-      const role = $('#team-new-role').value;
-      if (!name) return;
-      window.TeamManager.addPhotographer({ name, role });
-      $('#team-new-name').value = '';
-      renderTeamList();
-      populateSelects();
-      showToast(t('msgMemberAdded'));
-    });
-
-    $('#filter-photographer').addEventListener('change', renderTable);
-    $('#btn-theme').textContent = currentTheme === 'dark' ? '🌙' : '☀️';
-
-    $('#btn-add').addEventListener('click', () => openModal());
-    $('#btn-settings').addEventListener('click', () => {
-      renderSettings();
-      settingsOverlay.classList.add('active');
-    });
-
-    searchInput.addEventListener('input', renderTable);
-    filterPayment.addEventListener('change', renderTable);
-    filterMonth.addEventListener('change', renderTable);
+    bindCoreUIEventListeners();
 
     if (dashboardMonthPicker) {
       syncDashboardMonthPicker();
-      dashboardMonthPicker.addEventListener('change', (e) => {
+      bindEventOnce(dashboardMonthPicker, 'change', (e) => {
         if (!e.target.value) return;
         const [year, month] = e.target.value.split('-').map(Number);
         if (!year || !month) return;
         selectedDashboardMonth = new Date(year, month - 1, 1);
         updateDashboard();
-      });
+      }, 'dashboard-month-picker-change');
     }
 
     if (dashboardPrevMonth) {
-      dashboardPrevMonth.addEventListener('click', () => moveDashboardMonth(-1));
+      bindEventOnce(dashboardPrevMonth, 'click', () => moveDashboardMonth(-1), 'dashboard-prev-month');
     }
 
     if (dashboardNextMonth) {
-      dashboardNextMonth.addEventListener('click', () => moveDashboardMonth(1));
+      bindEventOnce(dashboardNextMonth, 'click', () => moveDashboardMonth(1), 'dashboard-next-month');
     }
 
     // Initial render
@@ -1954,10 +2029,10 @@
   }
 
   function hydrateStateFromCloud() {
-    currentLang = getCloudValue(LANG_KEY, 'en');
+    currentLang = getCloudValue(LANG_KEY, getLocalValue(LANG_KEY, 'en'));
     if (!window.LOCALE || !window.LOCALE[currentLang]) currentLang = 'en';
-    currentTheme = getCloudValue(THEME_KEY, 'dark');
-    currentCurrency = getCloudValue(CURRENCY_KEY, 'USD');
+    currentTheme = getCloudValue(THEME_KEY, getLocalValue(THEME_KEY, 'dark'));
+    currentCurrency = getCloudValue(CURRENCY_KEY, getLocalValue(CURRENCY_KEY, 'USD'));
     if (!CURRENCY_CONFIG[currentCurrency]) currentCurrency = 'USD';
     customers = loadCustomers();
     options = loadOptions();
@@ -2077,6 +2152,31 @@
     }
   }
 
+  async function waitForInitialAuthStateWithTimeout(timeoutMs = 5000) {
+    return new Promise((resolve) => {
+      let settled = false;
+
+      const finish = (user) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timerId);
+        resolve(user || window.FirebaseService?.getCurrentUser?.() || null);
+      };
+
+      const timerId = setTimeout(() => {
+        console.warn(`Auth state wait timed out after ${timeoutMs}ms; falling back to currentUser.`);
+        finish(window.FirebaseService?.getCurrentUser?.() || null);
+      }, timeoutMs);
+
+      window.FirebaseService.waitForInitialAuthState()
+        .then((user) => finish(user))
+        .catch((err) => {
+          console.warn('waitForInitialAuthState failed; falling back to currentUser.', err);
+          finish(window.FirebaseService?.getCurrentUser?.() || null);
+        });
+    });
+  }
+
   async function bootstrapAuth() {
     let redirectUser = null;
     try {
@@ -2093,8 +2193,10 @@
       showToast('Googleログインに失敗しました。再度お試しください。');
     } finally {
       authReady = true;
-      const currentUser = await window.FirebaseService.waitForInitialAuthState();
-      const resolvedUser = redirectUser || currentUser || window.FirebaseService.getCurrentUser();
+      let resolvedUser = redirectUser || window.FirebaseService.getCurrentUser?.() || null;
+      if (!resolvedUser) {
+        resolvedUser = await waitForInitialAuthStateWithTimeout();
+      }
       if (resolvedUser) {
         setAuthScreenState('loggedIn', resolvedUser);
       }
@@ -2111,13 +2213,24 @@
 
   // Ensure DOM is ready before initializing
   document.addEventListener('DOMContentLoaded', async () => {
+    setAuthScreenState('checking');
+    bindCoreUIEventListeners();
+
     if (!window.FirebaseService) {
       console.error('FirebaseService is not available. Please check script loading order.');
       showToast('Firebase設定の読み込みに失敗しました。');
+      setAuthScreenState('loggedOut');
       return;
     }
 
-    await window.FirebaseService.whenReady();
+    try {
+      await window.FirebaseService.whenReady();
+    } catch (err) {
+      console.error('Firebase initialization failed', err);
+      showToast('Firebase初期化に失敗しました。');
+      setAuthScreenState('loggedOut');
+      return;
+    }
 
     const triggerGoogleLogin = () => {
       window.FirebaseService.signInWithGoogle().catch((err) => {
@@ -2129,17 +2242,20 @@
 
     registerPwaServiceWorker();
 
-    document.getElementById('btn-google-login')?.addEventListener('click', triggerGoogleLogin);
-    document.getElementById('btn-google-login-screen')?.addEventListener('click', triggerGoogleLogin);
-    document.getElementById('btn-logout')?.addEventListener('click', () => {
+    bindEventOnce(document.getElementById('btn-google-login'), 'click', triggerGoogleLogin, 'google-login-banner');
+    bindEventOnce(document.getElementById('btn-google-login-screen'), 'click', triggerGoogleLogin, 'google-login-screen');
+    bindEventOnce(document.getElementById('btn-logout'), 'click', () => {
       window.FirebaseService.signOut();
-    });
+    }, 'google-logout');
 
-    (await window.FirebaseService.onAuthChanged((user) => {
+    await window.FirebaseService.onAuthChanged((user) => {
+      if (user) {
+        setAuthScreenState('loggedIn', user);
+      }
       handleAuthState(user).catch((err) => {
         console.error('Auth state refresh failed', err);
       });
-    }));
+    });
 
     await bootstrapAuth();
   });
