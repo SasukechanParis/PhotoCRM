@@ -1922,20 +1922,7 @@
   }
 
   function handleGoogleLogoutClick() {
-    if (!window.FirebaseService) return;
-    isLoggedIn = false;
-    if (authNullTimer) {
-      clearTimeout(authNullTimer);
-      authNullTimer = null;
-    }
-    window.FirebaseService.signOut()
-      .catch((err) => {
-        console.error('Google logout failed', err);
-        showToast('ログアウトに失敗しました。');
-      })
-      .finally(() => {
-        window.location.reload();
-      });
+    window.FirebaseService?.signOut?.(); window.location.href = window.location.pathname;
   }
 
   function bindCoreUIEventListeners() {
@@ -2042,8 +2029,6 @@
 
   let appInitialized = false;
   let authStateRequestId = 0;
-  let isLoggedIn = false;
-  let authNullTimer = null;
 
   function getAppContainerElement() {
     const byId = document.getElementById('app-container');
@@ -2189,36 +2174,24 @@
       console.log("🔔 Auth State Changed. User:", user ? user.email : "LoggedOut");
 
       if (user) {
-        if (authNullTimer) {
-          clearTimeout(authNullTimer);
-          authNullTimer = null;
+        const appContainer = getAppContainerElement();
+        const loginScreen = document.getElementById('login-screen');
+        const isLoginScreenActive = !!loginScreen && loginScreen.style.display !== 'none';
+        const isDashboardActive = !!appContainer && appContainer.style.display === 'block';
+        if (isLoginScreenActive || !isDashboardActive) {
+          setAuthScreenState('loggedIn', user);
+          handleAuthStateSafely(user);
         }
-        isLoggedIn = true;
-        setAuthScreenState('loggedIn', user);
-        handleAuthStateSafely(user);
         return;
       }
 
-      if (isLoggedIn) {
-        if (authNullTimer) clearTimeout(authNullTimer);
-        authNullTimer = setTimeout(() => {
-          authNullTimer = null;
-          const latestUser = window.FirebaseService?.getCurrentUser?.() || null;
-          if (!latestUser) {
-            isLoggedIn = false;
-            setAuthScreenState('loggedOut');
-          }
-        }, 1000);
+      const appContainer = getAppContainerElement();
+      const isDashboardActive = !!appContainer && appContainer.style.display === 'block';
+      if (isDashboardActive) {
+        window.location.reload();
         return;
       }
-
-      if (!isLoggedIn) {
-        if (authNullTimer) {
-          clearTimeout(authNullTimer);
-          authNullTimer = null;
-        }
-        setAuthScreenState('loggedOut');
-      }
+      setAuthScreenState('loggedOut');
     });
   });
 
