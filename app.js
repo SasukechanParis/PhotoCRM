@@ -3,29 +3,6 @@
 (function () {
   'use strict';
 
-  const AUTH_UI_LOCK_STYLE_ID = 'auth-ui-lock-style';
-  const AUTH_UI_LOCK_STYLE_TEXT = '';
-  let authUiLocked = true;
-
-  function setAuthUiLocked(locked) {
-    authUiLocked = !!locked;
-    const existingStyle = document.getElementById(AUTH_UI_LOCK_STYLE_ID);
-
-    if (authUiLocked) {
-      if (existingStyle) return;
-      const style = document.createElement('style');
-      style.id = AUTH_UI_LOCK_STYLE_ID;
-      style.textContent = AUTH_UI_LOCK_STYLE_TEXT;
-      (document.head || document.documentElement).appendChild(style);
-      return;
-    }
-
-    if (existingStyle) existingStyle.remove();
-  }
-
-  // Keep auth/login/app UI hidden until Firebase auth state is finalized.
-  setAuthUiLocked(true);
-
   // ===== Storage Keys =====
   const STORAGE_KEY = 'photocrm_customers';
   const OPTIONS_KEY = 'photocrm_options';
@@ -789,35 +766,39 @@
     updateMonthFilter();
   }
 
-  // ===== Sort =====
-  $$('thead th[data-sort]').forEach(th => {
-    th.addEventListener('click', () => {
-      const key = th.dataset.sort;
-      if (currentSort.key === key) currentSort.dir = currentSort.dir === 'asc' ? 'desc' : 'asc';
-      else currentSort = { key, dir: 'asc' };
-      renderTable();
+  function bindSortEventListeners() {
+    $$('thead th[data-sort]').forEach((th) => {
+      const key = th.dataset.sort || 'unknown';
+      bindEventOnce(th, 'click', () => {
+        const sortKey = th.dataset.sort;
+        if (!sortKey) return;
+        if (currentSort.key === sortKey) currentSort.dir = currentSort.dir === 'asc' ? 'desc' : 'asc';
+        else currentSort = { key: sortKey, dir: 'asc' };
+        renderTable();
+      }, `table-sort-${key}`);
     });
-  });
+  }
 
-  // ===== View Toggle =====
-  $$('.view-tab').forEach(tab => {
-    tab.addEventListener('click', () => {
-      $$('.view-tab').forEach(t => t.classList.remove('active'));
-      tab.classList.add('active');
-      const view = tab.dataset.view;
+  function bindViewTabEventListeners() {
+    $$('.view-tab').forEach((tab) => {
+      const view = tab.dataset.view || 'list';
+      bindEventOnce(tab, 'click', () => {
+        $$('.view-tab').forEach(t => t.classList.remove('active'));
+        tab.classList.add('active');
 
-      saveCloudValue('preferred_view', view);
+        saveCloudValue('preferred_view', view);
 
-      if (view === 'calendar') {
-        listView.classList.remove('active');
-        calendarView.classList.add('active');
-        renderCalendar();
-      } else {
-        calendarView.classList.remove('active');
-        listView.classList.add('active');
-      }
+        if (view === 'calendar') {
+          listView.classList.remove('active');
+          calendarView.classList.add('active');
+          renderCalendar();
+        } else {
+          calendarView.classList.remove('active');
+          listView.classList.add('active');
+        }
+      }, `view-tab-${view}`);
     });
-  });
+  }
 
   // ===== Calendar =====
   function renderCalendar() {
@@ -922,52 +903,46 @@
 
   function initCalendarFilters() {
     syncCalendarFilterControls();
-    calendarFilterInputs.forEach(input => {
-      input.addEventListener('change', () => {
+    calendarFilterInputs.forEach((input) => {
+      const inputKey = input.value || 'unknown';
+      bindEventOnce(input, 'change', () => {
         if (!Object.prototype.hasOwnProperty.call(calendarFilters, input.value)) return;
         calendarFilters[input.value] = input.checked;
         saveCalendarFilters(calendarFilters);
         renderCalendar();
-      });
+      }, `calendar-filter-${inputKey}`);
     });
   }
 
-  $('#cal-prev').addEventListener('click', () => {
-    calMonth--;
-    if (calMonth < 0) { calMonth = 11; calYear--; }
-    renderCalendar();
-  });
-  $('#cal-next').addEventListener('click', () => {
-    calMonth++;
-    if (calMonth > 11) { calMonth = 0; calYear++; }
-    renderCalendar();
-  });
-  $('#cal-today').addEventListener('click', () => {
-    const d = new Date();
-    calYear = d.getFullYear();
-    calMonth = d.getMonth();
-    renderCalendar();
-  });
+  function bindCalendarNavigationEventListeners() {
+    bindEventOnce($('#cal-prev'), 'click', () => {
+      calMonth--;
+      if (calMonth < 0) { calMonth = 11; calYear--; }
+      renderCalendar();
+    }, 'calendar-prev-month');
 
-  // ===== Toolbar Filters =====
-  searchInput.addEventListener('input', renderTable);
-  filterPayment.addEventListener('change', renderTable);
-  filterMonth.addEventListener('change', renderTable);
-  $('#filter-photographer').addEventListener('change', renderTable);
+    bindEventOnce($('#cal-next'), 'click', () => {
+      calMonth++;
+      if (calMonth > 11) { calMonth = 0; calYear++; }
+      renderCalendar();
+    }, 'calendar-next-month');
 
-  // ===== Add / Edit Modal =====
-  function checkCustomerLimit() {
-    const currentUser = window.FirebaseService?.getCurrentUser();
-    if (!currentUser) return false;
-
-    const userPlan = currentUser.photoCRMPlan || 'free';
-    if (userPlan !== 'pro' && customers.length >= FREE_PLAN_LIMIT) {
-      showToast(`無料プランでは最大${FREE_PLAN_LIMIT}件まで登録可能です。PROプランにアップグレードしてください。`, 'warning');
-      return false;
-    }
-    return true;
+    bindEventOnce($('#cal-today'), 'click', () => {
+      const d = new Date();
+      calYear = d.getFullYear();
+      calMonth = d.getMonth();
+      renderCalendar();
+    }, 'calendar-current-month');
   }
 
+  function bindToolbarFilterEventListeners() {
+    bindEventOnce(searchInput, 'input', renderTable, 'toolbar-search-input');
+    bindEventOnce(filterPayment, 'change', renderTable, 'toolbar-filter-payment');
+    bindEventOnce(filterMonth, 'change', renderTable, 'toolbar-filter-month');
+    bindEventOnce($('#filter-photographer'), 'change', renderTable, 'toolbar-filter-photographer');
+  }
+
+  // ===== Add / Edit Modal =====
   window.openModal = function (id) {
     if (!id && !checkCustomerLimit()) return;
     editingId = id || null;
@@ -1133,7 +1108,7 @@
   };
   window.closeConfirm = window.closeConfirmModal;
 
-  $('#btn-confirm-delete').addEventListener('click', () => {
+  function handleConfirmDeleteClick() {
     if (deletingId) {
       customers = customers.filter(c => c.id !== deletingId);
       saveCustomers(customers);
@@ -1142,7 +1117,7 @@
       renderTable();
       if (calendarView.classList.contains('active')) renderCalendar();
     }
-  });
+  }
 
   // ===== Settings =====
   window.closeSettings = function () { settingsOverlay.classList.remove('active'); };
@@ -1247,17 +1222,13 @@
     reader.readAsText(file);
   }
 
-  bindEventOnce($('#btn-sync-export'), 'click', handleSyncExportClick, 'sync-export-click');
-  bindEventOnce($('#btn-sync-import'), 'click', handleSyncImportClick, 'sync-import-click');
-  bindEventOnce($('#import-file'), 'change', handleImportFileChange, 'import-file-change');
-
-  bindEventOnce($('#btn-add-custom-field'), 'click', () => {
+  function handleAddCustomFieldClick() {
     const label = prompt(t('enterFieldName') || 'Enter custom field label');
     if (!label || !label.trim()) return;
     addCustomFieldDefinition(label.trim());
     renderCustomFields();
     showToast(t('customFieldAdded') || 'Custom field added');
-  }, 'add-custom-field-click');
+  }
 
   // Team Management UI
   function renderTeamList() {
@@ -1389,8 +1360,6 @@
     URL.revokeObjectURL(url);
   }
 
-  bindEventOnce($('#btn-ics-export'), 'click', handleIcsExportClick, 'ics-export-click');
-
   // CSV Export
   function handleCsvExportClick() {
     const headers = fields.map(f => f.label).join(',');
@@ -1408,8 +1377,6 @@
     a.click();
     URL.revokeObjectURL(url);
   }
-
-  bindEventOnce($('#btn-export'), 'click', handleCsvExportClick, 'csv-export-click');
 
   // ===== Task Management Logic =====
   function renderTasks(customer) {
@@ -1644,8 +1611,9 @@
     setTimeout(() => { modal.style.display = 'none'; }, 300);
   };
 
-  document.getElementById('btn-add-invoice-item').onclick = () => {
+  function handleAddInvoiceItemClick() {
     const container = document.getElementById('invoice-items-container');
+    if (!container) return;
     const rows = Array.from(container.querySelectorAll('.invoice-item-row')).map(row => ({
       description: row.querySelector('.invoice-item-desc').value,
       quantity: row.querySelector('.invoice-item-qty').value,
@@ -1653,9 +1621,9 @@
     }));
     rows.push({ description: '', quantity: 1, unitPrice: 0 });
     renderInvoiceBuilderItems(rows);
-  };
+  }
 
-  document.getElementById('btn-generate-custom-invoice').onclick = () => {
+  function handleGenerateCustomInvoiceClick() {
     const customer = customers.find(c => c.id === invoiceBuilderCustomerId);
     if (!customer || !window.generateInvoicePDF) return;
 
@@ -1702,7 +1670,7 @@
       message: customer.invoiceMessage,
     });
     closeInvoiceBuilderModal();
-  };
+  }
 
   // ===== Expense Management Logic =====
   function renderExpenses() {
@@ -1786,14 +1754,9 @@
 
   function bindExpenseModalEvents() {
     const expenseForm = $('#expense-form');
-    if (expenseForm) {
-      expenseForm.addEventListener('submit', window.saveExpense);
-    }
-
     const addExpenseBtn = $('#addExpenseBtn');
-    if (addExpenseBtn) {
-      addExpenseBtn.addEventListener('click', window.saveExpense);
-    }
+    bindEventOnce(expenseForm, 'submit', window.saveExpense, 'expense-form-submit');
+    bindEventOnce(addExpenseBtn, 'click', window.saveExpense, 'expense-add-click');
   }
 
   window.deleteExpense = function (id) {
@@ -1815,14 +1778,15 @@
     setTimeout(() => $('#contract-modal').style.display = 'none', 300);
   };
 
-  // Set up contract template buttons
-  document.querySelectorAll('.contract-template-btn').forEach(btn => {
-    btn.onclick = () => {
-      const template = btn.dataset.template;
-      window.generateContract(window.currentContractCustomer, template);
-      closeContractModal();
-    };
-  });
+  function bindContractTemplateEventListeners() {
+    document.querySelectorAll('.contract-template-btn').forEach((btn) => {
+      const template = btn.dataset.template || 'default';
+      bindEventOnce(btn, 'click', () => {
+        window.generateContract(window.currentContractCustomer, template);
+        closeContractModal();
+      }, `contract-template-${template}`);
+    });
+  }
 
   // ===== Free Tier Limit Logic =====
   function checkCustomerLimit() {
@@ -1840,19 +1804,6 @@
       window.open('landing.html#pricing', '_blank');
     }
   }
-
-  // ===== Settings Tabs Logic =====
-  document.querySelectorAll('.settings-tab-btn').forEach(btn => {
-    btn.onclick = () => {
-      document.querySelectorAll('.settings-tab-btn').forEach(b => b.classList.remove('active'));
-      document.querySelectorAll('.settings-tab-content').forEach(c => c.classList.remove('active'));
-      btn.classList.add('active');
-      $(`#settings-content-${btn.dataset.tab}`).classList.add('active');
-
-      if (btn.dataset.tab === 'invoice') loadInvoiceSettings();
-      if (btn.dataset.tab === 'team') renderTeamList();
-    };
-  });
 
   function loadInvoiceSettings() {
     const settings = getTaxSettings();
@@ -1878,15 +1829,15 @@
     if (templateSelect) templateSelect.value = settings.invoiceTemplate || 'modern';
   }
 
-  $('#tax-enabled').onchange = (e) => {
+  function handleTaxEnabledChange(e) {
     $('#tax-options').style.display = e.target.checked ? 'block' : 'none';
-  };
+  }
 
-  $('#tax-label').onchange = (e) => {
+  function handleTaxLabelChange(e) {
     $('#tax-label-custom').style.display = e.target.value === 'Custom' ? 'block' : 'none';
-  };
+  }
 
-  $('#btn-save-invoice-settings').onclick = () => {
+  function handleSaveInvoiceSettings() {
     const label = $('#tax-label').value === 'Custom' ? $('#tax-label-custom').value : $('#tax-label').value;
     const currentSettings = getTaxSettings();
     const settings = {
@@ -1904,7 +1855,7 @@
     };
     saveTaxSettings(settings);
     showToast(t('msgSettingsSaved'));
-  };
+  }
 
   // ===== Helper Functions for Invoice/Quote/Contract =====
   window.generateInvoiceByID = function(customerId) {
@@ -1969,8 +1920,29 @@
         btn.classList.add('active');
         const tab = btn.dataset.tab;
         $(`#settings-content-${tab}`)?.classList.add('active');
+        if (tab === 'invoice') loadInvoiceSettings();
         if (tab === 'team') renderTeamList();
       }, `settings-tab-${tabName}`);
+    });
+  }
+
+  function handleGoogleLoginClick() {
+    if (!window.FirebaseService) {
+      showToast('Firebase設定の読み込みに失敗しました。');
+      return;
+    }
+    window.FirebaseService.signInWithGoogle().catch((err) => {
+      console.error('Firebase Auth Error:', err.code, err.message);
+      console.error(err);
+      showToast('Googleログインに失敗しました。');
+    });
+  }
+
+  function handleGoogleLogoutClick() {
+    if (!window.FirebaseService) return;
+    window.FirebaseService.signOut().catch((err) => {
+      console.error('Google logout failed', err);
+      showToast('ログアウトに失敗しました。');
     });
   }
 
@@ -1986,30 +1958,33 @@
     bindEventOnce(document.getElementById('btn-export'), 'click', handleCsvExportClick, 'csv-export-click');
     bindEventOnce(document.getElementById('btn-ics-export'), 'click', handleIcsExportClick, 'ics-export-click');
     bindEventOnce(document.getElementById('btn-team-add'), 'click', handleTeamAddClick, 'team-add-click');
-    bindEventOnce(document.getElementById('filter-photographer'), 'change', renderTable, 'filter-photographer-change');
-    bindEventOnce(searchInput, 'input', renderTable, 'search-input');
-    bindEventOnce(filterPayment, 'change', renderTable, 'filter-payment-change');
-    bindEventOnce(filterMonth, 'change', renderTable, 'filter-month-change');
-
+    bindEventOnce(document.getElementById('btn-add-custom-field'), 'click', handleAddCustomFieldClick, 'add-custom-field-click');
+    bindEventOnce(document.getElementById('btn-google-login'), 'click', handleGoogleLoginClick, 'google-login-banner');
+    bindEventOnce(document.getElementById('btn-google-login-screen'), 'click', handleGoogleLoginClick, 'google-login-screen');
+    bindEventOnce(document.getElementById('btn-logout'), 'click', handleGoogleLogoutClick, 'google-logout');
     bindSettingsTabListeners();
   }
 
-  function rebindLanguageAndThemeListeners() {
-    const langSelect = document.getElementById('lang-select');
-    if (langSelect) {
-      langSelect.removeEventListener('change', handleLanguageSelectChange);
-      langSelect.addEventListener('change', handleLanguageSelectChange);
-    }
-
-    const themeBtn = document.getElementById('btn-theme');
-    if (themeBtn) {
-      themeBtn.removeEventListener('click', toggleTheme);
-      themeBtn.addEventListener('click', toggleTheme);
-    }
+  function bindFeatureEventListeners() {
+    bindSortEventListeners();
+    bindViewTabEventListeners();
+    bindCalendarNavigationEventListeners();
+    bindToolbarFilterEventListeners();
+    bindContractTemplateEventListeners();
+    bindEventOnce($('#btn-confirm-delete'), 'click', handleConfirmDeleteClick, 'confirm-delete');
+    bindEventOnce(document.getElementById('btn-add-invoice-item'), 'click', handleAddInvoiceItemClick, 'invoice-item-add');
+    bindEventOnce(document.getElementById('btn-generate-custom-invoice'), 'click', handleGenerateCustomInvoiceClick, 'invoice-generate-custom');
+    bindEventOnce($('#tax-enabled'), 'change', handleTaxEnabledChange, 'tax-enabled-change');
+    bindEventOnce($('#tax-label'), 'change', handleTaxLabelChange, 'tax-label-change');
+    bindEventOnce($('#btn-save-invoice-settings'), 'click', handleSaveInvoiceSettings, 'tax-settings-save');
+    initCalendarFilters();
+    bindExpenseModalEvents();
   }
 
   // ===== Initialization =====
   function init() {
+    if (appInitialized) return;
+
     console.log('🚀 ========================================');
     console.log('🚀 PhotoCRM v2.2.3 Initializing...');
     console.log('🚀 ========================================');
@@ -2028,7 +2003,12 @@
 
     // 3. Attach event listeners
     bindCoreUIEventListeners();
-    rebindLanguageAndThemeListeners();
+    bindFeatureEventListeners();
+
+    // Hook dynamic "Other" behavior after elements are present.
+    const keys_to_hook = ['plan', 'costume', 'hairMakeup'];
+    keys_to_hook.forEach(k => hookSelectOther(k));
+    hookPhotographerOther();
 
     if (dashboardMonthPicker) {
       syncDashboardMonthPicker();
@@ -2063,7 +2043,7 @@
     const savedView = getCloudValue('preferred_view', 'list');
     const activeTab = $(`.view-tab[data-view="${savedView}"]`);
     if (activeTab) activeTab.click();
-
+    appInitialized = true;
   }
 
   function hydrateStateFromCloud() {
@@ -2077,19 +2057,8 @@
     calendarFilters = loadCalendarFilters();
   }
 
-  // Hook for "Other" in selects
-  const keys_to_hook = ['plan', 'costume', 'hairMakeup'];
-  keys_to_hook.forEach(k => hookSelectOther(k));
-  hookPhotographerOther();
-
   let appInitialized = false;
-  let authReady = false;
   let authStateRequestId = 0;
-
-  function markAuthReady() {
-    authReady = true;
-    setAuthUiLocked(false);
-  }
 
   function getAppContainerElement() {
     const byId = document.getElementById('app-container');
@@ -2106,25 +2075,6 @@
     const authStatus = document.getElementById('auth-status');
     const loginBtn = document.getElementById('btn-google-login');
     const logoutBtn = document.getElementById('btn-logout');
-
-    if (authUiLocked) {
-      if (loginBtn) loginBtn.style.display = 'none';
-      if (logoutBtn) logoutBtn.style.display = 'none';
-      if (loginScreen) loginScreen.style.display = 'none';
-      if (authBanner) authBanner.style.display = 'none';
-      if (appContainer) appContainer.style.display = 'none';
-      return;
-    }
-
-    if (state === 'loggedOut' && !authReady) {
-      if (authStatus) authStatus.textContent = '🔄 ログイン状態を確認中...';
-      if (loginBtn) loginBtn.style.display = 'none';
-      if (logoutBtn) logoutBtn.style.display = 'none';
-      if (loginScreen) loginScreen.style.display = 'none';
-      if (authBanner) authBanner.style.display = 'none';
-      if (appContainer) appContainer.style.display = 'none';
-      return;
-    }
 
     if (state === 'checking') {
       if (authStatus) authStatus.textContent = '🔄 ログイン状態を確認中...';
@@ -2174,95 +2124,34 @@
 
   async function handleAuthState(user) {
     const requestId = ++authStateRequestId;
-
     const resolvedUser = user || window.FirebaseService?.getCurrentUser?.() || null;
 
     if (!resolvedUser) {
-      if (!authReady) {
-        setAuthScreenState('checking');
-        return;
-      }
-
       setAuthScreenState('loggedOut');
       return;
     }
 
-    setAuthScreenState('loggedIn', resolvedUser);
+    setAuthScreenState('checking');
 
     try {
       await window.FirebaseService.loadForUser(resolvedUser);
       if (requestId !== authStateRequestId) return;
       hydrateStateFromCloud();
+      applyTheme(currentTheme);
+      updateLanguage(currentLang || 'en');
+      updateCurrency(currentCurrency);
+      renderTable();
+      renderExpenses();
+      updateDashboard();
+      populateSelects();
+      syncCalendarFilterControls();
+      if (calendarView.classList.contains('active')) renderCalendar();
       setAuthScreenState('loggedIn', resolvedUser);
     } catch (err) {
       console.error('Cloud data load failed', err);
       showToast('クラウドデータの読み込みに失敗しました。再度お試しください。');
       if (requestId !== authStateRequestId) return;
       setAuthScreenState('loggedIn', resolvedUser);
-    }
-
-    if (requestId !== authStateRequestId) return;
-
-    if (!appInitialized) {
-      init();
-      appInitialized = true;
-    } else {
-      renderTable();
-      renderExpenses();
-      updateDashboard();
-      populateSelects();
-    }
-  }
-
-  async function waitForInitialAuthStateWithTimeout(timeoutMs = 5000) {
-    return new Promise((resolve) => {
-      let settled = false;
-
-      const finish = (user) => {
-        if (settled) return;
-        settled = true;
-        clearTimeout(timerId);
-        resolve(user || window.FirebaseService?.getCurrentUser?.() || null);
-      };
-
-      const timerId = setTimeout(() => {
-        console.warn(`Auth state wait timed out after ${timeoutMs}ms; falling back to currentUser.`);
-        finish(window.FirebaseService?.getCurrentUser?.() || null);
-      }, timeoutMs);
-
-      window.FirebaseService.waitForInitialAuthState()
-        .then((user) => finish(user))
-        .catch((err) => {
-          console.warn('waitForInitialAuthState failed; falling back to currentUser.', err);
-          finish(window.FirebaseService?.getCurrentUser?.() || null);
-        });
-    });
-  }
-
-  async function bootstrapAuth() {
-    let redirectUser = null;
-    try {
-      await window.FirebaseService.whenReady();
-      const redirectResult = await window.FirebaseService.processRedirectResult();
-      if (redirectResult?.user) {
-        redirectUser = redirectResult.user;
-        console.log('✅ Redirect login success:', redirectResult.user.uid);
-        setAuthScreenState('loggedIn', redirectResult.user);
-      }
-    } catch (err) {
-      console.error('Firebase Auth Error:', err.code, err.message);
-      console.error('Redirect login failed', err);
-      showToast('Googleログインに失敗しました。再度お試しください。');
-    } finally {
-      let resolvedUser = redirectUser || window.FirebaseService.getCurrentUser?.() || null;
-      if (!resolvedUser) {
-        resolvedUser = await waitForInitialAuthStateWithTimeout();
-      }
-      markAuthReady();
-      if (resolvedUser) {
-        setAuthScreenState('loggedIn', resolvedUser);
-      }
-      await handleAuthState(resolvedUser);
     }
   }
 
@@ -2275,14 +2164,13 @@
 
   // Ensure DOM is ready before initializing
   document.addEventListener('DOMContentLoaded', async () => {
+    init();
     setAuthScreenState('checking');
-    bindCoreUIEventListeners();
-    rebindLanguageAndThemeListeners();
+    registerPwaServiceWorker();
 
     if (!window.FirebaseService) {
       console.error('FirebaseService is not available. Please check script loading order.');
       showToast('Firebase設定の読み込みに失敗しました。');
-      markAuthReady();
       setAuthScreenState('loggedOut');
       return;
     }
@@ -2292,37 +2180,22 @@
     } catch (err) {
       console.error('Firebase initialization failed', err);
       showToast('Firebase初期化に失敗しました。');
-      markAuthReady();
       setAuthScreenState('loggedOut');
       return;
     }
 
-    const triggerGoogleLogin = () => {
-      window.FirebaseService.signInWithGoogle().catch((err) => {
-        console.error('Firebase Auth Error:', err.code, err.message);
-        console.error(err);
-        showToast('Googleログインに失敗しました。');
-      });
-    };
-
-    registerPwaServiceWorker();
-
-    bindEventOnce(document.getElementById('btn-google-login'), 'click', triggerGoogleLogin, 'google-login-banner');
-    bindEventOnce(document.getElementById('btn-google-login-screen'), 'click', triggerGoogleLogin, 'google-login-screen');
-    bindEventOnce(document.getElementById('btn-logout'), 'click', () => {
-      window.FirebaseService.signOut();
-    }, 'google-logout');
+    try {
+      await window.FirebaseService.processRedirectResult();
+    } catch (err) {
+      console.error('Redirect login failed', err);
+      showToast('Googleログインに失敗しました。再度お試しください。');
+    }
 
     await window.FirebaseService.onAuthChanged((user) => {
-      if (user) {
-        setAuthScreenState('loggedIn', user);
-      }
       handleAuthState(user).catch((err) => {
         console.error('Auth state refresh failed', err);
       });
     });
-
-    await bootstrapAuth();
   });
 
 })();
