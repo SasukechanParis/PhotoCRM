@@ -565,6 +565,30 @@
   const calendarView = $('#calendar-view');
   const calendarFilterInputs = $$('.calendar-filter-input');
   const eventBindingRegistry = new WeakMap();
+  const STYLE_CACHE_BUSTER = '20260228-rcq';
+
+  function refreshMainStylesheetCache() {
+    const styleLink = document.querySelector('link[rel="stylesheet"][href*="style.css"]');
+    if (!styleLink) return;
+    try {
+      const styleUrl = new URL(styleLink.getAttribute('href') || styleLink.href, window.location.href);
+      if (styleUrl.searchParams.get('v') === STYLE_CACHE_BUSTER) return;
+      styleUrl.searchParams.set('v', STYLE_CACHE_BUSTER);
+      styleLink.href = styleUrl.toString();
+    } catch {
+      const href = styleLink.getAttribute('href') || 'style.css';
+      if (!href.includes(`v=${STYLE_CACHE_BUSTER}`)) {
+        styleLink.setAttribute('href', `${href}${href.includes('?') ? '&' : '?'}v=${STYLE_CACHE_BUSTER}`);
+      }
+    }
+  }
+
+  function ensureListColumnsMenuMountedToBody() {
+    if (!listColumnsMenu || !document.body) return;
+    if (listColumnsMenu.parentElement !== document.body) {
+      document.body.appendChild(listColumnsMenu);
+    }
+  }
 
   function bindEventOnce(element, eventName, handler, bindingKey = null, options = undefined) {
     if (!element || typeof handler !== 'function') return;
@@ -1131,6 +1155,8 @@
     if (!listColumnsMenu || !listColumnsButton) return;
     isListColumnsMenuOpen = !!isOpen;
     if (isListColumnsMenuOpen) {
+      ensureListColumnsMenuMountedToBody();
+      console.log('Menu Opening...');
       renderListColumnsMenu();
       listColumnsMenu.style.zIndex = '2147483647';
       listColumnsMenu.style.backgroundColor = '#ffffff';
@@ -3283,6 +3309,7 @@
     updateCurrency(currentCurrency);
     setDashboardVisibility(dashboardVisible);
     applyDashboardConfig();
+    ensureListColumnsMenuMountedToBody();
 
     // 3. Attach event listeners
     bindCoreUIEventListeners();
@@ -3442,6 +3469,7 @@
 
   // Ensure DOM is ready before initializing
   document.addEventListener('DOMContentLoaded', async () => {
+    refreshMainStylesheetCache();
     init();
     setAuthScreenState('checking');
     registerPwaServiceWorker();

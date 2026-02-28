@@ -566,8 +566,7 @@ body {
   opacity: 0.5;
 }
 
-.filter-select,
-#btn-list-columns {
+.filter-select {
   padding: 8px 12px;
   min-height: 38px;
   height: 38px;
@@ -578,17 +577,32 @@ body {
   border-radius: 8px;
   color: var(--text-primary);
   box-shadow: none;
-}
-
-.filter-select {
   cursor: pointer;
 }
 
 #btn-list-columns {
+  all: unset;
+  box-sizing: border-box;
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  padding: 8px 12px;
+  min-height: 38px;
+  height: 38px;
+  font-size: 0.85rem;
+  line-height: 1.2;
+  background: var(--bg-input);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  color: var(--text-primary);
+  box-shadow: none;
   cursor: pointer;
+  white-space: nowrap;
+}
+
+#btn-list-columns:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 
 #btn-list-columns:hover {
@@ -895,8 +909,8 @@ tbody tr:hover {
   background: rgba(255, 255, 255, 0.02);
   padding: 12px 8px;
   text-align: left;
-  min-width: 120px;
-  white-space: nowrap;
+  min-width: 120px !important;
+  white-space: nowrap !important;
   font-weight: 600;
   color: var(--text-secondary);
   border-bottom: 2px solid var(--border-color);
@@ -913,8 +927,8 @@ tbody tr:hover {
 
 #customer-table th,
 #customer-table td {
-  white-space: nowrap;
-  min-width: 120px;
+  white-space: nowrap !important;
+  min-width: 120px !important;
 }
 
 #customer-table th[data-column-key="inquiryDate"],
