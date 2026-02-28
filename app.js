@@ -1931,7 +1931,9 @@
       showToast('Firebase設定の読み込みに失敗しました。');
       return;
     }
-    window.FirebaseService.signInWithGoogle().catch((err) => {
+    const loginFn = window.FirebaseService.signInWithPopup
+      ?? window.FirebaseService.signInWithGoogle;
+    loginFn.call(window.FirebaseService).catch((err) => {
       console.error('Firebase Auth Error:', err.code, err.message);
       console.error(err);
       showToast('Googleログインに失敗しました。');
@@ -2060,6 +2062,7 @@
   let appInitialized = false;
   let authStateRequestId = 0;
   let isLoggedIn = false;
+  let authNullTimer = null;
 
   function getAppContainerElement() {
     const byId = document.getElementById('app-container');
@@ -2184,10 +2187,15 @@
     }
 
     isLoggedIn = false;
+    authNullTimer = null;
     window.FirebaseService.onAuthChanged((user) => {
       console.log("🔔 Auth State Changed. User:", user ? "LoggedIn" : "LoggedOut");
 
       if (user) {
+        if (authNullTimer) {
+          clearTimeout(authNullTimer);
+          authNullTimer = null;
+        }
         isLoggedIn = true;
         const authScreen = document.getElementById('auth-screen');
         const appContainer = document.getElementById('app-container');
@@ -2200,7 +2208,12 @@
           console.log("🔔 Ignoring transient null auth state (already logged in)");
           return;
         }
-        setAuthScreenState('loggedOut');
+        authNullTimer = setTimeout(() => {
+          if (!isLoggedIn) {
+            console.log("🔔 Auth settled as loggedOut after delay");
+            setAuthScreenState('loggedOut');
+          }
+        }, 1000);
       }
     });
   });
