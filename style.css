@@ -248,7 +248,7 @@ body {
   color: var(--text-secondary);
   border-radius: 10px;
   padding: 7px 12px;
-  font-size: 0.78rem;
+  font-size: clamp(0.7rem, 1.8vw, 0.82rem);
   font-weight: 600;
   cursor: pointer;
   box-shadow: var(--shadow-sm);
@@ -343,12 +343,13 @@ body {
   border: 1px solid var(--border-color);
   background: var(--bg-glass);
   color: var(--text-primary);
-  font-size: 0.84rem;
+  font-size: clamp(0.72rem, 1.2vw, 0.84rem);
   font-weight: 600;
   line-height: 1.2;
   cursor: pointer;
   box-shadow: var(--shadow-sm);
   transition: all var(--transition);
+  white-space: nowrap;
 }
 
 .btn:hover {
@@ -381,7 +382,7 @@ body {
 
 .btn-sm {
   padding: 6px 10px;
-  font-size: 0.78rem;
+  font-size: clamp(0.7rem, 1.8vw, 0.78rem);
 }
 
 .btn-lg {
@@ -561,11 +562,13 @@ body {
   background: var(--bg-card);
   border: 1px solid var(--border-color);
   border-radius: var(--radius-lg);
-  overflow: hidden;
+  overflow-x: auto;
+  overflow-y: hidden;
   animation: fadeIn 0.8s ease-out 0.6s both;
 }
 
 .table-scroll {
+  width: 100%;
   overflow-x: auto;
 }
 
@@ -765,7 +768,8 @@ tbody tr:hover {
 #customer-table {
   width: 100%;
   border-collapse: collapse;
-  table-layout: fixed;
+  table-layout: auto;
+  min-width: 1320px;
 }
 
 #customer-table th {
@@ -782,13 +786,17 @@ tbody tr:hover {
   padding: 8px 10px;
   border-bottom: 1px solid var(--border-color);
   color: var(--text-primary);
-  word-break: break-word;
-  overflow-wrap: anywhere;
+}
+
+#customer-table th,
+#customer-table td {
+  white-space: nowrap;
 }
 
 #customer-table th:last-child,
 #customer-table td:last-child {
-  width: 220px;
+  width: 208px;
+  min-width: 208px;
 }
 
 #customer-table tbody tr:hover {
@@ -835,7 +843,7 @@ tbody tr:hover {
 
 .table-action-btn .table-action-label,
 .action-btn .table-action-label {
-  font-size: 10px;
+  font-size: clamp(9px, 1.6vw, 10px);
   line-height: 1.1;
   color: var(--text-secondary);
   white-space: nowrap;
@@ -844,6 +852,64 @@ tbody tr:hover {
 .action-btn-delete,
 .table-action-btn.btn-del {
   grid-column: span 2;
+}
+
+.customer-card-grid {
+  display: none;
+  margin-top: 12px;
+  gap: 10px;
+}
+
+.customer-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  padding: 10px;
+  display: grid;
+  gap: 8px;
+  box-shadow: var(--shadow-sm);
+}
+
+.customer-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.customer-card-name {
+  font-weight: 700;
+  color: var(--text-primary);
+  font-size: 0.92rem;
+  line-height: 1.2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.customer-card-meta {
+  display: grid;
+  gap: 4px;
+}
+
+.customer-card-meta-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+}
+
+.customer-card-meta-label {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.customer-card-actions.action-buttons {
+  margin-top: 2px;
 }
 
 .empty-state {
@@ -887,20 +953,26 @@ tbody tr:hover {
 }
 
 .calendar-nav {
-  display: flex;
+  display: grid;
+  grid-template-columns: auto 1fr auto auto;
   align-items: center;
-  justify-content: space-between;
   margin-bottom: 0;
-  gap: 16px;
+  gap: 12px;
+  padding: 12px 14px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.97), rgba(248, 243, 255, 0.94));
+  border: 1px solid rgba(139, 92, 246, 0.2);
+  border-radius: 14px;
+  box-shadow: 0 10px 24px rgba(66, 33, 118, 0.14);
 }
 
 #cal-title {
-  font-size: 1.75rem;
+  font-size: clamp(1.05rem, 2.4vw, 1.55rem);
   font-weight: 800;
-  color: var(--text-primary);
+  color: #312652;
   flex: 1;
   text-align: center;
   letter-spacing: -0.02em;
+  margin: 0;
 }
 
 
@@ -909,6 +981,45 @@ tbody tr:hover {
   flex-direction: column;
   gap: 14px;
   margin-bottom: 24px;
+}
+
+#cal-prev,
+#cal-next {
+  width: 42px;
+  height: 42px;
+  border-radius: 999px;
+  border: 1px solid rgba(139, 92, 246, 0.24);
+  background: #fff;
+  color: #6d4cd7;
+  padding: 0;
+}
+
+#cal-prev svg,
+#cal-next svg {
+  width: 18px;
+  height: 18px;
+  display: block;
+}
+
+#cal-prev:hover,
+#cal-next:hover {
+  background: rgba(139, 92, 246, 0.14);
+  border-color: rgba(139, 92, 246, 0.52);
+  box-shadow: 0 8px 18px rgba(139, 92, 246, 0.2);
+  transform: translateY(-1px);
+}
+
+#cal-today {
+  border-radius: 999px;
+  padding: 8px 14px;
+  border-color: rgba(139, 92, 246, 0.22);
+  background: rgba(139, 92, 246, 0.09);
+  color: #5f43c8;
+}
+
+#cal-today:hover {
+  background: rgba(139, 92, 246, 0.16);
+  border-color: rgba(139, 92, 246, 0.45);
 }
 
 .calendar-filters {
@@ -1099,24 +1210,25 @@ tbody tr:hover {
     width: 100%;
   }
 
-  .table-scroll {
-    overflow-x: auto;
+  #table-wrapper {
+    display: none !important;
   }
 
-  table {
-    min-width: 100%;
-    table-layout: fixed;
+  .customer-card-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
   }
 
-  #customer-table th,
-  #customer-table td {
-    white-space: normal;
-    word-break: break-word;
+  .customer-card {
+    padding: 10px;
   }
 
-  #customer-table th:last-child,
-  #customer-table td:last-child {
-    width: auto;
+  .customer-card-name {
+    font-size: 0.85rem;
+  }
+
+  .customer-card-meta-row {
+    font-size: 0.72rem;
   }
 
   .table-action-btn,
@@ -1135,6 +1247,21 @@ tbody tr:hover {
   .action-buttons {
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 6px;
+  }
+
+  .calendar-nav {
+    grid-template-columns: auto 1fr auto;
+    gap: 8px;
+    padding: 10px;
+  }
+
+  #cal-title {
+    font-size: 1rem;
+  }
+
+  #cal-today {
+    grid-column: 1 / -1;
+    justify-self: center;
   }
 
   .calendar-cell {

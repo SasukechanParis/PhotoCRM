@@ -235,6 +235,7 @@
           <span id="table-revenue-total">Total: $0</span>
         </div>
       </div>
+      <div class="customer-card-grid" id="customer-card-grid"></div>
 
       <div class="empty-state" id="empty-state" style="display:none;">
         <div class="empty-icon">📷</div>
@@ -250,9 +251,19 @@
     <div class="calendar-view" id="calendar-view">
       <div class="calendar-nav-wrap">
         <div class="calendar-nav">
-          <button class="btn-icon" id="cal-prev" title="前月">◀</button>
+          <button class="btn-icon" id="cal-prev" title="前月" aria-label="前月" data-i18n-title="calPrev">
+            <svg viewBox="0 0 20 20" aria-hidden="true">
+              <path d="M12.5 4.5L7 10l5.5 5.5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"
+                stroke-linejoin="round" />
+            </svg>
+          </button>
           <h2 id="cal-title">2026年2月</h2>
-          <button class="btn-icon" id="cal-next" title="次月">▶</button>
+          <button class="btn-icon" id="cal-next" title="次月" aria-label="次月" data-i18n-title="calNext">
+            <svg viewBox="0 0 20 20" aria-hidden="true">
+              <path d="M7.5 4.5L13 10l-5.5 5.5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"
+                stroke-linejoin="round" />
+            </svg>
+          </button>
           <button class="btn btn-secondary btn-sm" id="cal-today" data-i18n="calToday">今月</button>
         </div>
         <div class="calendar-filters" aria-label="Calendar event filters">

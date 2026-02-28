@@ -472,6 +472,7 @@
   const settingsOverlay = $('#settings-overlay');
   const emptyState = $('#empty-state');
   const tableWrapper = $('#table-wrapper');
+  const customerCardGrid = $('#customer-card-grid');
   const listView = $('#list-view');
   const calendarView = $('#calendar-view');
   const calendarFilterInputs = $$('.calendar-filter-input');
@@ -1257,19 +1258,38 @@
   }
 
   // ===== Render Table =====
+  function getActionLabels() {
+    const actionDetail = t('actionDetail');
+    const actionHistory = t('actionHistory');
+    const actionContract = t('generateContract');
+    return {
+      edit: t('edit') !== 'edit' ? t('edit') : (currentLang === 'fr' ? 'Modifier' : currentLang === 'en' ? 'Edit' : '編集'),
+      detail: actionDetail !== 'actionDetail' ? actionDetail : (currentLang === 'fr' ? 'Détails' : currentLang === 'en' ? 'Details' : '詳細'),
+      contract: actionContract !== 'generateContract' ? actionContract : (currentLang === 'fr' ? 'Contrat' : currentLang === 'en' ? 'Contract' : '契約書'),
+      history: actionHistory !== 'actionHistory' ? actionHistory : (currentLang === 'fr' ? 'Historique' : currentLang === 'en' ? 'History' : '履歴'),
+      delete: t('delete') !== 'delete' ? t('delete') : (currentLang === 'fr' ? 'Supprimer' : currentLang === 'en' ? 'Delete' : '削除'),
+      shootingDate: t('thShootingDate') !== 'thShootingDate' ? t('thShootingDate') : (currentLang === 'fr' ? 'Date de séance' : currentLang === 'en' ? 'Shooting Date' : '撮影日'),
+      revenue: t('thRevenue') !== 'thRevenue' ? t('thRevenue') : (currentLang === 'fr' ? 'Revenus' : currentLang === 'en' ? 'Revenue' : '売上'),
+    };
+  }
+
   function renderTable() {
     const list = getFilteredCustomers();
+    const actionLabels = getActionLabels();
     if (customers.length === 0) {
       tableWrapper.style.display = 'none';
+      if (customerCardGrid) customerCardGrid.style.display = 'none';
       emptyState.style.display = 'block';
       $('.toolbar').style.display = 'none';
     } else {
       tableWrapper.style.display = '';
+      if (customerCardGrid) customerCardGrid.style.display = '';
       emptyState.style.display = 'none';
       $('.toolbar').style.display = '';
     }
 
     tbody.innerHTML = '';
+    if (customerCardGrid) customerCardGrid.innerHTML = '';
     list.forEach(c => {
       const tr = document.createElement('tr');
       tr.dataset.id = c.id;
@@ -1287,25 +1307,25 @@
         <td><span class="badge badge-cyan">${escapeHtml(getPhotographerName(c.assignedTo))}</span></td>
         <td>
           <div class="table-action-group action-buttons">
-            <button type="button" class="table-action-btn action-btn btn-edit" title="編集" aria-label="編集" onclick="openModal('${c.id}')">
+            <button type="button" class="table-action-btn action-btn btn-edit" title="${escapeHtml(actionLabels.edit)}" aria-label="${escapeHtml(actionLabels.edit)}" onclick="openModal('${c.id}')">
               <span class="table-action-icon">✏️</span>
-              <span class="table-action-label">編集</span>
+              <span class="table-action-label">${escapeHtml(actionLabels.edit)}</span>
             </button>
-            <button type="button" class="table-action-btn action-btn" title="詳細" aria-label="詳細" onclick="openCustomerDetailByID('${c.id}')">
+            <button type="button" class="table-action-btn action-btn" title="${escapeHtml(actionLabels.detail)}" aria-label="${escapeHtml(actionLabels.detail)}" onclick="openCustomerDetailByID('${c.id}')">
               <span class="table-action-icon">📄</span>
-              <span class="table-action-label">詳細</span>
+              <span class="table-action-label">${escapeHtml(actionLabels.detail)}</span>
             </button>
-            <button type="button" class="table-action-btn action-btn" title="契約書" aria-label="契約書" onclick="openContractModalByID('${c.id}')">
+            <button type="button" class="table-action-btn action-btn" title="${escapeHtml(actionLabels.contract)}" aria-label="${escapeHtml(actionLabels.contract)}" onclick="openContractModalByID('${c.id}')">
               <span class="table-action-icon">📋</span>
-              <span class="table-action-label">契約書</span>
+              <span class="table-action-label">${escapeHtml(actionLabels.contract)}</span>
             </button>
-            <button type="button" class="table-action-btn action-btn" title="履歴" aria-label="履歴" onclick="openCustomerHistoryByID('${c.id}')">
+            <button type="button" class="table-action-btn action-btn" title="${escapeHtml(actionLabels.history)}" aria-label="${escapeHtml(actionLabels.history)}" onclick="openCustomerHistoryByID('${c.id}')">
               <span class="table-action-icon">📜</span>
-              <span class="table-action-label">履歴</span>
+              <span class="table-action-label">${escapeHtml(actionLabels.history)}</span>
             </button>
-            <button type="button" class="table-action-btn action-btn action-btn-delete btn-del" title="削除" aria-label="削除" onclick="openConfirm('${c.id}')">
+            <button type="button" class="table-action-btn action-btn action-btn-delete btn-del" title="${escapeHtml(actionLabels.delete)}" aria-label="${escapeHtml(actionLabels.delete)}" onclick="openConfirm('${c.id}')">
               <span class="table-action-icon">🗑</span>
-              <span class="table-action-label">削除</span>
+              <span class="table-action-label">${escapeHtml(actionLabels.delete)}</span>
             </button>
           </div>
         </td>
@@ -1315,6 +1335,55 @@
         openDetail(c.id);
       });
       tbody.appendChild(tr);
+
+      if (customerCardGrid) {
+        const card = document.createElement('article');
+        card.className = 'customer-card';
+        card.dataset.id = c.id;
+        card.innerHTML = `
+          <div class="customer-card-head">
+            <div class="customer-card-name">${escapeHtml(c.customerName || '—')}</div>
+            <span class="badge badge-purple">${escapeHtml(resolveCustomerPlanName(c))}</span>
+          </div>
+          <div class="customer-card-meta">
+            <div class="customer-card-meta-row">
+              <span class="customer-card-meta-label">${escapeHtml(actionLabels.shootingDate)}</span>
+              <span>${formatDate(c.shootingDate)}</span>
+            </div>
+            <div class="customer-card-meta-row">
+              <span class="customer-card-meta-label">${escapeHtml(actionLabels.revenue)}</span>
+              <strong>${formatCurrency(c.revenue)}</strong>
+            </div>
+          </div>
+          <div class="customer-card-actions action-buttons">
+            <button type="button" class="table-action-btn action-btn btn-edit" title="${escapeHtml(actionLabels.edit)}" aria-label="${escapeHtml(actionLabels.edit)}" onclick="openModal('${c.id}')">
+              <span class="table-action-icon">✏️</span>
+              <span class="table-action-label">${escapeHtml(actionLabels.edit)}</span>
+            </button>
+            <button type="button" class="table-action-btn action-btn" title="${escapeHtml(actionLabels.detail)}" aria-label="${escapeHtml(actionLabels.detail)}" onclick="openCustomerDetailByID('${c.id}')">
+              <span class="table-action-icon">📄</span>
+              <span class="table-action-label">${escapeHtml(actionLabels.detail)}</span>
+            </button>
+            <button type="button" class="table-action-btn action-btn" title="${escapeHtml(actionLabels.contract)}" aria-label="${escapeHtml(actionLabels.contract)}" onclick="openContractModalByID('${c.id}')">
+              <span class="table-action-icon">📋</span>
+              <span class="table-action-label">${escapeHtml(actionLabels.contract)}</span>
+            </button>
+            <button type="button" class="table-action-btn action-btn" title="${escapeHtml(actionLabels.history)}" aria-label="${escapeHtml(actionLabels.history)}" onclick="openCustomerHistoryByID('${c.id}')">
+              <span class="table-action-icon">📜</span>
+              <span class="table-action-label">${escapeHtml(actionLabels.history)}</span>
+            </button>
+            <button type="button" class="table-action-btn action-btn action-btn-delete btn-del" title="${escapeHtml(actionLabels.delete)}" aria-label="${escapeHtml(actionLabels.delete)}" onclick="openConfirm('${c.id}')">
+              <span class="table-action-icon">🗑</span>
+              <span class="table-action-label">${escapeHtml(actionLabels.delete)}</span>
+            </button>
+          </div>
+        `;
+        card.addEventListener('click', (e) => {
+          if (e.target.closest('.table-action-btn, .btn-icon')) return;
+          openDetail(c.id);
+        });
+        customerCardGrid.appendChild(card);
+      }
     });
 
     const totalRevenue = list.reduce((s, c) => s + (Number(c.revenue) || 0), 0);
@@ -2502,11 +2571,10 @@
     const container = $('#expense-list');
     container.innerHTML = '';
     const expenses = getExpenses().sort((a, b) => new Date(b.date) - new Date(a.date));
-    const noExpensesMessage = currentLang === 'ja'
-      ? '経費はまだ登録されていません'
-      : currentLang === 'fr'
-        ? 'Aucune dépense enregistrée pour le moment'
-        : 'No expenses registered yet';
+    const translatedNoExpenses = t('noExpensesYet');
+    const noExpensesMessage = translatedNoExpenses !== 'noExpensesYet'
+      ? translatedNoExpenses
+      : 'No expenses registered yet';
 
     if (expenses.length === 0) {
       container.innerHTML = `<p style="color:var(--text-muted); text-align:center; padding:20px;">${noExpensesMessage}</p>`;
