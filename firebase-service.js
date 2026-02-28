@@ -39,7 +39,7 @@
     }
     auth = firebase.auth();
     db = firebase.firestore();
-    await auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(console.error);
+    await auth.setPersistence(firebase.auth.Auth.Persistence.SESSION).catch(console.error);
   })();
 
   let redirectResolved = false;

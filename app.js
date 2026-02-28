@@ -1924,27 +1924,22 @@
   }
 
   function handleGoogleLogoutClick() {
+    authWatcherDisabled = true;
+    if (typeof authUnsubscribe === 'function') {
+      authUnsubscribe();
+      authUnsubscribe = null;
+    }
     isLoggedIn = false;
     if (authNullTimer) {
       clearTimeout(authNullTimer);
       authNullTimer = null;
     }
-
-    const reloadToRoot = () => {
-      window.location.href = window.location.origin + window.location.pathname;
-    };
-
-    if (!window.FirebaseService?.signOut) {
-      reloadToRoot();
-      return;
-    }
-
-    window.FirebaseService.signOut()
-      .then(reloadToRoot)
-      .catch((err) => {
-        console.error('Google logout failed', err);
-        reloadToRoot();
-      });
+    window.FirebaseService?.signOut?.().catch((err) => {
+      console.error('Google logout failed', err);
+    });
+    try { window.localStorage.clear(); } catch {}
+    try { window.sessionStorage.clear(); } catch {}
+    window.location.href = window.location.origin + window.location.pathname;
   }
 
   function bindCoreUIEventListeners() {
@@ -2053,6 +2048,8 @@
   let authStateRequestId = 0;
   let isLoggedIn = false;
   let authNullTimer = null;
+  let authWatcherDisabled = false;
+  let authUnsubscribe = null;
 
   function getAppContainerElement() {
     const byId = document.getElementById('app-container');
@@ -2201,7 +2198,13 @@
     }
 
     // onAuthChanged is registered only after Firebase initialization is complete.
-    await window.FirebaseService.onAuthChanged((user) => {
+    authWatcherDisabled = false;
+    if (typeof authUnsubscribe === 'function') {
+      authUnsubscribe();
+      authUnsubscribe = null;
+    }
+    authUnsubscribe = await window.FirebaseService.onAuthChanged((user) => {
+      if (authWatcherDisabled) return;
       console.log("🔔 Auth State Changed. User:", user ? user.email : "LoggedOut");
 
       if (user) {
