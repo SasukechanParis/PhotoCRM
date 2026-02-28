@@ -387,6 +387,25 @@
             <label for="form-paymentChecked" data-i18n="labelPaymentChecked">入金チェック済み</label>
           </div>
 
+          <div class="form-section-title">プラン詳細</div>
+          <div class="form-group">
+            <label for="form-plan-name">撮影プラン名</label>
+            <input type="text" id="form-plan-name" placeholder="例: Standard" />
+          </div>
+          <div class="form-group">
+            <label for="form-base-price">基本料金</label>
+            <input type="number" id="form-base-price" min="0" step="1" placeholder="例: 120000" />
+          </div>
+          <div class="form-group" style="grid-column: 1 / -1;">
+            <label for="form-plan-options">オプション項目</label>
+            <textarea id="form-plan-options"
+              placeholder="例: アルバム +20000&#10;レタッチ追加 +10000"></textarea>
+          </div>
+          <div class="form-group">
+            <label for="form-total-price">合計金額</label>
+            <input type="number" id="form-total-price" min="0" step="1" placeholder="例: 150000" />
+          </div>
+
           <div class="form-section-title" data-i18n="secMemo">メモ</div>
           <div class="form-group full-width">
             <label for="form-details" data-i18n="labelDetails">詳細</label>
@@ -441,6 +460,22 @@
           <div class="detail-item">
             <label class="detail-label" data-i18n="labelRevenue">Revenue</label>
             <p class="detail-value" id="detail-revenue">—</p>
+          </div>
+          <div class="detail-item">
+            <label class="detail-label">撮影プラン名</label>
+            <p class="detail-value" id="detail-plan-name">—</p>
+          </div>
+          <div class="detail-item">
+            <label class="detail-label">基本料金</label>
+            <p class="detail-value" id="detail-base-price">—</p>
+          </div>
+          <div class="detail-item" style="grid-column: 1 / -1;">
+            <label class="detail-label">オプション項目</label>
+            <p class="detail-value" id="detail-plan-options" style="white-space: pre-line;">—</p>
+          </div>
+          <div class="detail-item">
+            <label class="detail-label">合計金額</label>
+            <p class="detail-value" id="detail-total-price">—</p>
           </div>
           <div class="detail-item">
             <label class="detail-label" data-i18n="labelPayment">Payment Status</label>

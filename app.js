@@ -144,7 +144,11 @@
   // ===== Storage Helpers =====
   function loadCustomers() {
     const loaded = getCloudValue(STORAGE_KEY, []);
-    return withCurrentUserId(loaded);
+    const records = Array.isArray(loaded) ? loaded : [];
+    return withCurrentUserId(records).map((record) => ({
+      ...record,
+      planDetails: normalizePlanDetails(record?.planDetails, record?.revenue),
+    }));
   }
   function withCurrentUserId(records) {
     const uid = window.FirebaseService?.getCurrentUser?.()?.uid;
@@ -153,7 +157,12 @@
   }
 
   function saveCustomers(data) {
-    saveCloudValue(STORAGE_KEY, withCurrentUserId(data));
+    const records = Array.isArray(data) ? data : [];
+    const normalized = records.map((record) => ({
+      ...(record || {}),
+      planDetails: normalizePlanDetails(record?.planDetails, record?.revenue),
+    }));
+    saveCloudValue(STORAGE_KEY, withCurrentUserId(normalized));
   }
 
   function loadOptions() {
@@ -296,6 +305,26 @@
   function formatCurrency(val) {
     const cfg = CURRENCY_CONFIG[currentCurrency] || CURRENCY_CONFIG.USD;
     return cfg.symbol + (Number(val) || 0).toLocaleString(cfg.locale);
+  }
+
+  function toSafeNumber(value, fallback = 0) {
+    if (value === '' || value === null || value === undefined) return fallback;
+    const num = Number(value);
+    return Number.isFinite(num) ? num : fallback;
+  }
+
+  function normalizePlanDetails(planDetails, fallbackRevenue = 0) {
+    const safe = (planDetails && typeof planDetails === 'object') ? planDetails : {};
+    const basePrice = toSafeNumber(safe.basePrice, 0);
+    const fallbackTotal = toSafeNumber(fallbackRevenue, basePrice);
+    const totalPrice = toSafeNumber(safe.totalPrice, fallbackTotal);
+
+    return {
+      planName: typeof safe.planName === 'string' ? safe.planName : '',
+      basePrice,
+      options: typeof safe.options === 'string' ? safe.options : '',
+      totalPrice,
+    };
   }
 
   function updateCurrency(currency) {
@@ -969,9 +998,28 @@
           el.value = c[f.key] || '';
         }
       });
+
+      const planDetails = normalizePlanDetails(c.planDetails, c.revenue);
+      const planNameInput = $('#form-plan-name');
+      const basePriceInput = $('#form-base-price');
+      const optionsInput = $('#form-plan-options');
+      const totalPriceInput = $('#form-total-price');
+      if (planNameInput) planNameInput.value = planDetails.planName;
+      if (basePriceInput) basePriceInput.value = String(planDetails.basePrice);
+      if (optionsInput) optionsInput.value = planDetails.options;
+      if (totalPriceInput) totalPriceInput.value = String(planDetails.totalPrice);
+
       renderCustomFields(c);
     } else {
       $('#modal-title').textContent = t('modalAddTitle');
+      const planNameInput = $('#form-plan-name');
+      const basePriceInput = $('#form-base-price');
+      const optionsInput = $('#form-plan-options');
+      const totalPriceInput = $('#form-total-price');
+      if (planNameInput) planNameInput.value = '';
+      if (basePriceInput) basePriceInput.value = '';
+      if (optionsInput) optionsInput.value = '';
+      if (totalPriceInput) totalPriceInput.value = '';
       renderCustomFields();
     }
     modalOverlay.style.display = 'flex';
@@ -1006,6 +1054,18 @@
     });
     data.customFields = customFields;
 
+    const planNameInput = $('#form-plan-name');
+    const basePriceInput = $('#form-base-price');
+    const optionsInput = $('#form-plan-options');
+    const totalPriceInput = $('#form-total-price');
+    const rawPlanDetails = {
+      planName: planNameInput?.value?.trim() || '',
+      basePrice: toSafeNumber(basePriceInput?.value, 0),
+      options: optionsInput?.value || '',
+      totalPrice: totalPriceInput?.value,
+    };
+    data.planDetails = normalizePlanDetails(rawPlanDetails, data.revenue);
+
     if (editingId) {
       const idx = customers.findIndex(c => c.id === editingId);
       if (idx !== -1) customers[idx] = { ...customers[idx], ...data, updatedAt: new Date().toISOString() };
@@ -1039,6 +1099,15 @@
     $('#detail-revenue').textContent = formatCurrency(c.revenue);
     $('#detail-payment').innerHTML = c.paymentChecked ? `<span class="badge badge-success">${t('paid')}</span>` : `<span class="badge badge-warning">${t('unpaid')}</span>`;
     $('#detail-notes').textContent = c.notes || '—';
+    const planDetails = normalizePlanDetails(c.planDetails, c.revenue);
+    const detailPlanName = $('#detail-plan-name');
+    const detailBasePrice = $('#detail-base-price');
+    const detailPlanOptions = $('#detail-plan-options');
+    const detailTotalPrice = $('#detail-total-price');
+    if (detailPlanName) detailPlanName.textContent = planDetails.planName || '—';
+    if (detailBasePrice) detailBasePrice.textContent = formatCurrency(planDetails.basePrice);
+    if (detailPlanOptions) detailPlanOptions.textContent = planDetails.options || '—';
+    if (detailTotalPrice) detailTotalPrice.textContent = formatCurrency(planDetails.totalPrice);
 
     const detailContainer = $('#detail-body-container');
     detailContainer.querySelectorAll('.custom-detail-field').forEach(el => el.remove());
