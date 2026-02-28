@@ -18,6 +18,7 @@
     }
     auth = firebase.auth();
     db = firebase.firestore();
+    await auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(console.error);
   })();
   const cache = {};
 
@@ -232,18 +233,10 @@
   }
 
   async function processRedirectResult() {
-    await ensureInitialized();
-    if (redirectResultPromise) return redirectResultPromise;
-    redirectResultPromise = auth.getRedirectResult()
-      .then((result) => {
-        redirectResolved = true;
-        return result;
-      })
-      .catch((error) => {
-        redirectResolved = true;
-        throw error;
-      });
-    return redirectResultPromise;
+    // signInWithRedirect is no longer used (replaced with signInWithPopup).
+    // This is a safe no-op kept for interface compatibility.
+    redirectResolved = true;
+    return null;
   }
 
   window.FirebaseService = {
@@ -280,7 +273,10 @@
       await ensureInitialized();
       const provider = new firebase.auth.GoogleAuthProvider();
       provider.setCustomParameters({ prompt: 'select_account' });
-      return auth.signInWithRedirect(provider);
+      return auth.signInWithPopup(provider);
+    },
+    async signInWithPopup() {
+      return this.signInWithGoogle();
     },
     async signOut() {
       await ensureInitialized();
