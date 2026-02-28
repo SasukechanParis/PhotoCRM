@@ -333,9 +333,14 @@ body {
 /* ===== Stat Cards ===== */
 .dashboard {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(4, 1fr) !important;
   gap: 12px;
   margin-bottom: 0;
+}
+
+.stats-container {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr) !important;
 }
 
 .dashboard-period-controls {
@@ -682,7 +687,7 @@ tbody tr:hover {
 
 #customer-table th {
   background: rgba(255, 255, 255, 0.02);
-  padding: 10px 12px;
+  padding: 8px 10px;
   text-align: left;
   font-weight: 600;
   color: var(--text-secondary);
@@ -691,7 +696,7 @@ tbody tr:hover {
 }
 
 #customer-table td {
-  padding: 10px 12px;
+  padding: 8px 10px;
   border-bottom: 1px solid var(--border-color);
   color: var(--text-primary);
   word-break: break-word;
@@ -707,44 +712,55 @@ tbody tr:hover {
   background: rgba(255, 255, 255, 0.03);
 }
 
-.table-action-group {
+.table-action-group,
+.action-buttons {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 4px;
 }
 
-.table-action-btn {
+.table-action-btn,
+.action-btn {
   border: 1px solid rgba(148, 163, 184, 0.22);
   background: var(--bg-glass);
   color: var(--text-primary);
   border-radius: 8px;
   min-width: 0;
-  min-height: 28px;
-  padding: 3px 5px;
+  min-height: 24px;
+  padding: 4px 2px;
   display: flex;
   flex-direction: row;
   align-items: center;
   justify-content: center;
   gap: 4px;
+  line-height: 1;
   cursor: pointer;
   transition: all var(--transition);
 }
 
-.table-action-btn:hover {
+.table-action-btn:hover,
+.action-btn:hover {
   border-color: var(--accent);
   transform: translateY(-1px);
 }
 
-.table-action-icon {
-  font-size: 0.72rem;
+.table-action-btn .table-action-icon,
+.action-btn .table-action-icon {
+  font-size: 1.2rem;
   line-height: 1;
 }
 
-.table-action-label {
-  font-size: 0.56rem;
+.table-action-btn .table-action-label,
+.action-btn .table-action-label {
+  font-size: 10px;
   line-height: 1.1;
   color: var(--text-secondary);
   white-space: nowrap;
+}
+
+.action-btn-delete,
+.table-action-btn.btn-del {
+  grid-column: span 2;
 }
 
 .empty-state {
@@ -979,7 +995,7 @@ tbody tr:hover {
   }
 
   .dashboard {
-    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)) !important;
   }
 
   .stats-toggle-btn {
@@ -1020,17 +1036,20 @@ tbody tr:hover {
     width: auto;
   }
 
-  .table-action-btn {
+  .table-action-btn,
+  .action-btn {
     min-width: 0;
-    min-height: 44px;
-    padding: 6px 8px;
+    min-height: 40px;
+    padding: 6px 4px;
   }
 
-  .table-action-label {
-    font-size: 0.62rem;
+  .table-action-btn .table-action-label,
+  .action-btn .table-action-label {
+    font-size: 10px;
   }
 
-  .table-action-group {
+  .table-action-group,
+  .action-buttons {
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 6px;
   }

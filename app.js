@@ -1286,24 +1286,24 @@
         <td>${c.paymentChecked ? `<span class="badge badge-success">${t('paid')}</span>` : `<span class="badge badge-warning">${t('unpaid')}</span>`}</td>
         <td><span class="badge badge-cyan">${escapeHtml(getPhotographerName(c.assignedTo))}</span></td>
         <td>
-          <div class="table-action-group">
-            <button type="button" class="table-action-btn btn-edit" title="編集" aria-label="編集" onclick="openModal('${c.id}')">
+          <div class="table-action-group action-buttons">
+            <button type="button" class="table-action-btn action-btn btn-edit" title="編集" aria-label="編集" onclick="openModal('${c.id}')">
               <span class="table-action-icon">✏️</span>
               <span class="table-action-label">編集</span>
             </button>
-            <button type="button" class="table-action-btn" title="詳細" aria-label="詳細" onclick="openCustomerDetailByID('${c.id}')">
+            <button type="button" class="table-action-btn action-btn" title="詳細" aria-label="詳細" onclick="openCustomerDetailByID('${c.id}')">
               <span class="table-action-icon">📄</span>
               <span class="table-action-label">詳細</span>
             </button>
-            <button type="button" class="table-action-btn" title="契約書" aria-label="契約書" onclick="openContractModalByID('${c.id}')">
+            <button type="button" class="table-action-btn action-btn" title="契約書" aria-label="契約書" onclick="openContractModalByID('${c.id}')">
               <span class="table-action-icon">📋</span>
               <span class="table-action-label">契約書</span>
             </button>
-            <button type="button" class="table-action-btn" title="履歴" aria-label="履歴" onclick="openCustomerHistoryByID('${c.id}')">
+            <button type="button" class="table-action-btn action-btn" title="履歴" aria-label="履歴" onclick="openCustomerHistoryByID('${c.id}')">
               <span class="table-action-icon">📜</span>
               <span class="table-action-label">履歴</span>
             </button>
-            <button type="button" class="table-action-btn btn-del" title="削除" aria-label="削除" onclick="openConfirm('${c.id}')">
+            <button type="button" class="table-action-btn action-btn action-btn-delete btn-del" title="削除" aria-label="削除" onclick="openConfirm('${c.id}')">
               <span class="table-action-icon">🗑</span>
               <span class="table-action-label">削除</span>
             </button>
