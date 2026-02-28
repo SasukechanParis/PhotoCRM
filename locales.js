@@ -7,10 +7,10 @@ const LOCALE = {
         // Header
         themeToggle: "テーマ切替",
         settings: "設定",
-        exportSync: "書き出し",
-        importSync: "読み込み",
-        exportIcs: ".ics",
-        exportCsv: "CSV",
+        exportSync: "バックアップ (JSON)",
+        importSync: "データ復元",
+        exportIcs: "カレンダー連携 (iCal)",
+        exportCsv: "売上集計 (CSV)",
         addCustomer: "＋ 新規登録",
 
         // Dashboard
@@ -343,10 +343,10 @@ const LOCALE = {
         // Header
         themeToggle: "Theme",
         settings: "Settings",
-        exportSync: "Export",
-        importSync: "Import",
-        exportIcs: ".ics",
-        exportCsv: "CSV",
+        exportSync: "Backup (JSON)",
+        importSync: "Data Restore",
+        exportIcs: "Calendar Sync (iCal)",
+        exportCsv: "Revenue Report (CSV)",
         addCustomer: "＋ Add New",
 
         // Dashboard
@@ -680,10 +680,10 @@ const LOCALE = {
         // Header
         themeToggle: "Thème",
         settings: "Réglages",
-        exportSync: "Exporter",
-        importSync: "Importer",
-        exportIcs: ".ics",
-        exportCsv: "CSV",
+        exportSync: "Sauvegarde (JSON)",
+        importSync: "Restauration des données",
+        exportIcs: "Synchronisation calendrier (iCal)",
+        exportCsv: "Rapport ventes (CSV)",
         addCustomer: "＋ Nouveau",
 
         // Dashboard

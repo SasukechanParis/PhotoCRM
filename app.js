@@ -2502,9 +2502,14 @@
     const container = $('#expense-list');
     container.innerHTML = '';
     const expenses = getExpenses().sort((a, b) => new Date(b.date) - new Date(a.date));
+    const noExpensesMessage = currentLang === 'ja'
+      ? '経費はまだ登録されていません'
+      : currentLang === 'fr'
+        ? 'Aucune dépense enregistrée pour le moment'
+        : 'No expenses registered yet';
 
     if (expenses.length === 0) {
-      container.innerHTML = `<p style="color:var(--text-muted); text-align:center; padding:20px;">No expenses yet.</p>`;
+      container.innerHTML = `<p style="color:var(--text-muted); text-align:center; padding:20px;">${noExpensesMessage}</p>`;
       return;
     }
 
