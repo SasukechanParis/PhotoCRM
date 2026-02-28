@@ -85,60 +85,62 @@
         <button class="btn-icon" id="dashboard-next-month" title="Next month">▶</button>
       </div>
 
-      <div class="dashboard" id="dashboard">
-        <div class="stat-card">
+      <div class="dashboard" id="dashboard-cards-grid">
+        <div class="stat-card" data-dashboard-key="totalCustomers">
           <div class="stat-icon">👤</div>
           <div class="stat-info">
             <label data-i18n="cardTotalCustomers">Total Customers</label>
             <div class="stat-value" id="stat-total">0</div>
           </div>
         </div>
-        <div class="stat-card">
+        <div class="stat-card" data-dashboard-key="monthlyShoots">
           <div class="stat-icon">📅</div>
           <div class="stat-info">
             <label data-i18n="cardMonthlyShoots">Monthly Shoots</label>
             <div class="stat-value" id="stat-monthly">0</div>
           </div>
         </div>
-        <div class="stat-card">
+        <div class="stat-card" data-dashboard-key="monthlyRevenue">
           <div class="stat-icon">💰</div>
           <div class="stat-info">
             <label data-i18n="cardMonthlyRevenue">Monthly Revenue</label>
             <div class="stat-value" id="stat-revenue">$0</div>
           </div>
         </div>
-        <div class="stat-card">
+        <div class="stat-card" data-dashboard-key="monthlyProfit">
           <div class="stat-icon">📈</div>
           <div class="stat-info">
             <label data-i18n="cardProfit">Profit</label>
             <div class="stat-value" id="profit-month">$0</div>
           </div>
         </div>
-      </div>
-
-      <section class="dashboard yearly-overview" id="yearly-overview">
-        <div class="stat-card">
+        <div class="stat-card" data-dashboard-key="yearlyRevenue">
           <div class="stat-icon">🗓️</div>
           <div class="stat-info">
             <label id="yearly-revenue-label" data-i18n="yearlyRevenueTotal">今年の総売上</label>
             <div class="stat-value" id="stat-yearly-revenue">$0</div>
           </div>
         </div>
-        <div class="stat-card">
+        <div class="stat-card" data-dashboard-key="yearlyExpense">
           <div class="stat-icon">💸</div>
           <div class="stat-info">
             <label id="yearly-expense-label" data-i18n="yearlyExpenseTotal">今年の総経費</label>
             <div class="stat-value" id="stat-yearly-expense">$0</div>
           </div>
         </div>
-        <div class="stat-card">
+        <div class="stat-card" data-dashboard-key="yearlyProfit">
           <div class="stat-icon">📊</div>
           <div class="stat-info">
             <label id="yearly-profit-label" data-i18n="yearlyProfitTotal">今年の総利益</label>
             <div class="stat-value" id="stat-yearly-profit">$0</div>
           </div>
         </div>
-      </section>
+        <div class="stat-card pink" data-dashboard-key="unpaid">
+          <div class="stat-icon">⚠️</div>
+          <div class="stat-value" id="stat-unpaid">0</div>
+          <div class="stat-label" data-i18n="cardUnpaid">Unpaid</div>
+        </div>
+      </div>
     </div>
 
     <!-- Expense Tracking Section -->
@@ -170,13 +172,6 @@
         <div id="expense-list" class="expense-list"></div>
       </div>
     </div>
-    <section class="dashboard">
-      <div class="stat-card pink">
-        <div class="stat-icon">⚠️</div>
-        <div class="stat-value" id="stat-unpaid">0</div>
-        <div class="stat-label" data-i18n="cardUnpaid">Unpaid</div>
-      </div>
-    </section>
     <!-- ===== View Toggle ===== -->
     <div class="view-tabs">
       <div class="view-tab active" data-view="list" data-i18n="tabList">List</div>

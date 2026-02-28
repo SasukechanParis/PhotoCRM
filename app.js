@@ -16,8 +16,20 @@
   const CUSTOM_FIELDS_KEY = 'photocrm_custom_fields';
   const CALENDAR_FILTERS_KEY = 'photocrm_calendar_filters';
   const DASHBOARD_VISIBILITY_KEY = 'photocrm_dashboard_visible';
+  const DASHBOARD_CONFIG_KEY = 'photocrm_dashboard_config';
   const DEFAULT_INVOICE_MESSAGE = 'この度はありがとうございます。';
   const FREE_PLAN_LIMIT = 30;
+
+  const DASHBOARD_CARD_DEFINITIONS = [
+    { key: 'totalCustomers', labelKey: 'cardTotalCustomers', fallbackLabel: '総顧客数' },
+    { key: 'monthlyShoots', labelKey: 'cardMonthlyShoots', fallbackLabel: '今月の撮影' },
+    { key: 'monthlyRevenue', labelKey: 'cardMonthlyRevenue', fallbackLabel: '今月の売上' },
+    { key: 'monthlyProfit', labelKey: 'cardProfit', fallbackLabel: '利益' },
+    { key: 'yearlyRevenue', labelKey: 'yearlyRevenueTotal', fallbackLabel: '今年の総売上' },
+    { key: 'yearlyExpense', labelKey: 'yearlyExpenseTotal', fallbackLabel: '今年の総経費' },
+    { key: 'yearlyProfit', labelKey: 'yearlyProfitTotal', fallbackLabel: '今年の総利益' },
+    { key: 'unpaid', labelKey: 'cardUnpaid', fallbackLabel: '入金未確認' },
+  ];
 
   function getCloudValue(key, fallback) {
     const value = window.FirebaseService?.getCachedData(key);
@@ -172,6 +184,57 @@
   }
   function saveOptions(data) { saveCloudValue(OPTIONS_KEY, data); }
 
+  function getDefaultDashboardConfig() {
+    return DASHBOARD_CARD_DEFINITIONS.map((item) => ({
+      key: item.key,
+      visible: true,
+    }));
+  }
+
+  function normalizeDashboardConfig(config) {
+    const allowedKeys = new Set(DASHBOARD_CARD_DEFINITIONS.map((item) => item.key));
+    const unique = new Map();
+
+    if (Array.isArray(config)) {
+      config.forEach((item) => {
+        const key = item && typeof item.key === 'string' ? item.key : '';
+        if (!allowedKeys.has(key) || unique.has(key)) return;
+        unique.set(key, {
+          key,
+          visible: item.visible !== false,
+        });
+      });
+    }
+
+    DASHBOARD_CARD_DEFINITIONS.forEach((item) => {
+      if (!unique.has(item.key)) {
+        unique.set(item.key, { key: item.key, visible: true });
+      }
+    });
+
+    return Array.from(unique.values());
+  }
+
+  function loadDashboardConfig() {
+    const defaultConfig = getDefaultDashboardConfig();
+    const loaded = getCloudValue(DASHBOARD_CONFIG_KEY, getLocalValue(DASHBOARD_CONFIG_KEY, defaultConfig));
+    return normalizeDashboardConfig(loaded);
+  }
+
+  function saveDashboardConfig(config) {
+    const normalized = normalizeDashboardConfig(config);
+    dashboardConfig = normalized;
+    saveLocalValue(DASHBOARD_CONFIG_KEY, normalized);
+    saveCloudValue(DASHBOARD_CONFIG_KEY, normalized);
+  }
+
+  function getDashboardCardLabel(itemKey) {
+    const item = DASHBOARD_CARD_DEFINITIONS.find((entry) => entry.key === itemKey);
+    if (!item) return itemKey;
+    const label = item.labelKey ? t(item.labelKey) : '';
+    return label && label !== item.labelKey ? label : item.fallbackLabel;
+  }
+
   function normalizePlanMasterItem(plan) {
     const safe = (plan && typeof plan === 'object') ? plan : {};
     const name = typeof safe.name === 'string' ? safe.name.trim() : '';
@@ -260,6 +323,7 @@
 
   let calendarFilters = loadCalendarFilters();
   let dashboardVisible = getLocalValue(DASHBOARD_VISIBILITY_KEY, true) !== false;
+  let dashboardConfig = loadDashboardConfig();
 
   // Init calendar to current month
   const now = new Date();
@@ -566,6 +630,59 @@
     setDashboardVisibility(!dashboardVisible);
   }
 
+  function applyDashboardConfig() {
+    const grid = document.getElementById('dashboard-cards-grid');
+    if (!grid) return;
+
+    const cards = Array.from(grid.querySelectorAll('[data-dashboard-key]'));
+    const cardMap = new Map(cards.map((card) => [card.dataset.dashboardKey, card]));
+    let visibleCount = 0;
+
+    dashboardConfig.forEach((item) => {
+      const card = cardMap.get(item.key);
+      if (!card) return;
+      card.style.display = item.visible ? '' : 'none';
+      if (item.visible) visibleCount += 1;
+      grid.appendChild(card);
+    });
+
+    cards.forEach((card) => {
+      if (!dashboardConfig.some((item) => item.key === card.dataset.dashboardKey)) {
+        card.style.display = '';
+        grid.appendChild(card);
+        visibleCount += 1;
+      }
+    });
+
+    grid.style.display = visibleCount > 0 ? 'grid' : 'none';
+  }
+
+  function updateDashboardCardVisibility(itemKey, visible) {
+    dashboardConfig = dashboardConfig.map((item) => (
+      item.key === itemKey ? { ...item, visible: !!visible } : item
+    ));
+    saveDashboardConfig(dashboardConfig);
+    applyDashboardConfig();
+    renderSettings();
+  }
+
+  function moveDashboardCard(itemKey, direction) {
+    const index = dashboardConfig.findIndex((item) => item.key === itemKey);
+    if (index === -1) return;
+    const targetIndex = index + direction;
+    if (targetIndex < 0 || targetIndex >= dashboardConfig.length) return;
+
+    const next = [...dashboardConfig];
+    const [picked] = next.splice(index, 1);
+    next.splice(targetIndex, 0, picked);
+    saveDashboardConfig(next);
+    applyDashboardConfig();
+    renderSettings();
+  }
+
+  window.toggleDashboardCardVisibility = updateDashboardCardVisibility;
+  window.moveDashboardCard = moveDashboardCard;
+
   function getExpenses() {
     return getCloudValue(EXPENSES_KEY, []);
   }
@@ -807,6 +924,7 @@
       .reduce((sum, e) => sum + (Number(e.amount) || 0), 0);
 
     const yearlyProfit = yearlyRevenue - yearlyExpenses;
+    const unpaidCount = customers.filter((customer) => !customer.paymentChecked).length;
 
     $('#stat-total').textContent = total;
     $('#stat-monthly').textContent = monthlyShoots.length;
@@ -820,6 +938,7 @@
     if ($('#stat-yearly-revenue')) $('#stat-yearly-revenue').textContent = formatCurrency(yearlyRevenue);
     if ($('#stat-yearly-profit')) $('#stat-yearly-profit').textContent = formatCurrency(yearlyProfit);
     if ($('#stat-yearly-expense')) $('#stat-yearly-expense').textContent = formatCurrency(yearlyExpenses);
+    if ($('#stat-unpaid')) $('#stat-unpaid').textContent = unpaidCount;
     if ($('#yearly-revenue-label')) $('#yearly-revenue-label').textContent = t('yearlyRevenueTotal');
     if ($('#yearly-profit-label')) $('#yearly-profit-label').textContent = t('yearlyProfitTotal');
     if ($('#yearly-expense-label')) $('#yearly-expense-label').textContent = t('yearlyExpenseTotal');
@@ -1423,6 +1542,35 @@
     planSection.appendChild(planAddBox);
     container.appendChild(planSection);
 
+    const dashboardSection = document.createElement('div');
+    dashboardSection.className = 'settings-section';
+    dashboardSection.innerHTML = '<h3>ダッシュボード設定</h3>';
+    const dashboardList = document.createElement('div');
+    dashboardList.className = 'settings-item-list dashboard-config-list';
+
+    dashboardConfig.forEach((item, index) => {
+      const row = document.createElement('div');
+      row.className = 'settings-item dashboard-config-row';
+      const label = getDashboardCardLabel(item.key);
+      const checked = item.visible ? 'checked' : '';
+      const disableUp = index === 0 ? 'disabled' : '';
+      const disableDown = index === dashboardConfig.length - 1 ? 'disabled' : '';
+      row.innerHTML = `
+        <label class="dashboard-config-label">
+          <input type="checkbox" ${checked} onchange="toggleDashboardCardVisibility('${item.key}', this.checked)">
+          <span>${escapeHtml(label)}</span>
+        </label>
+        <div class="dashboard-config-order">
+          <button class="btn-icon-sm" ${disableUp} title="上へ" onclick="moveDashboardCard('${item.key}', -1)">↑</button>
+          <button class="btn-icon-sm" ${disableDown} title="下へ" onclick="moveDashboardCard('${item.key}', 1)">↓</button>
+        </div>
+      `;
+      dashboardList.appendChild(row);
+    });
+
+    dashboardSection.appendChild(dashboardList);
+    container.appendChild(dashboardSection);
+
     const keys = ['costume', 'hairMakeup'];
     keys.forEach(key => {
       const section = document.createElement('div');
@@ -1550,7 +1698,7 @@
   // ===== Message Analyzer Integration =====
   // ===== Import/Export =====
   function handleSyncExportClick() {
-    const data = { customers, options, planMaster, exportedAt: new Date().toISOString() };
+    const data = { customers, options, planMaster, dashboardConfig, exportedAt: new Date().toISOString() };
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -1573,9 +1721,12 @@
         const data = JSON.parse(event.target.result);
         const stats = await window.SyncManager.mergeData(data);
         if (Array.isArray(data.planMaster)) savePlanMaster(data.planMaster);
+        if (Array.isArray(data.dashboardConfig)) saveDashboardConfig(data.dashboardConfig);
         customers = loadCustomers();
         options = loadOptions();
         planMaster = loadPlanMaster();
+        dashboardConfig = loadDashboardConfig();
+        applyDashboardConfig();
         updateLanguage(currentLang);
         showToast(`Imported: ${stats.customers} new, ${stats.updated} updated, ${stats.team} members.`);
       } catch (err) {
@@ -2377,6 +2528,7 @@
     updateLanguage(currentLang || 'en');
     updateCurrency(currentCurrency);
     setDashboardVisibility(dashboardVisible);
+    applyDashboardConfig();
 
     // 3. Attach event listeners
     bindCoreUIEventListeners();
@@ -2439,6 +2591,8 @@
       savePlanMaster(planMaster);
     }
     calendarFilters = loadCalendarFilters();
+    dashboardConfig = loadDashboardConfig();
+    applyDashboardConfig();
   }
 
   let appInitialized = false;

@@ -1367,6 +1367,95 @@ tbody tr:hover {
   animation: fadeIn 0.3s ease-out;
 }
 
+.settings-section {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 14px;
+  margin-bottom: 14px;
+}
+
+.settings-section h3 {
+  margin: 0 0 10px;
+  font-size: 0.95rem;
+}
+
+.settings-item-list {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.settings-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 10px;
+  background: var(--bg-input);
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+}
+
+.settings-add-box {
+  display: flex;
+  gap: 8px;
+}
+
+.settings-add-box input {
+  flex: 1;
+}
+
+.btn-icon-sm {
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background: var(--bg-glass);
+  color: var(--text-primary);
+  min-width: 30px;
+  height: 30px;
+  cursor: pointer;
+}
+
+.btn-icon-sm:hover:not(:disabled) {
+  border-color: var(--accent);
+}
+
+.dashboard-config-list {
+  display: grid;
+  gap: 8px;
+}
+
+.dashboard-config-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.dashboard-config-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-primary);
+  font-size: 0.92rem;
+  font-weight: 500;
+}
+
+.dashboard-config-label input[type="checkbox"] {
+  accent-color: var(--accent);
+  width: 16px;
+  height: 16px;
+}
+
+.dashboard-config-order {
+  display: inline-flex;
+  gap: 6px;
+}
+
+.dashboard-config-order .btn-icon-sm:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
 .custom-fields-container {
   grid-column: 1 / -1;
   display: grid;

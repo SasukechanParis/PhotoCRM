@@ -25,6 +25,7 @@
     'photocrm_currency',
     'photocrm_custom_fields',
     'photocrm_calendar_filters',
+    'photocrm_dashboard_config',
     'preferred_view'
   ];
 
