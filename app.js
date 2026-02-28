@@ -1924,8 +1924,12 @@
   function handleGoogleLogoutClick() {
     if (!window.FirebaseService) return;
     isLoggedIn = false;
+    if (authNullTimer) {
+      clearTimeout(authNullTimer);
+      authNullTimer = null;
+    }
+    setAuthScreenState('loggedOut');
     window.FirebaseService.signOut().catch((err) => {
-      isLoggedIn = true;
       console.error('Google logout failed', err);
       showToast('ログアウトに失敗しました。');
     });
@@ -2048,6 +2052,7 @@
 
   function setAuthScreenState(state, user = null) {
     const appContainer = getAppContainerElement();
+    const authScreen = document.getElementById('auth-screen') || document.getElementById('login-screen');
     const loginScreen = document.getElementById('login-screen');
     const authBanner = document.getElementById('auth-banner');
     const authStatus = document.getElementById('auth-status');
@@ -2058,6 +2063,7 @@
       if (authStatus) authStatus.textContent = '🔄 ログイン状態を確認中...';
       if (loginBtn) loginBtn.style.display = 'none';
       if (logoutBtn) logoutBtn.style.display = 'none';
+      if (authScreen) authScreen.style.display = 'none';
       if (loginScreen) loginScreen.style.display = 'none';
       if (authBanner) authBanner.style.display = 'flex';
       if (appContainer) appContainer.style.display = 'none';
@@ -2068,6 +2074,7 @@
       if (authStatus) authStatus.textContent = '🔐 Googleでログインしてクラウド同期を開始';
       if (loginBtn) loginBtn.style.display = '';
       if (logoutBtn) logoutBtn.style.display = 'none';
+      if (authScreen) authScreen.style.display = 'block';
       if (loginScreen) loginScreen.style.display = 'flex';
       if (authBanner) authBanner.style.display = 'none';
       if (appContainer) appContainer.style.display = 'none';
@@ -2078,6 +2085,7 @@
       if (authStatus) authStatus.textContent = `✅ ${user?.displayName || user?.email || 'ログイン中'} でログイン中`;
       if (loginBtn) loginBtn.style.display = 'none';
       if (logoutBtn) logoutBtn.style.display = '';
+      if (authScreen) authScreen.style.display = 'none';
       if (loginScreen) loginScreen.style.display = 'none';
       if (authBanner) authBanner.style.display = 'flex';
       if (appContainer) appContainer.style.display = 'block';
