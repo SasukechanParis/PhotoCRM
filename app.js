@@ -4,7 +4,7 @@
   'use strict';
 
   const AUTH_UI_LOCK_STYLE_ID = 'auth-ui-lock-style';
-  const AUTH_UI_LOCK_STYLE_TEXT = '#login-screen,#app-container,#auth-banner{display:none !important;}';
+  const AUTH_UI_LOCK_STYLE_TEXT = '';
   let authUiLocked = true;
 
   function setAuthUiLocked(locked) {
