@@ -3,6 +3,29 @@
 (function () {
   'use strict';
 
+  const AUTH_UI_LOCK_STYLE_ID = 'auth-ui-lock-style';
+  const AUTH_UI_LOCK_STYLE_TEXT = '#login-screen,#app-container,#auth-banner{display:none !important;}';
+  let authUiLocked = true;
+
+  function setAuthUiLocked(locked) {
+    authUiLocked = !!locked;
+    const existingStyle = document.getElementById(AUTH_UI_LOCK_STYLE_ID);
+
+    if (authUiLocked) {
+      if (existingStyle) return;
+      const style = document.createElement('style');
+      style.id = AUTH_UI_LOCK_STYLE_ID;
+      style.textContent = AUTH_UI_LOCK_STYLE_TEXT;
+      (document.head || document.documentElement).appendChild(style);
+      return;
+    }
+
+    if (existingStyle) existingStyle.remove();
+  }
+
+  // Keep auth/login/app UI hidden until Firebase auth state is finalized.
+  setAuthUiLocked(true);
+
   // ===== Storage Keys =====
   const STORAGE_KEY = 'photocrm_customers';
   const OPTIONS_KEY = 'photocrm_options';
@@ -1971,6 +1994,20 @@
     bindSettingsTabListeners();
   }
 
+  function rebindLanguageAndThemeListeners() {
+    const langSelect = document.getElementById('lang-select');
+    if (langSelect) {
+      langSelect.removeEventListener('change', handleLanguageSelectChange);
+      langSelect.addEventListener('change', handleLanguageSelectChange);
+    }
+
+    const themeBtn = document.getElementById('btn-theme');
+    if (themeBtn) {
+      themeBtn.removeEventListener('click', toggleTheme);
+      themeBtn.addEventListener('click', toggleTheme);
+    }
+  }
+
   // ===== Initialization =====
   function init() {
     console.log('🚀 ========================================');
@@ -1991,6 +2028,7 @@
 
     // 3. Attach event listeners
     bindCoreUIEventListeners();
+    rebindLanguageAndThemeListeners();
 
     if (dashboardMonthPicker) {
       syncDashboardMonthPicker();
@@ -2048,6 +2086,11 @@
   let authReady = false;
   let authStateRequestId = 0;
 
+  function markAuthReady() {
+    authReady = true;
+    setAuthUiLocked(false);
+  }
+
   function getAppContainerElement() {
     const byId = document.getElementById('app-container');
     if (byId) return byId;
@@ -2063,6 +2106,25 @@
     const authStatus = document.getElementById('auth-status');
     const loginBtn = document.getElementById('btn-google-login');
     const logoutBtn = document.getElementById('btn-logout');
+
+    if (authUiLocked) {
+      if (loginBtn) loginBtn.style.display = 'none';
+      if (logoutBtn) logoutBtn.style.display = 'none';
+      if (loginScreen) loginScreen.style.display = 'none';
+      if (authBanner) authBanner.style.display = 'none';
+      if (appContainer) appContainer.style.display = 'none';
+      return;
+    }
+
+    if (state === 'loggedOut' && !authReady) {
+      if (authStatus) authStatus.textContent = '🔄 ログイン状態を確認中...';
+      if (loginBtn) loginBtn.style.display = 'none';
+      if (logoutBtn) logoutBtn.style.display = 'none';
+      if (loginScreen) loginScreen.style.display = 'none';
+      if (authBanner) authBanner.style.display = 'none';
+      if (appContainer) appContainer.style.display = 'none';
+      return;
+    }
 
     if (state === 'checking') {
       if (authStatus) authStatus.textContent = '🔄 ログイン状態を確認中...';
@@ -2192,11 +2254,11 @@
       console.error('Redirect login failed', err);
       showToast('Googleログインに失敗しました。再度お試しください。');
     } finally {
-      authReady = true;
       let resolvedUser = redirectUser || window.FirebaseService.getCurrentUser?.() || null;
       if (!resolvedUser) {
         resolvedUser = await waitForInitialAuthStateWithTimeout();
       }
+      markAuthReady();
       if (resolvedUser) {
         setAuthScreenState('loggedIn', resolvedUser);
       }
@@ -2215,10 +2277,12 @@
   document.addEventListener('DOMContentLoaded', async () => {
     setAuthScreenState('checking');
     bindCoreUIEventListeners();
+    rebindLanguageAndThemeListeners();
 
     if (!window.FirebaseService) {
       console.error('FirebaseService is not available. Please check script loading order.');
       showToast('Firebase設定の読み込みに失敗しました。');
+      markAuthReady();
       setAuthScreenState('loggedOut');
       return;
     }
@@ -2228,6 +2292,7 @@
     } catch (err) {
       console.error('Firebase initialization failed', err);
       showToast('Firebase初期化に失敗しました。');
+      markAuthReady();
       setAuthScreenState('loggedOut');
       return;
     }
