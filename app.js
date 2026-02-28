@@ -2163,7 +2163,7 @@
     registerPwaServiceWorker();
 
     if (!window.FirebaseService) {
-      console.error('FirebaseService is not available. Please check script loading order.');
+      console.error('FirebaseService is not available.');
       showToast('Firebase設定の読み込みに失敗しました。');
       setAuthScreenState('loggedOut');
       return;
@@ -2178,42 +2178,46 @@
       return;
     }
 
-    try {
-      await window.FirebaseService.processRedirectResult();
-      console.log("✅ processRedirectResult completed");
-    } catch (err) {
-      console.error('Redirect login failed', err);
-      showToast('Googleログインに失敗しました。再度お試しください。');
+    // Check if a user session already exists before waiting for onAuthChanged
+    const existingUser = await window.FirebaseService.getCurrentUserAsync().catch(() => null);
+    console.log('🔍 Existing session check:', existingUser ? existingUser.email : 'none');
+
+    if (existingUser) {
+      // Session already valid — show app immediately
+      isLoggedIn = true;
+      const authScreen = document.getElementById('auth-screen');
+      const appContainer = document.getElementById('app-container');
+      if (authScreen) authScreen.style.display = 'none';
+      if (appContainer) appContainer.style.display = 'block';
+      setAuthScreenState('loggedIn', existingUser);
+      handleAuthState(existingUser).catch(err => console.error('Auth update error:', err));
+    } else {
+      // No existing session — show login screen immediately, no delay
+      setAuthScreenState('loggedOut');
     }
 
-    isLoggedIn = false;
-    authNullTimer = null;
+    // onAuthChanged handles subsequent login/logout events
+    isLoggedIn = !!existingUser;
     window.FirebaseService.onAuthChanged((user) => {
-      console.log("🔔 Auth State Changed. User:", user ? "LoggedIn" : "LoggedOut");
+      console.log("🔔 Auth State Changed. User:", user ? user.email : "LoggedOut");
 
       if (user) {
-        if (authNullTimer) {
-          clearTimeout(authNullTimer);
-          authNullTimer = null;
+        if (!isLoggedIn) {
+          // Fresh login via popup
+          isLoggedIn = true;
+          const authScreen = document.getElementById('auth-screen');
+          const appContainer = document.getElementById('app-container');
+          if (authScreen) authScreen.style.display = 'none';
+          if (appContainer) appContainer.style.display = 'block';
+          setAuthScreenState('loggedIn', user);
+          handleAuthState(user).catch(err => console.error('Auth update error:', err));
         }
-        isLoggedIn = true;
-        const authScreen = document.getElementById('auth-screen');
-        const appContainer = document.getElementById('app-container');
-        if (authScreen) authScreen.style.display = 'none';
-        if (appContainer) appContainer.style.display = 'block';
-        setAuthScreenState('loggedIn', user);
-        handleAuthState(user).catch(err => console.error('Auth update error:', err));
       } else {
         if (isLoggedIn) {
-          console.log("🔔 Ignoring transient null auth state (already logged in)");
-          return;
+          // Genuine logout
+          isLoggedIn = false;
+          setAuthScreenState('loggedOut');
         }
-        authNullTimer = setTimeout(() => {
-          if (!isLoggedIn) {
-            console.log("🔔 Auth settled as loggedOut after delay");
-            setAuthScreenState('loggedOut');
-          }
-        }, 1000);
       }
     });
   });

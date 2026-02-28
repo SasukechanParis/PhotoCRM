@@ -233,8 +233,7 @@
   }
 
   async function processRedirectResult() {
-    // signInWithRedirect is no longer used (replaced with signInWithPopup).
-    // This is a safe no-op kept for interface compatibility.
+    // signInWithRedirect replaced by signInWithPopup. Safe no-op.
     redirectResolved = true;
     return null;
   }
@@ -282,9 +281,21 @@
       await ensureInitialized();
       return auth.signOut();
     },
-    async onAuthChanged(callback) {
-      await ensureInitialized();
+    onAuthChanged(callback) {
+      // Register synchronously after whenReady() has been awaited by caller
       return auth.onAuthStateChanged(callback);
+    },
+    getCurrentUser() {
+      return auth ? auth.currentUser : null;
+    },
+    async getCurrentUserAsync() {
+      await ensureInitialized();
+      return new Promise((resolve) => {
+        const unsubscribe = auth.onAuthStateChanged((user) => {
+          unsubscribe();
+          resolve(user);
+        });
+      });
     }
   };
 })();
