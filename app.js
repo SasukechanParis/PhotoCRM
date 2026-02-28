@@ -1912,9 +1912,11 @@
       showToast('Firebase設定の読み込みに失敗しました。');
       return;
     }
-    const loginFn = window.FirebaseService.signInWithPopup
-      ?? window.FirebaseService.signInWithGoogle;
-    loginFn.call(window.FirebaseService).catch((err) => {
+    if (typeof window.FirebaseService.signInWithPopup !== 'function') {
+      showToast('Googleログイン設定に問題があります。');
+      return;
+    }
+    window.FirebaseService.signInWithPopup().catch((err) => {
       console.error('Firebase Auth Error:', err.code, err.message);
       console.error(err);
       showToast('Googleログインに失敗しました。');
@@ -2169,8 +2171,8 @@
       return;
     }
 
-    // onAuthChanged is the single source of truth for auth state.
-    window.FirebaseService.onAuthChanged((user) => {
+    // onAuthChanged is registered only after Firebase initialization is complete.
+    await window.FirebaseService.onAuthChanged((user) => {
       console.log("🔔 Auth State Changed. User:", user ? user.email : "LoggedOut");
 
       if (user) {
