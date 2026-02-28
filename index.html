@@ -200,6 +200,14 @@
         <select class="filter-select" id="filter-month">
           <option value="all" data-i18n="filterPeriodAll">全期間</option>
         </select>
+        <div class="list-columns-menu-wrap" id="list-columns-menu-wrap">
+          <button class="btn btn-secondary btn-sm" id="btn-list-columns" type="button" aria-expanded="false">
+            表示設定
+          </button>
+          <div class="list-columns-menu" id="list-columns-menu" style="display:none;">
+            <div class="list-columns-menu-content" id="list-columns-menu-content"></div>
+          </div>
+        </div>
       </div>
 
       <div class="table-wrapper" id="table-wrapper">
@@ -207,11 +215,11 @@
           <table id="customer-table">
             <thead>
               <tr>
+                <th data-sort="shootingDate"><span data-i18n="thShootingDate">撮影日</span> <span
+                    class="sort-arrow">▼</span></th>
                 <th data-sort="inquiryDate"><span data-i18n="thInquiryDate">問い合わせ日</span> <span
                     class="sort-arrow">▼</span></th>
                 <th data-sort="contractDate"><span data-i18n="thContractDate">成約日</span> <span
-                    class="sort-arrow">▼</span></th>
-                <th data-sort="shootingDate"><span data-i18n="thShootingDate">撮影日</span> <span
                     class="sort-arrow">▼</span></th>
                 <th data-sort="customerName"><span data-i18n="thCustomerName">お客様名</span> <span
                     class="sort-arrow">▼</span></th>

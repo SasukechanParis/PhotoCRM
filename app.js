@@ -17,6 +17,7 @@
   const CALENDAR_FILTERS_KEY = 'photocrm_calendar_filters';
   const DASHBOARD_VISIBILITY_KEY = 'photocrm_dashboard_visible';
   const DASHBOARD_CONFIG_KEY = 'photocrm_dashboard_config';
+  const LIST_COLUMN_CONFIG_KEY = 'photocrm_list_column_config';
   const CONTRACT_TEMPLATE_KEY = 'photocrm_contract_template';
   const DEFAULT_INVOICE_MESSAGE = 'この度はありがとうございます。';
   const FREE_PLAN_LIMIT = 30;
@@ -31,6 +32,19 @@
     { key: 'yearlyProfit', labelKey: 'yearlyProfitTotal', fallbackLabel: '今年の総利益' },
     { key: 'unpaid', labelKey: 'cardUnpaid', fallbackLabel: '入金未確認' },
     { key: 'expenseSection', labelKey: 'expenseTracking', fallbackLabel: '経費管理セクション' },
+  ];
+
+  const LIST_COLUMN_DEFINITIONS = [
+    { key: 'shootingDate', labelKey: 'thShootingDate', fallbackLabel: '撮影日', sortKey: 'shootingDate' },
+    { key: 'inquiryDate', labelKey: 'thInquiryDate', fallbackLabel: '問い合わせ日', sortKey: 'inquiryDate' },
+    { key: 'contractDate', labelKey: 'thContractDate', fallbackLabel: '成約日', sortKey: 'contractDate' },
+    { key: 'customerName', labelKey: 'thCustomerName', fallbackLabel: 'お客様名', sortKey: 'customerName' },
+    { key: 'contact', labelKey: 'thContact', fallbackLabel: '連絡先', sortKey: 'contact' },
+    { key: 'meetingDate', labelKey: 'thMeetingDate', fallbackLabel: '打ち合わせ日', sortKey: 'meetingDate' },
+    { key: 'plan', labelKey: 'thPlan', fallbackLabel: 'プラン', sortKey: 'plan' },
+    { key: 'revenue', labelKey: 'thRevenue', fallbackLabel: '売上', sortKey: 'revenue' },
+    { key: 'paymentChecked', labelKey: 'thPayment', fallbackLabel: '入金', sortKey: 'paymentChecked' },
+    { key: 'assignedTo', labelKey: 'thPhotographer', fallbackLabel: '担当', sortKey: 'assignedTo' },
   ];
 
   function getCloudValue(key, fallback) {
@@ -133,6 +147,11 @@
       langSelect.value = lang;
     }
 
+    const customerTable = document.getElementById('customer-table');
+    if (customerTable) customerTable.style.tableLayout = 'auto';
+    const customerTableWrapper = document.getElementById('table-wrapper');
+    if (customerTableWrapper) customerTableWrapper.style.overflowX = 'auto';
+
     // Re-render dynamic content
     if (typeof renderTable === 'function') renderTable();
     if (typeof updateStats === 'function') updateStats();
@@ -141,6 +160,7 @@
     if (typeof updateDashboard === 'function') updateDashboard();
     if (typeof renderExpenses === 'function') renderExpenses();
     if (typeof renderDashboardQuickMenu === 'function') renderDashboardQuickMenu();
+    if (typeof renderListColumnsMenu === 'function') renderListColumnsMenu();
 
   }
   window.updateLanguage = updateLanguage;
@@ -358,6 +378,64 @@
     return label && label !== item.labelKey ? label : item.fallbackLabel;
   }
 
+  function getDefaultListColumnConfig() {
+    return LIST_COLUMN_DEFINITIONS.map((item) => ({
+      key: item.key,
+      visible: true,
+    }));
+  }
+
+  function normalizeListColumnConfig(config) {
+    const allowedKeys = new Set(LIST_COLUMN_DEFINITIONS.map((item) => item.key));
+    const unique = new Map();
+
+    if (Array.isArray(config)) {
+      config.forEach((item) => {
+        const key = item && typeof item.key === 'string' ? item.key : '';
+        if (!allowedKeys.has(key) || unique.has(key)) return;
+        unique.set(key, {
+          key,
+          visible: item.visible !== false,
+        });
+      });
+    }
+
+    LIST_COLUMN_DEFINITIONS.forEach((item) => {
+      if (!unique.has(item.key)) {
+        unique.set(item.key, { key: item.key, visible: true });
+      }
+    });
+
+    return Array.from(unique.values());
+  }
+
+  function loadListColumnConfig() {
+    const defaultConfig = getDefaultListColumnConfig();
+    const loaded = getCloudValue(LIST_COLUMN_CONFIG_KEY, getLocalValue(LIST_COLUMN_CONFIG_KEY, defaultConfig));
+    return normalizeListColumnConfig(loaded);
+  }
+
+  function saveListColumnConfig(config) {
+    const normalized = normalizeListColumnConfig(config);
+    listColumnConfig = normalized;
+    saveLocalValue(LIST_COLUMN_CONFIG_KEY, normalized);
+    saveCloudValue(LIST_COLUMN_CONFIG_KEY, normalized);
+  }
+
+  function getListColumnLabel(itemKey) {
+    const item = LIST_COLUMN_DEFINITIONS.find((entry) => entry.key === itemKey);
+    if (!item) return itemKey;
+    const label = item.labelKey ? t(item.labelKey) : '';
+    return label && label !== item.labelKey ? label : item.fallbackLabel;
+  }
+
+  function getVisibleListColumns() {
+    return listColumnConfig
+      .filter((item) => item.visible !== false)
+      .map((item) => LIST_COLUMN_DEFINITIONS.find((entry) => entry.key === item.key))
+      .filter(Boolean);
+  }
+
   function normalizePlanMasterItem(plan) {
     const safe = (plan && typeof plan === 'object') ? plan : {};
     const name = typeof safe.name === 'string' ? safe.name.trim() : '';
@@ -448,6 +526,8 @@
   let dashboardVisible = getCloudValue(DASHBOARD_VISIBILITY_KEY, getLocalValue(DASHBOARD_VISIBILITY_KEY, true)) !== false;
   let dashboardConfig = loadDashboardConfig();
   let isDashboardQuickMenuOpen = false;
+  let listColumnConfig = loadListColumnConfig();
+  let isListColumnsMenuOpen = false;
   let contractTemplateText = loadContractTemplate();
 
   // Init calendar to current month
@@ -473,6 +553,9 @@
   const emptyState = $('#empty-state');
   const tableWrapper = $('#table-wrapper');
   const customerCardGrid = $('#customer-card-grid');
+  const listColumnsMenu = $('#list-columns-menu');
+  const listColumnsMenuContent = $('#list-columns-menu-content');
+  const listColumnsButton = $('#btn-list-columns');
   const listView = $('#list-view');
   const calendarView = $('#calendar-view');
   const calendarFilterInputs = $$('.calendar-filter-input');
@@ -841,6 +924,7 @@
   function handleDashboardToggleButtonClick(event) {
     event.preventDefault();
     event.stopPropagation();
+    setListColumnsMenuOpen(false);
     setDashboardQuickMenuOpen(!isDashboardQuickMenuOpen);
   }
 
@@ -915,6 +999,133 @@
     applyDashboardConfig();
     renderDashboardQuickMenu();
     renderSettings();
+  }
+
+  function getListSettingsButtonLabel() {
+    if (currentLang === 'fr') return 'Affichage Colonnes';
+    if (currentLang === 'en') return 'Display Settings';
+    return '表示設定';
+  }
+
+  function getListSettingsHintLabel() {
+    if (currentLang === 'fr') return 'Afficher / masquer et réordonner';
+    if (currentLang === 'en') return 'Show / hide and reorder';
+    return '表示・非表示と並び替え';
+  }
+
+  function updateListSettingsButtonLabel() {
+    if (!listColumnsButton) return;
+    const label = getListSettingsButtonLabel();
+    listColumnsButton.textContent = label;
+    listColumnsButton.title = label;
+    listColumnsButton.setAttribute('aria-label', label);
+  }
+
+  function updateListColumnVisibility(itemKey, visible) {
+    const visibleCount = listColumnConfig.filter((item) => item.visible !== false).length;
+    if (!visible && visibleCount <= 1) {
+      showToast(getListColumnMinimumMessage(), 'error');
+      renderListColumnsMenu();
+      return;
+    }
+    listColumnConfig = listColumnConfig.map((item) => (
+      item.key === itemKey ? { ...item, visible: !!visible } : item
+    ));
+    saveListColumnConfig(listColumnConfig);
+    renderTable();
+    renderListColumnsMenu();
+  }
+
+  function moveListColumn(itemKey, direction) {
+    const index = listColumnConfig.findIndex((item) => item.key === itemKey);
+    if (index === -1) return;
+    const targetIndex = index + direction;
+    if (targetIndex < 0 || targetIndex >= listColumnConfig.length) return;
+
+    const next = [...listColumnConfig];
+    const [picked] = next.splice(index, 1);
+    next.splice(targetIndex, 0, picked);
+    saveListColumnConfig(next);
+    renderTable();
+    renderListColumnsMenu();
+  }
+
+  function renderListColumnsMenu() {
+    if (!listColumnsMenuContent) return;
+    updateListSettingsButtonLabel();
+
+    const rows = [
+      `<div class="list-columns-menu-hint">${escapeHtml(getListSettingsHintLabel())}</div>`,
+    ];
+
+    listColumnConfig.forEach((item, index) => {
+      rows.push(`
+        <div class="list-columns-item">
+          <label class="list-columns-toggle">
+            <input type="checkbox" data-list-column-key="${item.key}" ${item.visible ? 'checked' : ''}>
+            <span>${escapeHtml(getListColumnLabel(item.key))}</span>
+          </label>
+          <div class="list-columns-order">
+            <button type="button" class="btn-icon-sm" data-list-column-move="${item.key}" data-list-column-dir="-1" ${index === 0 ? 'disabled' : ''}>↑</button>
+            <button type="button" class="btn-icon-sm" data-list-column-move="${item.key}" data-list-column-dir="1" ${index === listColumnConfig.length - 1 ? 'disabled' : ''}>↓</button>
+          </div>
+        </div>
+      `);
+    });
+
+    listColumnsMenuContent.innerHTML = rows.join('');
+
+    listColumnsMenuContent.querySelectorAll('input[data-list-column-key]').forEach((input) => {
+      const key = input.dataset.listColumnKey;
+      bindEventOnce(input, 'change', (e) => {
+        updateListColumnVisibility(key, !!e.target.checked);
+      }, `list-column-visible-${key}`);
+    });
+
+    listColumnsMenuContent.querySelectorAll('button[data-list-column-move]').forEach((button) => {
+      const key = button.dataset.listColumnMove;
+      const direction = Number(button.dataset.listColumnDir || '0');
+      bindEventOnce(button, 'click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (!Number.isFinite(direction) || direction === 0) return;
+        moveListColumn(key, direction);
+      }, `list-column-move-${key}-${direction}`);
+    });
+  }
+
+  function setListColumnsMenuOpen(isOpen) {
+    if (!listColumnsMenu || !listColumnsButton) return;
+    isListColumnsMenuOpen = !!isOpen;
+    if (isListColumnsMenuOpen) {
+      renderListColumnsMenu();
+      listColumnsMenu.style.display = 'block';
+      listColumnsMenu.classList.add('active');
+    } else {
+      listColumnsMenu.classList.remove('active');
+      listColumnsMenu.style.display = 'none';
+    }
+    listColumnsButton.setAttribute('aria-expanded', isListColumnsMenuOpen ? 'true' : 'false');
+  }
+
+  function handleListColumnsToggleButtonClick(event) {
+    event.preventDefault();
+    event.stopPropagation();
+    setDashboardQuickMenuOpen(false);
+    setListColumnsMenuOpen(!isListColumnsMenuOpen);
+  }
+
+  function handleListColumnsOutsideClick(event) {
+    if (!isListColumnsMenuOpen) return;
+    if (!listColumnsMenu || !listColumnsButton) return;
+    if (listColumnsMenu.contains(event.target) || listColumnsButton.contains(event.target)) return;
+    setListColumnsMenuOpen(false);
+  }
+
+  function handleListColumnsEscape(event) {
+    if (event.key === 'Escape' && isListColumnsMenuOpen) {
+      setListColumnsMenuOpen(false);
+    }
   }
 
   window.toggleDashboardCardVisibility = updateDashboardCardVisibility;
@@ -1262,20 +1473,74 @@
     const actionDetail = t('actionDetail');
     const actionHistory = t('actionHistory');
     const actionContract = t('generateContract');
+    const thActions = t('thActions');
     return {
       edit: t('edit') !== 'edit' ? t('edit') : (currentLang === 'fr' ? 'Modifier' : currentLang === 'en' ? 'Edit' : '編集'),
       detail: actionDetail !== 'actionDetail' ? actionDetail : (currentLang === 'fr' ? 'Détails' : currentLang === 'en' ? 'Details' : '詳細'),
       contract: actionContract !== 'generateContract' ? actionContract : (currentLang === 'fr' ? 'Contrat' : currentLang === 'en' ? 'Contract' : '契約書'),
       history: actionHistory !== 'actionHistory' ? actionHistory : (currentLang === 'fr' ? 'Historique' : currentLang === 'en' ? 'History' : '履歴'),
       delete: t('delete') !== 'delete' ? t('delete') : (currentLang === 'fr' ? 'Supprimer' : currentLang === 'en' ? 'Delete' : '削除'),
+      actions: thActions !== 'thActions' ? thActions : (currentLang === 'fr' ? 'Actions' : currentLang === 'en' ? 'Actions' : '操作'),
       shootingDate: t('thShootingDate') !== 'thShootingDate' ? t('thShootingDate') : (currentLang === 'fr' ? 'Date de séance' : currentLang === 'en' ? 'Shooting Date' : '撮影日'),
       revenue: t('thRevenue') !== 'thRevenue' ? t('thRevenue') : (currentLang === 'fr' ? 'Revenus' : currentLang === 'en' ? 'Revenue' : '売上'),
     };
   }
 
+  function renderCustomerColumnValue(customer, columnKey, viewMode = 'table') {
+    switch (columnKey) {
+      case 'inquiryDate':
+      case 'contractDate':
+      case 'shootingDate':
+      case 'meetingDate':
+        return formatDate(customer[columnKey]);
+      case 'customerName':
+        return escapeHtml(customer.customerName || '—');
+      case 'contact':
+        return escapeHtml(customer.contact || '—');
+      case 'plan':
+        return `<span class="badge badge-purple">${escapeHtml(resolveCustomerPlanName(customer))}</span>`;
+      case 'revenue':
+        return viewMode === 'card'
+          ? `<strong>${formatCurrency(customer.revenue)}</strong>`
+          : `<span style="font-weight:600;color:var(--text-primary);">${formatCurrency(customer.revenue)}</span>`;
+      case 'paymentChecked':
+        return customer.paymentChecked
+          ? `<span class="badge badge-success">${t('paid')}</span>`
+          : `<span class="badge badge-warning">${t('unpaid')}</span>`;
+      case 'assignedTo':
+        return `<span class="badge badge-cyan">${escapeHtml(getPhotographerName(customer.assignedTo))}</span>`;
+      default:
+        return '—';
+    }
+  }
+
+  function renderTableHeaders(visibleColumns, actionLabels) {
+    const headerRow = document.querySelector('#customer-table thead tr');
+    if (!headerRow) return;
+
+    const headers = visibleColumns.map((column) => {
+      const label = escapeHtml(getListColumnLabel(column.key));
+      const sortAttr = column.sortKey ? ` data-sort="${column.sortKey}"` : '';
+      const arrow = column.sortKey ? ' <span class="sort-arrow">▼</span>' : '';
+      return `<th${sortAttr} data-column-key="${column.key}"><span>${label}</span>${arrow}</th>`;
+    });
+    headers.push(`<th data-column-key="actions">${escapeHtml(actionLabels.actions)}</th>`);
+    headerRow.innerHTML = headers.join('');
+    bindSortEventListeners();
+  }
+
+  function getListColumnMinimumMessage() {
+    if (currentLang === 'fr') return 'Au moins une colonne doit être affichée.';
+    if (currentLang === 'en') return 'At least one column must remain visible.';
+    return '少なくとも1つの項目は表示してください。';
+  }
+
   function renderTable() {
     const list = getFilteredCustomers();
     const actionLabels = getActionLabels();
+    const visibleColumns = getVisibleListColumns();
+    renderTableHeaders(visibleColumns, actionLabels);
+
     if (customers.length === 0) {
       tableWrapper.style.display = 'none';
       if (customerCardGrid) customerCardGrid.style.display = 'none';
@@ -1294,18 +1559,16 @@
       const tr = document.createElement('tr');
       tr.dataset.id = c.id;
       tr.style.cursor = 'pointer';
+      const dataCells = visibleColumns.map((column) => {
+        const classList = [];
+        if (column.key === 'customerName') classList.push('customer-name');
+        const classAttr = classList.length ? ` class="${classList.join(' ')}"` : '';
+        return `<td data-column-key="${column.key}"${classAttr}>${renderCustomerColumnValue(c, column.key, 'table')}</td>`;
+      }).join('');
+
       tr.innerHTML = `
-        <td>${formatDate(c.inquiryDate)}</td>
-        <td>${formatDate(c.contractDate)}</td>
-        <td>${formatDate(c.shootingDate)}</td>
-        <td class="customer-name">${escapeHtml(c.customerName || '')}</td>
-        <td>${escapeHtml(c.contact || '')}</td>
-        <td>${formatDate(c.meetingDate)}</td>
-        <td><span class="badge badge-purple">${escapeHtml(resolveCustomerPlanName(c))}</span></td>
-        <td style="font-weight:600;color:var(--text-primary);">${formatCurrency(c.revenue)}</td>
-        <td>${c.paymentChecked ? `<span class="badge badge-success">${t('paid')}</span>` : `<span class="badge badge-warning">${t('unpaid')}</span>`}</td>
-        <td><span class="badge badge-cyan">${escapeHtml(getPhotographerName(c.assignedTo))}</span></td>
-        <td>
+        ${dataCells}
+        <td data-column-key="actions">
           <div class="table-action-group action-buttons">
             <button type="button" class="table-action-btn action-btn btn-edit" title="${escapeHtml(actionLabels.edit)}" aria-label="${escapeHtml(actionLabels.edit)}" onclick="openModal('${c.id}')">
               <span class="table-action-icon">✏️</span>
@@ -1337,23 +1600,32 @@
       tbody.appendChild(tr);
 
       if (customerCardGrid) {
+        const isNameVisible = visibleColumns.some((column) => column.key === 'customerName');
+        const isPlanVisible = visibleColumns.some((column) => column.key === 'plan');
+        const detailColumns = visibleColumns.filter((column) => column.key !== 'customerName' && column.key !== 'plan');
+        const cardHead = (isNameVisible || isPlanVisible)
+          ? `
+            <div class="customer-card-head">
+              ${isNameVisible ? `<div class="customer-card-name">${escapeHtml(c.customerName || '—')}</div>` : '<div></div>'}
+              ${isPlanVisible ? `<span class="badge badge-purple">${escapeHtml(resolveCustomerPlanName(c))}</span>` : ''}
+            </div>
+          `
+          : '';
+
+        const cardMetaRows = detailColumns.map((column) => `
+          <div class="customer-card-meta-row" data-column-key="${column.key}">
+            <span class="customer-card-meta-label">${escapeHtml(getListColumnLabel(column.key))}</span>
+            <span>${renderCustomerColumnValue(c, column.key, 'card')}</span>
+          </div>
+        `).join('');
+
         const card = document.createElement('article');
         card.className = 'customer-card';
         card.dataset.id = c.id;
         card.innerHTML = `
-          <div class="customer-card-head">
-            <div class="customer-card-name">${escapeHtml(c.customerName || '—')}</div>
-            <span class="badge badge-purple">${escapeHtml(resolveCustomerPlanName(c))}</span>
-          </div>
+          ${cardHead}
           <div class="customer-card-meta">
-            <div class="customer-card-meta-row">
-              <span class="customer-card-meta-label">${escapeHtml(actionLabels.shootingDate)}</span>
-              <span>${formatDate(c.shootingDate)}</span>
-            </div>
-            <div class="customer-card-meta-row">
-              <span class="customer-card-meta-label">${escapeHtml(actionLabels.revenue)}</span>
-              <strong>${formatCurrency(c.revenue)}</strong>
-            </div>
+            ${cardMetaRows || '<div class="customer-card-meta-row"><span class="customer-card-meta-label">—</span><span>—</span></div>'}
           </div>
           <div class="customer-card-actions action-buttons">
             <button type="button" class="table-action-btn action-btn btn-edit" title="${escapeHtml(actionLabels.edit)}" aria-label="${escapeHtml(actionLabels.edit)}" onclick="openModal('${c.id}')">
@@ -2075,7 +2347,7 @@
   // ===== Message Analyzer Integration =====
   // ===== Import/Export =====
   function handleSyncExportClick() {
-    const data = { customers, options, planMaster, dashboardConfig, contractTemplateText, exportedAt: new Date().toISOString() };
+    const data = { customers, options, planMaster, dashboardConfig, listColumnConfig, contractTemplateText, exportedAt: new Date().toISOString() };
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -2099,11 +2371,13 @@
         const stats = await window.SyncManager.mergeData(data);
         if (Array.isArray(data.planMaster)) savePlanMaster(data.planMaster);
         if (Array.isArray(data.dashboardConfig)) saveDashboardConfig(data.dashboardConfig);
+        if (Array.isArray(data.listColumnConfig)) saveListColumnConfig(data.listColumnConfig);
         if (typeof data.contractTemplateText === 'string') saveContractTemplate(data.contractTemplateText);
         customers = loadCustomers();
         options = loadOptions();
         planMaster = loadPlanMaster();
         dashboardConfig = loadDashboardConfig();
+        listColumnConfig = loadListColumnConfig();
         contractTemplateText = loadContractTemplate();
         applyDashboardConfig();
         updateLanguage(currentLang);
@@ -2839,6 +3113,7 @@
 
   function handleOpenSettingsClick() {
     setDashboardQuickMenuOpen(false);
+    setListColumnsMenuOpen(false);
     renderSettings();
     loadContractTemplateSettings();
     settingsOverlay?.classList.add('active');
@@ -2911,8 +3186,11 @@
     bindEventOnce(document.getElementById('currency-select'), 'change', handleCurrencySelectChange, 'currency-select-change');
     bindEventOnce(document.getElementById('btn-theme'), 'click', toggleTheme, 'theme-toggle-click');
     bindEventOnce(document.getElementById('btn-toggle-dashboard'), 'click', handleDashboardToggleButtonClick, 'dashboard-visibility-toggle');
+    bindEventOnce(document.getElementById('btn-list-columns'), 'click', handleListColumnsToggleButtonClick, 'list-columns-toggle');
     bindEventOnce(document, 'click', handleDashboardQuickMenuOutsideClick, 'dashboard-quick-menu-outside-click');
+    bindEventOnce(document, 'click', handleListColumnsOutsideClick, 'list-columns-outside-click');
     bindEventOnce(document, 'keydown', handleDashboardQuickMenuEscape, 'dashboard-quick-menu-escape');
+    bindEventOnce(document, 'keydown', handleListColumnsEscape, 'list-columns-escape');
     bindEventOnce(document.getElementById('form-plan'), 'change', handlePlanSelectChange, 'form-plan-select-change');
     bindEventOnce(document.getElementById('form-costume'), 'change', updateCostumePriceFromSelection, 'form-costume-select-change');
     bindEventOnce(document.getElementById('form-hairMakeup'), 'change', updateHairMakeupPriceFromSelection, 'form-hairmakeup-select-change');
@@ -3026,9 +3304,11 @@
     calendarFilters = loadCalendarFilters();
     dashboardVisible = getCloudValue(DASHBOARD_VISIBILITY_KEY, getLocalValue(DASHBOARD_VISIBILITY_KEY, true)) !== false;
     dashboardConfig = loadDashboardConfig();
+    listColumnConfig = loadListColumnConfig();
     contractTemplateText = loadContractTemplate();
     applyDashboardConfig();
     setDashboardVisibility(dashboardVisible);
+    renderListColumnsMenu();
   }
 
   let appInitialized = false;

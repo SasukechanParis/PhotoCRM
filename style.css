@@ -515,6 +515,7 @@ body {
 /* ===== Table & Toolbar ===== */
 .toolbar {
   display: flex;
+  flex-wrap: wrap;
   gap: 12px;
   margin-bottom: 16px;
   animation: fadeIn 0.6s ease-out 0.5s both;
@@ -558,18 +559,97 @@ body {
   cursor: pointer;
 }
 
+.list-columns-menu-wrap {
+  position: relative;
+}
+
+.list-columns-menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  width: min(340px, calc(100vw - 32px));
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  box-shadow: var(--shadow-lg);
+  z-index: 90;
+  padding: 8px;
+  opacity: 0;
+  transform: translateY(-6px);
+  pointer-events: none;
+  transition: opacity var(--transition), transform var(--transition);
+}
+
+.list-columns-menu.active {
+  opacity: 1;
+  transform: translateY(0);
+  pointer-events: auto;
+}
+
+.list-columns-menu-content {
+  display: grid;
+  gap: 6px;
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+.list-columns-menu-hint {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  padding: 6px 8px 4px;
+}
+
+.list-columns-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 8px;
+}
+
+.list-columns-item:hover {
+  background: var(--bg-glass);
+}
+
+.list-columns-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.84rem;
+  color: var(--text-primary);
+}
+
+.list-columns-toggle input[type="checkbox"] {
+  accent-color: var(--accent);
+  width: 15px;
+  height: 15px;
+}
+
+.list-columns-order {
+  display: inline-flex;
+  gap: 4px;
+}
+
+.list-columns-order .btn-icon-sm:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
 .table-wrapper {
   background: var(--bg-card);
   border: 1px solid var(--border-color);
   border-radius: var(--radius-lg);
   overflow-x: auto;
   overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
   animation: fadeIn 0.8s ease-out 0.6s both;
 }
 
 .table-scroll {
   width: 100%;
   overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 table {
@@ -769,7 +849,7 @@ tbody tr:hover {
   width: 100%;
   border-collapse: collapse;
   table-layout: auto;
-  min-width: 1320px;
+  min-width: 100%;
 }
 
 #customer-table th {
@@ -793,10 +873,35 @@ tbody tr:hover {
   white-space: nowrap;
 }
 
-#customer-table th:last-child,
-#customer-table td:last-child {
-  width: 208px;
-  min-width: 208px;
+#customer-table th[data-column-key="inquiryDate"],
+#customer-table td[data-column-key="inquiryDate"],
+#customer-table th[data-column-key="contractDate"],
+#customer-table td[data-column-key="contractDate"],
+#customer-table th[data-column-key="shootingDate"],
+#customer-table td[data-column-key="shootingDate"],
+#customer-table th[data-column-key="meetingDate"],
+#customer-table td[data-column-key="meetingDate"] {
+  min-width: 120px;
+}
+
+#customer-table th[data-column-key="customerName"],
+#customer-table td[data-column-key="customerName"],
+#customer-table th[data-column-key="contact"],
+#customer-table td[data-column-key="contact"] {
+  min-width: 150px;
+}
+
+#customer-table th[data-column-key="plan"],
+#customer-table td[data-column-key="plan"],
+#customer-table th[data-column-key="revenue"],
+#customer-table td[data-column-key="revenue"] {
+  min-width: 100px;
+}
+
+#customer-table th[data-column-key="actions"],
+#customer-table td[data-column-key="actions"] {
+  width: 190px;
+  min-width: 180px;
 }
 
 #customer-table tbody tr:hover {
@@ -843,10 +948,13 @@ tbody tr:hover {
 
 .table-action-btn .table-action-label,
 .action-btn .table-action-label {
-  font-size: clamp(9px, 1.6vw, 10px);
+  font-size: clamp(0.62rem, 0.9vw, 0.8rem);
   line-height: 1.1;
   color: var(--text-secondary);
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
 }
 
 .action-btn-delete,
@@ -899,6 +1007,11 @@ tbody tr:hover {
   gap: 8px;
   font-size: 0.78rem;
   color: var(--text-secondary);
+}
+
+.customer-card-meta-row span:last-child {
+  min-width: 0;
+  text-align: right;
 }
 
 .customer-card-meta-label {
@@ -1229,6 +1342,12 @@ tbody tr:hover {
 
   .customer-card-meta-row {
     font-size: 0.72rem;
+  }
+
+  .list-columns-menu {
+    right: auto;
+    left: 0;
+    width: min(360px, calc(100vw - 28px));
   }
 
   .table-action-btn,
