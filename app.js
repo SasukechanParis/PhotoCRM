@@ -147,7 +147,12 @@
   // ===== Default Custom Options =====
   const DEFAULT_OPTIONS = {
     plan: [],
-    costume: ['ウェディングドレス', 'カラードレス', '和装', '私服'],
+    costume: [
+      { name: 'ウェディングドレス', price: 0 },
+      { name: 'カラードレス', price: 0 },
+      { name: '和装', price: 0 },
+      { name: '私服', price: 0 },
+    ],
     hairMakeup: [],
   };
 
@@ -157,6 +162,8 @@
     hairMakeup: 'ヘアメイク',
   };
 
+  const PRICED_OPTION_KEYS = ['costume', 'hairMakeup'];
+
   // ===== Storage Helpers =====
   function loadCustomers() {
     const loaded = getCloudValue(STORAGE_KEY, []);
@@ -164,6 +171,8 @@
     return withCurrentUserId(records).map((record) => ({
       ...record,
       planDetails: normalizePlanDetails(record?.planDetails, record?.revenue),
+      costumePrice: toSafeNumber(record?.costumePrice, 0),
+      hairMakeupPrice: toSafeNumber(record?.hairMakeupPrice, 0),
     }));
   }
   function withCurrentUserId(records) {
@@ -177,14 +186,54 @@
     const normalized = records.map((record) => ({
       ...(record || {}),
       planDetails: normalizePlanDetails(record?.planDetails, record?.revenue),
+      costumePrice: toSafeNumber(record?.costumePrice, 0),
+      hairMakeupPrice: toSafeNumber(record?.hairMakeupPrice, 0),
     }));
     saveCloudValue(STORAGE_KEY, withCurrentUserId(normalized));
   }
 
   function loadOptions() {
-    return { ...DEFAULT_OPTIONS, ...(getCloudValue(OPTIONS_KEY, {}) || {}) };
+    const raw = { ...DEFAULT_OPTIONS, ...(getCloudValue(OPTIONS_KEY, {}) || {}) };
+    PRICED_OPTION_KEYS.forEach((key) => {
+      const list = Array.isArray(raw[key]) ? raw[key] : [];
+      raw[key] = list
+        .map(normalizePricedOption)
+        .filter((item) => item.name);
+    });
+    if (!Array.isArray(raw.plan)) raw.plan = [];
+    return raw;
   }
-  function saveOptions(data) { saveCloudValue(OPTIONS_KEY, data); }
+  function saveOptions(data) {
+    const normalized = { ...(data || {}) };
+    PRICED_OPTION_KEYS.forEach((key) => {
+      const list = Array.isArray(normalized[key]) ? normalized[key] : [];
+      normalized[key] = list
+        .map(normalizePricedOption)
+        .filter((item) => item.name);
+    });
+    saveCloudValue(OPTIONS_KEY, normalized);
+  }
+
+  function normalizePricedOption(item) {
+    if (item && typeof item === 'object') {
+      const name = typeof item.name === 'string' ? item.name.trim() : '';
+      return { name, price: toSafeNumber(item.price, 0) };
+    }
+    if (typeof item === 'string') {
+      const name = item.trim();
+      return { name, price: 0 };
+    }
+    return { name: '', price: 0 };
+  }
+
+  function getPricedOptionPrice(key, name, fallback = 0) {
+    if (!name) return fallback;
+    const list = Array.isArray(options[key]) ? options[key] : [];
+    const found = list
+      .map(normalizePricedOption)
+      .find((item) => item.name === name);
+    return found ? toSafeNumber(found.price, 0) : fallback;
+  }
 
   function getContractPresetTemplates() {
     return {
@@ -515,44 +564,67 @@
     return match?.name || customer?.plan || '—';
   }
 
+  function getCurrentCostumePrice() {
+    return toSafeNumber($('#form-costume-price')?.value, 0);
+  }
+
+  function getCurrentHairMakeupPrice() {
+    return toSafeNumber($('#form-hairmakeup-price')?.value, 0);
+  }
+
+  function getCurrentPricingBaseTotal() {
+    const basePrice = toSafeNumber($('#form-base-price')?.value, 0);
+    return basePrice + getCurrentCostumePrice() + getCurrentHairMakeupPrice();
+  }
+
+  function updateCostumePriceFromSelection(event) {
+    const selectedValue = event?.target?.value || '';
+    const input = $('#form-costume-price');
+    if (input) input.value = String(getPricedOptionPrice('costume', selectedValue, 0));
+    syncTotalsFromPlanPricing();
+  }
+
+  function updateHairMakeupPriceFromSelection(event) {
+    const selectedValue = event?.target?.value || '';
+    const input = $('#form-hairmakeup-price');
+    if (input) input.value = String(getPricedOptionPrice('hairMakeup', selectedValue, 0));
+    syncTotalsFromPlanPricing();
+  }
+
   function syncTotalsFromPlanPricing() {
-    const basePriceInput = $('#form-base-price');
     const adjustmentInput = $('#form-price-adjustment');
     const totalPriceInput = $('#form-total-price');
     const revenueInput = $('#form-revenue');
-    if (!basePriceInput || !adjustmentInput) return;
+    if (!adjustmentInput) return;
 
-    const basePrice = toSafeNumber(basePriceInput.value, 0);
     const adjustment = toSafeNumber(adjustmentInput.value, 0);
-    const totalPrice = basePrice + adjustment;
+    const totalPrice = getCurrentPricingBaseTotal() + adjustment;
     if (totalPriceInput) totalPriceInput.value = String(totalPrice);
     if (revenueInput) revenueInput.value = String(totalPrice);
   }
 
   function syncAdjustmentFromRevenueInput() {
-    const basePriceInput = $('#form-base-price');
     const adjustmentInput = $('#form-price-adjustment');
     const totalPriceInput = $('#form-total-price');
     const revenueInput = $('#form-revenue');
-    if (!basePriceInput || !adjustmentInput || !revenueInput) return;
+    if (!adjustmentInput || !revenueInput) return;
 
-    const basePrice = toSafeNumber(basePriceInput.value, 0);
+    const baseTotal = getCurrentPricingBaseTotal();
     const revenue = toSafeNumber(revenueInput.value, 0);
-    const adjustment = revenue - basePrice;
+    const adjustment = revenue - baseTotal;
     adjustmentInput.value = String(adjustment);
     if (totalPriceInput) totalPriceInput.value = String(revenue);
   }
 
   function syncAdjustmentFromTotalInput() {
-    const basePriceInput = $('#form-base-price');
     const adjustmentInput = $('#form-price-adjustment');
     const totalPriceInput = $('#form-total-price');
     const revenueInput = $('#form-revenue');
-    if (!basePriceInput || !adjustmentInput || !totalPriceInput) return;
+    if (!adjustmentInput || !totalPriceInput) return;
 
-    const basePrice = toSafeNumber(basePriceInput.value, 0);
+    const baseTotal = getCurrentPricingBaseTotal();
     const total = toSafeNumber(totalPriceInput.value, 0);
-    const adjustment = total - basePrice;
+    const adjustment = total - baseTotal;
     adjustmentInput.value = String(adjustment);
     if (revenueInput) revenueInput.value = String(total);
   }
@@ -560,7 +632,6 @@
   function handlePlanSelectChange(event) {
     const selectedValue = event?.target?.value || '';
     const selectedPlan = findPlanMasterByValue(selectedValue);
-    const revenueInput = $('#form-revenue');
     if (!selectedPlan) return;
 
     const planNameInput = $('#form-plan-name');
@@ -572,7 +643,6 @@
     if (basePriceInput) basePriceInput.value = String(toSafeNumber(selectedPlan.price, 0));
     if (optionsInput && !optionsInput.value.trim()) optionsInput.value = '';
     if (adjustmentInput) adjustmentInput.value = '0';
-    if (revenueInput) revenueInput.value = String(toSafeNumber(selectedPlan.price, 0));
     syncTotalsFromPlanPricing();
   }
 
@@ -803,9 +873,11 @@
       sel.innerHTML = `<option value="">${t('selectDefault')}</option>`;
       const opts = options[key] || [];
       opts.forEach((o) => {
+        const normalized = normalizePricedOption(o);
+        if (!normalized.name) return;
         const opt = document.createElement('option');
-        opt.value = o;
-        opt.textContent = o;
+        opt.value = normalized.name;
+        opt.textContent = normalized.name;
         sel.appendChild(opt);
       });
       const otherOpt = document.createElement('option');
@@ -869,6 +941,16 @@
     if (!sel || sel.tagName !== 'SELECT') return;
     sel.addEventListener('change', () => {
       if (sel.value === '__other__') {
+        if (key === 'costume') {
+          const costumePriceInput = $('#form-costume-price');
+          if (costumePriceInput) costumePriceInput.value = '0';
+          syncTotalsFromPlanPricing();
+        }
+        if (key === 'hairMakeup') {
+          const hairPriceInput = $('#form-hairmakeup-price');
+          if (hairPriceInput) hairPriceInput.value = '0';
+          syncTotalsFromPlanPricing();
+        }
         const input = document.createElement('input');
         input.type = 'text';
         input.id = `form-${key}`;
@@ -881,7 +963,22 @@
             newSel.id = `form-${key}`;
             input.replaceWith(newSel);
             populateSelects();
+            if (key === 'costume') {
+              bindEventOnce(newSel, 'change', updateCostumePriceFromSelection, 'form-costume-select-change');
+            }
+            if (key === 'hairMakeup') {
+              bindEventOnce(newSel, 'change', updateHairMakeupPriceFromSelection, 'form-hairmakeup-select-change');
+            }
             hookSelectOther(key);
+            if (key === 'costume') {
+              const costumePriceInput = $('#form-costume-price');
+              if (costumePriceInput) costumePriceInput.value = '0';
+            }
+            if (key === 'hairMakeup') {
+              const hairPriceInput = $('#form-hairmakeup-price');
+              if (hairPriceInput) hairPriceInput.value = '0';
+            }
+            syncTotalsFromPlanPricing();
           }
         });
       }
@@ -1343,6 +1440,8 @@
     });
 
     populateSelects();
+    bindEventOnce(document.getElementById('form-costume'), 'change', updateCostumePriceFromSelection, 'form-costume-select-change');
+    bindEventOnce(document.getElementById('form-hairMakeup'), 'change', updateHairMakeupPriceFromSelection, 'form-hairmakeup-select-change');
 
     if (editingId) {
       const c = customers.find(x => x.id === editingId);
@@ -1377,28 +1476,41 @@
       const planDetails = normalizePlanDetails(c.planDetails, c.revenue);
       const planNameInput = $('#form-plan-name');
       const basePriceInput = $('#form-base-price');
+      const costumePriceInput = $('#form-costume-price');
+      const hairPriceInput = $('#form-hairmakeup-price');
       const adjustmentInput = $('#form-price-adjustment');
       const optionsInput = $('#form-plan-options');
       const totalPriceInput = $('#form-total-price');
+      const costumePrice = toSafeNumber(c.costumePrice, getPricedOptionPrice('costume', c.costume, 0));
+      const hairPrice = toSafeNumber(c.hairMakeupPrice, getPricedOptionPrice('hairMakeup', c.hairMakeup, 0));
+      const fixedTotal = planDetails.basePrice + costumePrice + hairPrice;
       if (planNameInput) planNameInput.value = planDetails.planName;
       if (basePriceInput) basePriceInput.value = String(planDetails.basePrice);
-      if (adjustmentInput) adjustmentInput.value = String(planDetails.totalPrice - planDetails.basePrice);
+      if (costumePriceInput) costumePriceInput.value = String(costumePrice);
+      if (hairPriceInput) hairPriceInput.value = String(hairPrice);
+      if (adjustmentInput) adjustmentInput.value = String(planDetails.totalPrice - fixedTotal);
       if (optionsInput) optionsInput.value = planDetails.options;
       if (totalPriceInput) totalPriceInput.value = String(planDetails.totalPrice);
+      syncTotalsFromPlanPricing();
 
       renderCustomFields(c);
     } else {
       $('#modal-title').textContent = t('modalAddTitle');
       const planNameInput = $('#form-plan-name');
       const basePriceInput = $('#form-base-price');
+      const costumePriceInput = $('#form-costume-price');
+      const hairPriceInput = $('#form-hairmakeup-price');
       const adjustmentInput = $('#form-price-adjustment');
       const optionsInput = $('#form-plan-options');
       const totalPriceInput = $('#form-total-price');
       if (planNameInput) planNameInput.value = '';
       if (basePriceInput) basePriceInput.value = '';
+      if (costumePriceInput) costumePriceInput.value = '0';
+      if (hairPriceInput) hairPriceInput.value = '0';
       if (adjustmentInput) adjustmentInput.value = '0';
       if (optionsInput) optionsInput.value = '';
       if (totalPriceInput) totalPriceInput.value = '';
+      syncTotalsFromPlanPricing();
       renderCustomFields();
     }
     modalOverlay.style.display = 'flex';
@@ -1444,17 +1556,23 @@
 
     const planNameInput = $('#form-plan-name');
     const basePriceInput = $('#form-base-price');
+    const costumePriceInput = $('#form-costume-price');
+    const hairPriceInput = $('#form-hairmakeup-price');
     const adjustmentInput = $('#form-price-adjustment');
     const optionsInput = $('#form-plan-options');
     const totalPriceInput = $('#form-total-price');
     const revenueInput = $('#form-revenue');
     const basePrice = toSafeNumber(basePriceInput?.value, 0);
+    const costumePrice = toSafeNumber(costumePriceInput?.value, 0);
+    const hairMakeupPrice = toSafeNumber(hairPriceInput?.value, 0);
     const adjustment = toSafeNumber(adjustmentInput?.value, 0);
-    const totalFromAdjustment = basePrice + adjustment;
+    const totalFromAdjustment = basePrice + costumePrice + hairMakeupPrice + adjustment;
     const finalRevenue = totalFromAdjustment;
     if (totalPriceInput) totalPriceInput.value = String(finalRevenue);
     if (revenueInput) revenueInput.value = String(finalRevenue);
     data.revenue = finalRevenue;
+    data.costumePrice = costumePrice;
+    data.hairMakeupPrice = hairMakeupPrice;
 
     const rawPlanDetails = {
       planName: planNameInput?.value?.trim() || selectedPlan?.name || '',
@@ -1660,10 +1778,12 @@
       const list = document.createElement('div');
       list.className = 'settings-item-list';
       opts.forEach((o, i) => {
+        const priced = normalizePricedOption(o);
+        if (!priced.name) return;
         const item = document.createElement('div');
         item.className = 'settings-item';
         item.innerHTML = `
-          <span>${escapeHtml(o)}</span>
+          <span>${escapeHtml(priced.name)} <small style="color:var(--text-muted); margin-left:8px;">${formatCurrency(priced.price)}</small></span>
           <button class="btn-icon-sm" onclick="removeOption('${key}', ${i})">✕</button>
         `;
         list.appendChild(item);
@@ -1673,7 +1793,8 @@
       const addBox = document.createElement('div');
       addBox.className = 'settings-add-box';
       addBox.innerHTML = `
-        <input type="text" id="add-${key}" placeholder="${t('settingsAddPlaceholder', { label })}" />
+        <input type="text" id="add-${key}-name" placeholder="${t('settingsAddPlaceholder', { label })}" />
+        <input type="number" id="add-${key}-price" min="0" step="1" placeholder="金額" />
         <button class="btn btn-primary btn-sm" onclick="addOption('${key}')">${t('settingsAddBtn')}</button>
       `;
       section.appendChild(addBox);
@@ -1747,13 +1868,34 @@
   };
 
   window.addOption = function (key) {
+    if (PRICED_OPTION_KEYS.includes(key)) {
+      const nameInput = $(`#add-${key}-name`);
+      const priceInput = $(`#add-${key}-price`);
+      const name = nameInput?.value?.trim() || '';
+      if (!name) return;
+      const price = toSafeNumber(priceInput?.value, 0);
+      if (!options[key]) options[key] = [];
+      const list = (options[key] || []).map(normalizePricedOption).filter((item) => item.name);
+      const existingIdx = list.findIndex((item) => item.name.toLowerCase() === name.toLowerCase());
+      const next = { name, price };
+      if (existingIdx === -1) list.push(next);
+      else list[existingIdx] = next;
+      options[key] = list;
+      saveOptions(options);
+      if (nameInput) nameInput.value = '';
+      if (priceInput) priceInput.value = '';
+      renderSettings();
+      populateSelects();
+      return;
+    }
+
     const input = $(`#add-${key}`);
-    const val = input.value.trim();
+    const val = input?.value?.trim() || '';
     if (!val) return;
     if (!options[key]) options[key] = [];
     options[key].push(val);
     saveOptions(options);
-    input.value = '';
+    if (input) input.value = '';
     renderSettings();
     populateSelects();
   };
@@ -2597,6 +2739,8 @@
     bindEventOnce(document.getElementById('btn-theme'), 'click', toggleTheme, 'theme-toggle-click');
     bindEventOnce(document.getElementById('btn-toggle-dashboard'), 'click', toggleDashboardVisibility, 'dashboard-visibility-toggle');
     bindEventOnce(document.getElementById('form-plan'), 'change', handlePlanSelectChange, 'form-plan-select-change');
+    bindEventOnce(document.getElementById('form-costume'), 'change', updateCostumePriceFromSelection, 'form-costume-select-change');
+    bindEventOnce(document.getElementById('form-hairMakeup'), 'change', updateHairMakeupPriceFromSelection, 'form-hairmakeup-select-change');
     bindEventOnce(document.getElementById('form-base-price'), 'input', syncTotalsFromPlanPricing, 'form-base-price-input');
     bindEventOnce(document.getElementById('form-price-adjustment'), 'input', syncTotalsFromPlanPricing, 'form-price-adjustment-input');
     bindEventOnce(document.getElementById('form-revenue'), 'input', syncAdjustmentFromRevenueInput, 'form-revenue-input');

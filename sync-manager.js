@@ -53,7 +53,30 @@ window.SyncManager = {
       const newOptions = { ...localOptions };
       Object.keys(data.options).forEach((key) => {
         if (Array.isArray(data.options[key])) {
-          newOptions[key] = Array.from(new Set([...(newOptions[key] || []), ...data.options[key]]));
+          const incoming = data.options[key];
+          const existing = Array.isArray(newOptions[key]) ? newOptions[key] : [];
+          const hasNamedObject = incoming.some(item => item && typeof item === 'object' && typeof item.name === 'string');
+
+          if (hasNamedObject) {
+            const map = new Map();
+            existing.forEach((item) => {
+              if (item && typeof item === 'object' && typeof item.name === 'string') {
+                map.set(item.name, { name: item.name, price: Number(item.price) || 0 });
+              } else if (typeof item === 'string' && item.trim()) {
+                map.set(item.trim(), { name: item.trim(), price: 0 });
+              }
+            });
+            incoming.forEach((item) => {
+              if (item && typeof item === 'object' && typeof item.name === 'string' && item.name.trim()) {
+                map.set(item.name.trim(), { name: item.name.trim(), price: Number(item.price) || 0 });
+              } else if (typeof item === 'string' && item.trim()) {
+                map.set(item.trim(), { name: item.trim(), price: 0 });
+              }
+            });
+            newOptions[key] = Array.from(map.values());
+          } else {
+            newOptions[key] = Array.from(new Set([...(newOptions[key] || []), ...incoming]));
+          }
         }
       });
       await window.FirebaseService?.saveKey('photocrm_options', newOptions);
