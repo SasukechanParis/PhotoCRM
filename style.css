@@ -221,8 +221,34 @@ body {
   gap: 12px;
 }
 
+.logo-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
 .logo-icon {
   font-size: 24px;
+}
+
+.stats-toggle-btn {
+  margin-top: 6px;
+  border: 1px solid var(--border-color);
+  background: var(--bg-glass);
+  color: var(--text-secondary);
+  border-radius: 999px;
+  padding: 4px 10px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--transition);
+  align-self: flex-start;
+}
+
+.stats-toggle-btn:hover {
+  color: var(--text-primary);
+  border-color: var(--accent);
+  background: var(--accent-glow);
 }
 
 .header-actions {
@@ -244,6 +270,26 @@ body {
   align-items: center;
   gap: 12px;
   margin-bottom: 16px;
+}
+
+.dashboard-collapsible {
+  overflow: hidden;
+  max-height: 1100px;
+  opacity: 1;
+  transform: translateY(0);
+  transition: max-height 0.28s ease, opacity 0.22s ease, transform 0.22s ease, margin-bottom 0.22s ease;
+}
+
+.dashboard-collapsible.is-collapsed {
+  max-height: 0;
+  opacity: 0;
+  transform: translateY(-8px);
+  margin-bottom: 0;
+  pointer-events: none;
+}
+
+#dashboard-collapsible.is-collapsed~#expense-container {
+  margin-top: 8px !important;
 }
 
 #dashboard-month-picker {
@@ -580,6 +626,45 @@ tbody tr:hover {
   background: rgba(255, 255, 255, 0.03);
 }
 
+.table-action-group {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.table-action-btn {
+  border: 1px solid var(--border-color);
+  background: var(--bg-glass);
+  color: var(--text-primary);
+  border-radius: 10px;
+  min-width: 66px;
+  padding: 4px 6px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  cursor: pointer;
+  transition: all var(--transition);
+}
+
+.table-action-btn:hover {
+  border-color: var(--accent);
+  transform: translateY(-1px);
+}
+
+.table-action-icon {
+  font-size: 0.95rem;
+  line-height: 1;
+}
+
+.table-action-label {
+  font-size: 0.62rem;
+  line-height: 1.1;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
 .empty-state {
   text-align: center;
   padding: 64px 32px;
@@ -797,6 +882,11 @@ tbody tr:hover {
     padding: 16px;
   }
 
+  .stats-toggle-btn {
+    font-size: 0.72rem;
+    padding: 3px 8px;
+  }
+
   .view-tabs {
     padding: 0;
   }
@@ -816,6 +906,15 @@ tbody tr:hover {
 
   table {
     min-width: 900px;
+  }
+
+  .table-action-btn {
+    min-width: 58px;
+    padding: 3px 5px;
+  }
+
+  .table-action-label {
+    font-size: 0.56rem;
   }
 
   .calendar-cell {

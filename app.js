@@ -15,6 +15,7 @@
   const CURRENCY_KEY = 'photocrm_currency';
   const CUSTOM_FIELDS_KEY = 'photocrm_custom_fields';
   const CALENDAR_FILTERS_KEY = 'photocrm_calendar_filters';
+  const DASHBOARD_VISIBILITY_KEY = 'photocrm_dashboard_visible';
   const DEFAULT_INVOICE_MESSAGE = 'この度はありがとうございます。';
   const FREE_PLAN_LIMIT = 30;
 
@@ -175,10 +176,8 @@
     const safe = (plan && typeof plan === 'object') ? plan : {};
     const name = typeof safe.name === 'string' ? safe.name.trim() : '';
     return {
-      id: (typeof safe.id === 'string' && safe.id.trim()) ? safe.id : generateId(),
       name,
-      basePrice: toSafeNumber(safe.basePrice, 0),
-      defaultOptions: typeof safe.defaultOptions === 'string' ? safe.defaultOptions : '',
+      price: toSafeNumber(safe.price, toSafeNumber(safe.basePrice, 0)),
     };
   }
 
@@ -205,7 +204,7 @@
 
   function findPlanMasterByValue(value) {
     if (!value) return null;
-    return planMaster.find((plan) => plan.id === value || plan.name === value) || null;
+    return planMaster.find((plan) => plan.name === value) || null;
   }
 
   function loadCustomFieldDefinitions() {
@@ -260,6 +259,7 @@
   }
 
   let calendarFilters = loadCalendarFilters();
+  let dashboardVisible = getLocalValue(DASHBOARD_VISIBILITY_KEY, true) !== false;
 
   // Init calendar to current month
   const now = new Date();
@@ -422,6 +422,7 @@
   function handlePlanSelectChange(event) {
     const selectedValue = event?.target?.value || '';
     const selectedPlan = findPlanMasterByValue(selectedValue);
+    const revenueInput = $('#form-revenue');
     if (!selectedPlan) return;
 
     const planNameInput = $('#form-plan-name');
@@ -430,9 +431,10 @@
     const adjustmentInput = $('#form-price-adjustment');
 
     if (planNameInput) planNameInput.value = selectedPlan.name;
-    if (basePriceInput) basePriceInput.value = String(toSafeNumber(selectedPlan.basePrice, 0));
-    if (optionsInput) optionsInput.value = selectedPlan.defaultOptions || '';
+    if (basePriceInput) basePriceInput.value = String(toSafeNumber(selectedPlan.price, 0));
+    if (optionsInput && !optionsInput.value.trim()) optionsInput.value = '';
     if (adjustmentInput) adjustmentInput.value = '0';
+    if (revenueInput) revenueInput.value = String(toSafeNumber(selectedPlan.price, 0));
     syncTotalsFromPlanPricing();
   }
 
@@ -541,6 +543,29 @@
   }
   window.toggleTheme = toggleTheme;
 
+  function setDashboardVisibility(isVisible) {
+    dashboardVisible = !!isVisible;
+    const collapsible = document.getElementById('dashboard-collapsible');
+    const toggleBtn = document.getElementById('btn-toggle-dashboard');
+
+    if (collapsible) {
+      collapsible.classList.toggle('is-collapsed', !dashboardVisible);
+    }
+
+    if (toggleBtn) {
+      const label = dashboardVisible ? '📊 統計を隠す' : '📊 統計を表示';
+      toggleBtn.textContent = label;
+      toggleBtn.title = label;
+      toggleBtn.setAttribute('aria-expanded', dashboardVisible ? 'true' : 'false');
+    }
+
+    saveLocalValue(DASHBOARD_VISIBILITY_KEY, dashboardVisible);
+  }
+
+  function toggleDashboardVisibility() {
+    setDashboardVisibility(!dashboardVisible);
+  }
+
   function getExpenses() {
     return getCloudValue(EXPENSES_KEY, []);
   }
@@ -555,7 +580,7 @@
       const plans = Array.isArray(planMaster) ? planMaster : [];
       plans.forEach((plan) => {
         const opt = document.createElement('option');
-        opt.value = plan.id;
+        opt.value = plan.name;
         opt.textContent = plan.name;
         planSelect.appendChild(opt);
       });
@@ -563,7 +588,7 @@
       if (curVal) {
         const matched = findPlanMasterByValue(curVal);
         if (matched) {
-          planSelect.value = matched.id;
+          planSelect.value = matched.name;
         } else {
           const legacyOpt = document.createElement('option');
           legacyOpt.value = curVal;
@@ -879,17 +904,32 @@
         <td>${c.paymentChecked ? `<span class="badge badge-success">${t('paid')}</span>` : `<span class="badge badge-warning">${t('unpaid')}</span>`}</td>
         <td><span class="badge badge-cyan">${escapeHtml(getPhotographerName(c.assignedTo))}</span></td>
         <td>
-          <div style="display: flex; gap: 4px;">
-            <button class="btn-icon btn-edit" title="${t('btnEdit')}" data-id="${c.id}">✏️</button>
-            <button class="btn-icon" title="${t('generateInvoice')}" onclick="generateInvoiceByID('${c.id}')">📄</button>
-            <button class="btn-icon" title="${t('generateQuote')}" onclick="generateQuoteByID('${c.id}')">📋</button>
-            <button class="btn-icon" title="${t('generateContract')}" onclick="openContractModalByID('${c.id}')">📜</button>
-            <button class="btn-icon btn-del" title="${t('btnDelete')}" data-id="${c.id}">🗑</button>
+          <div class="table-action-group">
+            <button type="button" class="table-action-btn btn-edit" title="${t('edit')}" aria-label="${t('edit')}" data-id="${c.id}">
+              <span class="table-action-icon">✏️</span>
+              <span class="table-action-label">${t('edit')}</span>
+            </button>
+            <button type="button" class="table-action-btn" title="${t('generateInvoice')}" aria-label="${t('generateInvoice')}" onclick="generateInvoiceByID('${c.id}')">
+              <span class="table-action-icon">📄</span>
+              <span class="table-action-label">${t('generateInvoice')}</span>
+            </button>
+            <button type="button" class="table-action-btn" title="${t('generateQuote')}" aria-label="${t('generateQuote')}" onclick="generateQuoteByID('${c.id}')">
+              <span class="table-action-icon">📋</span>
+              <span class="table-action-label">${t('generateQuote')}</span>
+            </button>
+            <button type="button" class="table-action-btn" title="${t('generateContract')}" aria-label="${t('generateContract')}" onclick="openContractModalByID('${c.id}')">
+              <span class="table-action-icon">📜</span>
+              <span class="table-action-label">${t('generateContract')}</span>
+            </button>
+            <button type="button" class="table-action-btn btn-del" title="${t('delete')}" aria-label="${t('delete')}" data-id="${c.id}">
+              <span class="table-action-icon">🗑</span>
+              <span class="table-action-label">${t('delete')}</span>
+            </button>
           </div>
         </td>
       `;
       tr.addEventListener('click', e => {
-        if (e.target.closest('.btn-icon')) return;
+        if (e.target.closest('.table-action-btn, .btn-icon')) return;
         openDetail(c.id);
       });
       tbody.appendChild(tr);
@@ -1117,9 +1157,9 @@
         if (f.type === 'checkbox') {
           el.checked = !!c[f.key];
         } else if (f.type === 'select') {
-          const rawVal = f.key === 'plan' ? (c.planMasterId || c[f.key] || '') : (c[f.key] || '');
+          const rawVal = f.key === 'plan' ? (c[f.key] || c.planMasterId || '') : (c[f.key] || '');
           const val = f.key === 'plan'
-            ? (findPlanMasterByValue(rawVal)?.id || rawVal)
+            ? (findPlanMasterByValue(rawVal)?.name || rawVal)
             : rawVal;
           if (val && el.tagName === 'SELECT') {
             let found = false;
@@ -1198,7 +1238,7 @@
     const planSelect = $('#form-plan');
     const selectedPlan = findPlanMasterByValue(planSelect?.value || '');
     if (selectedPlan) {
-      data.planMasterId = selectedPlan.id;
+      data.planMasterId = selectedPlan.name;
       data.plan = selectedPlan.name;
     } else {
       data.planMasterId = data.plan || '';
@@ -1221,7 +1261,7 @@
     const rawPlanDetails = {
       planName: planNameInput?.value?.trim() || selectedPlan?.name || '',
       basePrice,
-      options: optionsInput?.value || selectedPlan?.defaultOptions || '',
+      options: optionsInput?.value || '',
       totalPrice: finalRevenue,
     };
     data.planDetails = normalizePlanDetails(rawPlanDetails, data.revenue);
@@ -1354,8 +1394,7 @@
         item.innerHTML = `
           <div style="flex:1;">
             <div style="font-weight:600;">${escapeHtml(plan.name)}</div>
-            <div style="font-size:0.85rem;color:var(--text-muted);">${formatCurrency(plan.basePrice)}</div>
-            <div style="font-size:0.8rem;color:var(--text-muted);white-space:pre-wrap;">${escapeHtml(plan.defaultOptions || 'オプション説明なし')}</div>
+            <div style="font-size:0.85rem;color:var(--text-muted);">${formatCurrency(plan.price)}</div>
           </div>
           <div style="display:flex; gap:6px;">
             <button class="btn-icon-sm" onclick="editPlanMaster(${index})">✏️</button>
@@ -1375,8 +1414,7 @@
     planAddBox.innerHTML = `
       <input type="hidden" id="edit-plan-index" value="" />
       <input type="text" id="add-plan-name" placeholder="プラン名 (例: Standard)" />
-      <input type="number" id="add-plan-base-price" min="0" step="1" placeholder="基本料金 (例: 120000)" />
-      <textarea id="add-plan-default-options" placeholder="デフォルトのオプション説明" style="min-height:70px;"></textarea>
+      <input type="number" id="add-plan-price" min="0" step="1" placeholder="金額 (例: 120000)" />
       <div style="display:flex; gap:8px;">
         <button class="btn btn-primary btn-sm" onclick="addPlanMaster()">${t('settingsAddBtn')}</button>
         <button class="btn btn-secondary btn-sm" onclick="resetPlanMasterForm()">クリア</button>
@@ -1419,12 +1457,10 @@
   window.resetPlanMasterForm = function () {
     const editInput = $('#edit-plan-index');
     const nameInput = $('#add-plan-name');
-    const baseInput = $('#add-plan-base-price');
-    const optionInput = $('#add-plan-default-options');
+    const priceInput = $('#add-plan-price');
     if (editInput) editInput.value = '';
     if (nameInput) nameInput.value = '';
-    if (baseInput) baseInput.value = '';
-    if (optionInput) optionInput.value = '';
+    if (priceInput) priceInput.value = '';
   };
 
   window.editPlanMaster = function (index) {
@@ -1432,19 +1468,16 @@
     if (!plan) return;
     const editInput = $('#edit-plan-index');
     const nameInput = $('#add-plan-name');
-    const baseInput = $('#add-plan-base-price');
-    const optionInput = $('#add-plan-default-options');
+    const priceInput = $('#add-plan-price');
     if (editInput) editInput.value = String(index);
     if (nameInput) nameInput.value = plan.name;
-    if (baseInput) baseInput.value = String(plan.basePrice);
-    if (optionInput) optionInput.value = plan.defaultOptions || '';
+    if (priceInput) priceInput.value = String(plan.price);
   };
 
   window.addPlanMaster = function () {
     const editInput = $('#edit-plan-index');
     const nameInput = $('#add-plan-name');
-    const baseInput = $('#add-plan-base-price');
-    const optionInput = $('#add-plan-default-options');
+    const priceInput = $('#add-plan-price');
     const name = nameInput?.value?.trim() || '';
     if (!name) {
       showToast('プラン名を入力してください。', 'error');
@@ -1461,10 +1494,8 @@
     }
 
     const nextPlan = normalizePlanMasterItem({
-      id: hasEditTarget ? planMaster[editIndex].id : generateId(),
       name,
-      basePrice: baseInput?.value,
-      defaultOptions: optionInput?.value || '',
+      price: priceInput?.value,
     });
 
     if (hasEditTarget) {
@@ -2298,6 +2329,7 @@
     bindEventOnce(document.getElementById('lang-select'), 'change', handleLanguageSelectChange, 'lang-select-change');
     bindEventOnce(document.getElementById('currency-select'), 'change', handleCurrencySelectChange, 'currency-select-change');
     bindEventOnce(document.getElementById('btn-theme'), 'click', toggleTheme, 'theme-toggle-click');
+    bindEventOnce(document.getElementById('btn-toggle-dashboard'), 'click', toggleDashboardVisibility, 'dashboard-visibility-toggle');
     bindEventOnce(document.getElementById('form-plan'), 'change', handlePlanSelectChange, 'form-plan-select-change');
     bindEventOnce(document.getElementById('form-base-price'), 'input', syncTotalsFromPlanPricing, 'form-base-price-input');
     bindEventOnce(document.getElementById('form-price-adjustment'), 'input', syncTotalsFromPlanPricing, 'form-price-adjustment-input');
@@ -2344,6 +2376,7 @@
     // 2. Set defaults
     updateLanguage(currentLang || 'en');
     updateCurrency(currentCurrency);
+    setDashboardVisibility(dashboardVisible);
 
     // 3. Attach event listeners
     bindCoreUIEventListeners();

@@ -16,6 +16,7 @@
 
   const SETTINGS_KEYS = [
     'photocrm_options',
+    'photocrm_plan_master',
     'photocrm_team',
     'photocrm_theme',
     'photocrm_lang',
@@ -101,6 +102,10 @@
     return userRootRef(uid).collection('meta').doc('state');
   }
 
+  function userSettingsRef(uid) {
+    return userRootRef(uid).collection('settings');
+  }
+
   function userMigrationRef(uid) {
     return userRootRef(uid).collection('meta').doc('migration');
   }
@@ -140,13 +145,14 @@
   }
 
   async function hasAnyCloudData(uid) {
-    const [settingsSnap, clientsSnap, expensesSnap] = await Promise.all([
+    const [settingsSnap, settingsCollectionSnap, clientsSnap, expensesSnap] = await Promise.all([
       userMetaRef(uid).get(),
+      userSettingsRef(uid).limit(1).get(),
       userClientsRef(uid).limit(1).get(),
       userExpensesRef(uid).limit(1).get(),
     ]);
 
-    return settingsSnap.exists || !clientsSnap.empty || !expensesSnap.empty;
+    return settingsSnap.exists || !settingsCollectionSnap.empty || !clientsSnap.empty || !expensesSnap.empty;
   }
 
   async function migrateLocalDataToCloud(user) {
@@ -169,6 +175,20 @@
       if (payload[key] !== undefined) settings[key] = payload[key];
     });
 
+    const settingEntries = Object.entries(settings);
+    if (settingEntries.length) {
+      const settingsBatch = db.batch();
+      settingEntries.forEach(([key, value]) => {
+        settingsBatch.set(userSettingsRef(uid).doc(key), {
+          key,
+          value,
+          userId: uid,
+          __updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+        }, { merge: true });
+      });
+      await settingsBatch.commit();
+    }
+
     await userMetaRef(uid).set({
       ...settings,
       userId: uid,
@@ -185,14 +205,24 @@
 
   async function loadCloudDataForUser(user) {
     const uid = user.uid;
-    const [settingsSnap, clientSnap, expenseSnap] = await Promise.all([
+    const [settingsSnap, settingsCollectionSnap, clientSnap, expenseSnap] = await Promise.all([
       userMetaRef(uid).get(),
+      userSettingsRef(uid).get(),
       userClientsRef(uid).get(),
       userExpensesRef(uid).get(),
     ]);
 
+    const settingsFromCollection = {};
+    settingsCollectionSnap.forEach((docSnap) => {
+      const data = docSnap.data();
+      if (data && Object.prototype.hasOwnProperty.call(data, 'value')) {
+        settingsFromCollection[docSnap.id] = data.value;
+      }
+    });
+
     const loaded = {
       ...(settingsSnap.exists ? settingsSnap.data() : {}),
+      ...settingsFromCollection,
       photocrm_customers: clientSnap.docs.map((doc) => ({ id: doc.id, ...doc.data(), userId: uid })),
       photocrm_expenses: expenseSnap.docs.map((doc) => ({ id: doc.id, ...doc.data(), userId: uid })),
     };
@@ -238,11 +268,24 @@
       return;
     }
 
-    await userMetaRef(user.uid).set({
+    const metaUpdatePromise = userMetaRef(user.uid).set({
       userId: user.uid,
       [key]: value,
       __updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
     }, { merge: true });
+
+    if (SETTINGS_KEYS.includes(key)) {
+      const settingUpdatePromise = userSettingsRef(user.uid).doc(key).set({
+        key,
+        value,
+        userId: user.uid,
+        __updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+      }, { merge: true });
+      await Promise.all([metaUpdatePromise, settingUpdatePromise]);
+      return;
+    }
+
+    await metaUpdatePromise;
   }
 
   async function processRedirectResult() {
