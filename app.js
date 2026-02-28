@@ -1924,7 +1924,27 @@
   }
 
   function handleGoogleLogoutClick() {
-    window.FirebaseService?.signOut?.(); window.location.href = window.location.pathname;
+    isLoggedIn = false;
+    if (authNullTimer) {
+      clearTimeout(authNullTimer);
+      authNullTimer = null;
+    }
+
+    const reloadToRoot = () => {
+      window.location.href = window.location.origin + window.location.pathname;
+    };
+
+    if (!window.FirebaseService?.signOut) {
+      reloadToRoot();
+      return;
+    }
+
+    window.FirebaseService.signOut()
+      .then(reloadToRoot)
+      .catch((err) => {
+        console.error('Google logout failed', err);
+        reloadToRoot();
+      });
   }
 
   function bindCoreUIEventListeners() {
@@ -2031,6 +2051,8 @@
 
   let appInitialized = false;
   let authStateRequestId = 0;
+  let isLoggedIn = false;
+  let authNullTimer = null;
 
   function getAppContainerElement() {
     const byId = document.getElementById('app-container');
@@ -2042,6 +2064,7 @@
 
   function setAuthScreenState(state, user = null) {
     const appContainer = getAppContainerElement();
+    const authScreenRoot = document.getElementById('auth-screen');
     const authScreen = document.getElementById('auth-screen') || document.getElementById('login-screen');
     const loginScreen = document.getElementById('login-screen');
     const authBanner = document.getElementById('auth-banner');
@@ -2061,9 +2084,15 @@
     }
 
     if (state === 'loggedOut') {
+      isLoggedIn = false;
+      if (authNullTimer) {
+        clearTimeout(authNullTimer);
+        authNullTimer = null;
+      }
       if (authStatus) authStatus.textContent = '🔐 Googleでログインしてクラウド同期を開始';
       if (loginBtn) loginBtn.style.display = '';
       if (logoutBtn) logoutBtn.style.display = 'none';
+      if (authScreenRoot) authScreenRoot.style.display = 'block';
       if (authScreen) authScreen.style.display = 'block';
       if (loginScreen) loginScreen.style.display = 'flex';
       if (authBanner) authBanner.style.display = 'none';
@@ -2176,6 +2205,7 @@
       console.log("🔔 Auth State Changed. User:", user ? user.email : "LoggedOut");
 
       if (user) {
+        isLoggedIn = true;
         const appContainer = getAppContainerElement();
         const loginScreen = document.getElementById('login-screen');
         const isLoginScreenActive = !!loginScreen && loginScreen.style.display !== 'none';
@@ -2187,12 +2217,12 @@
         return;
       }
 
-      const appContainer = getAppContainerElement();
-      const isDashboardActive = !!appContainer && appContainer.style.display === 'block';
-      if (isDashboardActive) {
-        window.location.reload();
+      if (!isLoggedIn) {
+        setAuthScreenState('loggedOut');
         return;
       }
+
+      isLoggedIn = false;
       setAuthScreenState('loggedOut');
     });
   });
