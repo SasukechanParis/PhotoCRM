@@ -335,6 +335,25 @@ function generateQuotePDF(customer) {
     generateInvoicePDF(customer, 'quote');
 }
 
+function applyContractTemplatePlaceholders(templateText, customer = {}, settings = {}) {
+    const replacements = {
+        '{{customer_name}}': customer.customerName || '—',
+        '{{shooting_date}}': customer.shootingDate || '—',
+        '{{total_price}}': formatInvoiceMoney(Number(customer.revenue) || 0),
+        '{{plan_name}}': customer.plan || '—',
+        '{{location}}': customer.location || '—',
+        '{{contact}}': customer.contact || '—',
+        '{{today}}': formatInvoiceDate(new Date()),
+        '{{company_name}}': settings.companyName || '—',
+    };
+
+    let text = String(templateText || '');
+    Object.entries(replacements).forEach(([token, value]) => {
+        text = text.split(token).join(String(value || ''));
+    });
+    return text;
+}
+
 function generateContract(customer, templateType = 'wedding') {
     const { jsPDF } = window.jspdf;
     const currency = typeof getCurrencySymbol === 'function' ? getCurrencySymbol() : '$';
@@ -438,7 +457,18 @@ Client: _________________ Date: _______
         }
     };
 
-    const template = templates[templateType] || templates.wedding;
+    const customTemplateSource = typeof window.getContractTemplateText === 'function'
+        ? window.getContractTemplateText()
+        : (window.FirebaseService?.getCachedData('photocrm_contract_template') || '');
+
+    const customTemplate = {
+        title: 'Custom Contract',
+        content: applyContractTemplatePlaceholders(customTemplateSource, customer, settings),
+    };
+
+    const template = templateType === 'custom' && customTemplate.content.trim()
+        ? customTemplate
+        : (templates[templateType] || templates.wedding);
 
     // Header
     doc.setFillColor(31, 41, 55);

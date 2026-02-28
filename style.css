@@ -1456,6 +1456,19 @@ tbody tr:hover {
   cursor: not-allowed;
 }
 
+.contract-preset-grid {
+  display: grid;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.contract-preset-grid .btn {
+  justify-content: flex-start;
+  text-align: left;
+  white-space: normal;
+  line-height: 1.35;
+}
+
 .custom-fields-container {
   grid-column: 1 / -1;
   display: grid;

@@ -17,6 +17,7 @@
   const CALENDAR_FILTERS_KEY = 'photocrm_calendar_filters';
   const DASHBOARD_VISIBILITY_KEY = 'photocrm_dashboard_visible';
   const DASHBOARD_CONFIG_KEY = 'photocrm_dashboard_config';
+  const CONTRACT_TEMPLATE_KEY = 'photocrm_contract_template';
   const DEFAULT_INVOICE_MESSAGE = 'この度はありがとうございます。';
   const FREE_PLAN_LIMIT = 30;
 
@@ -29,6 +30,7 @@
     { key: 'yearlyExpense', labelKey: 'yearlyExpenseTotal', fallbackLabel: '今年の総経費' },
     { key: 'yearlyProfit', labelKey: 'yearlyProfitTotal', fallbackLabel: '今年の総利益' },
     { key: 'unpaid', labelKey: 'cardUnpaid', fallbackLabel: '入金未確認' },
+    { key: 'expenseSection', labelKey: 'expenseTracking', fallbackLabel: '経費管理セクション' },
   ];
 
   function getCloudValue(key, fallback) {
@@ -184,6 +186,77 @@
   }
   function saveOptions(data) { saveCloudValue(OPTIONS_KEY, data); }
 
+  function getContractPresetTemplates() {
+    return {
+      standard: `【撮影契約書】
+本契約は {{customer_name}} 様（以下「お客様」）と撮影事業者（以下「撮影者」）の間で締結されます。
+
+1. 撮影日: {{shooting_date}}
+2. 撮影プラン: {{plan_name}}
+3. 撮影場所: {{location}}
+4. 料金: {{total_price}}
+
+【キャンセルポリシー】
+- 撮影日の14日前まで: 無料
+- 撮影日の13日〜3日前: 料金の50%
+- 撮影前日〜当日: 料金の100%
+
+【納品】
+- 納品目安: 撮影日より30日以内
+- 納品形式: オンライン納品
+
+【同意】
+本契約内容を確認し、双方合意の上で撮影を実施します。`,
+      bridal: `【ブライダル撮影契約】
+お客様名: {{customer_name}}
+撮影日: {{shooting_date}}
+プラン: {{plan_name}}
+場所: {{location}}
+契約金額: {{total_price}}
+
+【拘束時間】
+- 撮影開始〜終了までの拘束時間を基準に料金を算定します。
+- 延長が発生した場合、30分単位で追加料金を請求します。
+
+【キャンセル・日程変更】
+- 日程変更は空きがある場合のみ対応します。
+- 挙式都合による変更を除き、規定のキャンセル料が発生します。
+
+【著作権・利用】
+- 著作権は撮影者に帰属します。
+- お客様は私的利用の範囲で自由に使用できます。`,
+      light: `【撮影規約（ライト）】
+お客様: {{customer_name}}
+撮影日: {{shooting_date}}
+料金: {{total_price}}
+
+1. 撮影データは選定・補正後に納品します。
+2. SNS掲載可否はお客様確認後に決定します。
+3. 体調不良・天候不良時は双方協議の上で再調整します。
+4. ご連絡先: {{contact}}
+
+本規約に同意の上、撮影を進行します。`,
+    };
+  }
+
+  function getDefaultContractTemplateText() {
+    return getContractPresetTemplates().standard;
+  }
+
+  function loadContractTemplate() {
+    const fallback = getDefaultContractTemplateText();
+    const loaded = getCloudValue(CONTRACT_TEMPLATE_KEY, getLocalValue(CONTRACT_TEMPLATE_KEY, fallback));
+    if (typeof loaded !== 'string' || !loaded.trim()) return fallback;
+    return loaded;
+  }
+
+  function saveContractTemplate(templateText) {
+    const next = String(templateText || '').trim() || getDefaultContractTemplateText();
+    contractTemplateText = next;
+    saveLocalValue(CONTRACT_TEMPLATE_KEY, next);
+    saveCloudValue(CONTRACT_TEMPLATE_KEY, next);
+  }
+
   function getDefaultDashboardConfig() {
     return DASHBOARD_CARD_DEFINITIONS.map((item) => ({
       key: item.key,
@@ -324,6 +397,7 @@
   let calendarFilters = loadCalendarFilters();
   let dashboardVisible = getLocalValue(DASHBOARD_VISIBILITY_KEY, true) !== false;
   let dashboardConfig = loadDashboardConfig();
+  let contractTemplateText = loadContractTemplate();
 
   // Init calendar to current month
   const now = new Date();
@@ -632,29 +706,34 @@
 
   function applyDashboardConfig() {
     const grid = document.getElementById('dashboard-cards-grid');
-    if (!grid) return;
+    const expenseContainer = document.getElementById('expense-container');
+    if (!grid && !expenseContainer) return;
 
-    const cards = Array.from(grid.querySelectorAll('[data-dashboard-key]'));
+    const cards = grid ? Array.from(grid.querySelectorAll('[data-dashboard-key]')) : [];
     const cardMap = new Map(cards.map((card) => [card.dataset.dashboardKey, card]));
     let visibleCount = 0;
+    const expenseSetting = dashboardConfig.find((item) => item.key === 'expenseSection');
+    const isExpenseVisible = expenseSetting ? expenseSetting.visible !== false : true;
 
     dashboardConfig.forEach((item) => {
+      if (item.key === 'expenseSection') return;
       const card = cardMap.get(item.key);
       if (!card) return;
       card.style.display = item.visible ? '' : 'none';
       if (item.visible) visibleCount += 1;
-      grid.appendChild(card);
+      if (grid) grid.appendChild(card);
     });
 
     cards.forEach((card) => {
       if (!dashboardConfig.some((item) => item.key === card.dataset.dashboardKey)) {
         card.style.display = '';
-        grid.appendChild(card);
+        if (grid) grid.appendChild(card);
         visibleCount += 1;
       }
     });
 
-    grid.style.display = visibleCount > 0 ? 'grid' : 'none';
+    if (grid) grid.style.display = visibleCount > 0 ? 'grid' : 'none';
+    if (expenseContainer) expenseContainer.style.display = isExpenseVisible ? 'block' : 'none';
   }
 
   function updateDashboardCardVisibility(itemKey, visible) {
@@ -1544,7 +1623,7 @@
 
     const dashboardSection = document.createElement('div');
     dashboardSection.className = 'settings-section';
-    dashboardSection.innerHTML = '<h3>ダッシュボード設定</h3>';
+    dashboardSection.innerHTML = '<h3>表示設定</h3>';
     const dashboardList = document.createElement('div');
     dashboardList.className = 'settings-item-list dashboard-config-list';
 
@@ -1698,7 +1777,7 @@
   // ===== Message Analyzer Integration =====
   // ===== Import/Export =====
   function handleSyncExportClick() {
-    const data = { customers, options, planMaster, dashboardConfig, exportedAt: new Date().toISOString() };
+    const data = { customers, options, planMaster, dashboardConfig, contractTemplateText, exportedAt: new Date().toISOString() };
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -1722,10 +1801,12 @@
         const stats = await window.SyncManager.mergeData(data);
         if (Array.isArray(data.planMaster)) savePlanMaster(data.planMaster);
         if (Array.isArray(data.dashboardConfig)) saveDashboardConfig(data.dashboardConfig);
+        if (typeof data.contractTemplateText === 'string') saveContractTemplate(data.contractTemplateText);
         customers = loadCustomers();
         options = loadOptions();
         planMaster = loadPlanMaster();
         dashboardConfig = loadDashboardConfig();
+        contractTemplateText = loadContractTemplate();
         applyDashboardConfig();
         updateLanguage(currentLang);
         showToast(`Imported: ${stats.customers} new, ${stats.updated} updated, ${stats.team} members.`);
@@ -2298,7 +2379,7 @@
       const template = btn.dataset.template || 'default';
       bindEventOnce(btn, 'click', () => {
         window.generateContract(window.currentContractCustomer, template);
-        closeContractModal();
+        window.closeContractModal();
       }, `contract-template-${template}`);
     });
   }
@@ -2372,6 +2453,30 @@
     showToast(t('msgSettingsSaved'));
   }
 
+  function loadContractTemplateSettings() {
+    const textarea = $('#contract-template-editor');
+    if (textarea) textarea.value = contractTemplateText || getDefaultContractTemplateText();
+  }
+
+  function applyContractTemplatePreset(presetKey) {
+    const presets = getContractPresetTemplates();
+    const next = presets[presetKey] || presets.standard;
+    const textarea = $('#contract-template-editor');
+    if (textarea) textarea.value = next;
+  }
+
+  function handleSaveContractTemplate() {
+    const textarea = $('#contract-template-editor');
+    if (!textarea) return;
+    saveContractTemplate(textarea.value);
+    loadContractTemplateSettings();
+    showToast('契約書テンプレートを保存しました。');
+  }
+
+  window.getContractTemplateText = function () {
+    return contractTemplateText || getDefaultContractTemplateText();
+  };
+
   // ===== Helper Functions for Invoice/Quote/Contract =====
   window.generateInvoiceByID = function(customerId) {
     const customer = customers.find(c => c.id === customerId);
@@ -2389,7 +2494,15 @@
 
   window.openContractModalByID = function(customerId) {
     const customer = customers.find(c => c.id === customerId);
-    if (customer && window.openContractModal) {
+    if (!customer) return;
+
+    if (window.generateContract) {
+      window.generateContract(customer, 'custom');
+      showToast(t('contractGenerated') || '契約書を作成しました');
+      return;
+    }
+
+    if (window.openContractModal) {
       window.openContractModal(customer);
     }
   };
@@ -2408,6 +2521,7 @@
 
   function handleOpenSettingsClick() {
     renderSettings();
+    loadContractTemplateSettings();
     settingsOverlay?.classList.add('active');
   }
 
@@ -2436,6 +2550,7 @@
         const tab = btn.dataset.tab;
         $(`#settings-content-${tab}`)?.classList.add('active');
         if (tab === 'invoice') loadInvoiceSettings();
+        if (tab === 'contract') loadContractTemplateSettings();
         if (tab === 'team') renderTeamList();
       }, `settings-tab-${tabName}`);
     });
@@ -2513,6 +2628,10 @@
     bindEventOnce($('#tax-enabled'), 'change', handleTaxEnabledChange, 'tax-enabled-change');
     bindEventOnce($('#tax-label'), 'change', handleTaxLabelChange, 'tax-label-change');
     bindEventOnce($('#btn-save-invoice-settings'), 'click', handleSaveInvoiceSettings, 'tax-settings-save');
+    bindEventOnce(document.getElementById('btn-save-contract-template'), 'click', handleSaveContractTemplate, 'contract-template-save');
+    bindEventOnce(document.getElementById('btn-contract-preset-standard'), 'click', () => applyContractTemplatePreset('standard'), 'contract-preset-standard');
+    bindEventOnce(document.getElementById('btn-contract-preset-bridal'), 'click', () => applyContractTemplatePreset('bridal'), 'contract-preset-bridal');
+    bindEventOnce(document.getElementById('btn-contract-preset-light'), 'click', () => applyContractTemplatePreset('light'), 'contract-preset-light');
     initCalendarFilters();
     bindExpenseModalEvents();
   }
@@ -2563,11 +2682,6 @@
     renderExpenses();
     bindExpenseModalEvents();
 
-    // Check if expense view should be visible
-    if ($('#expense-container')) {
-      $('#expense-container').style.display = 'block';
-    }
-
     // Load saved view preference
     const savedView = getCloudValue('preferred_view', 'list');
     const activeTab = $(`.view-tab[data-view="${savedView}"]`);
@@ -2592,6 +2706,7 @@
     }
     calendarFilters = loadCalendarFilters();
     dashboardConfig = loadDashboardConfig();
+    contractTemplateText = loadContractTemplate();
     applyDashboardConfig();
   }
 

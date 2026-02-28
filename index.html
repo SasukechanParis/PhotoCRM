@@ -540,6 +540,7 @@
         <div class="settings-tabs">
           <button class="settings-tab-btn active" data-tab="menu" data-i18n="settings">General</button>
           <button class="settings-tab-btn" data-tab="invoice" data-i18n="invoiceSettings">Invoice & Tax</button>
+          <button class="settings-tab-btn" data-tab="contract">契約書設定</button>
           <button class="settings-tab-btn" data-tab="team" data-i18n="teamManager">Team</button>
         </div>
         <div class="settings-tab-content active" id="settings-content-menu">
@@ -641,6 +642,22 @@
                 <button class="btn btn-primary btn-sm" id="btn-team-add" data-i18n="addMember">Add</button>
               </div>
             </div>
+          </div>
+        </div>
+        <div class="settings-tab-content" id="settings-content-contract">
+          <div class="settings-section">
+            <h3>契約書テンプレート</h3>
+            <p class="help-text">利用可能プレースホルダー: <code>{{customer_name}}</code>, <code>{{shooting_date}}</code>, <code>{{total_price}}</code>, <code>{{plan_name}}</code>, <code>{{location}}</code>, <code>{{contact}}</code></p>
+            <div class="form-group">
+              <label for="contract-template-editor">本文（自由編集）</label>
+              <textarea id="contract-template-editor" style="min-height: 260px;"></textarea>
+            </div>
+            <div class="contract-preset-grid">
+              <button type="button" class="btn btn-secondary btn-sm" id="btn-contract-preset-standard">標準的な撮影規約（キャンセルポリシー込）</button>
+              <button type="button" class="btn btn-secondary btn-sm" id="btn-contract-preset-bridal">ブライダル特化型契約（拘束時間重視）</button>
+              <button type="button" class="btn btn-secondary btn-sm" id="btn-contract-preset-light">ライトな規約（SNS掲載確認など）</button>
+            </div>
+            <button type="button" class="btn btn-primary" id="btn-save-contract-template" style="width:100%; margin-top: 12px;">契約書テンプレートを保存</button>
           </div>
         </div>
       </div>

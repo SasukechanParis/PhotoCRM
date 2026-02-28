@@ -26,6 +26,7 @@
     'photocrm_custom_fields',
     'photocrm_calendar_filters',
     'photocrm_dashboard_config',
+    'photocrm_contract_template',
     'preferred_view'
   ];
 
