@@ -2192,6 +2192,10 @@
     }
 
     await window.FirebaseService.onAuthChanged((user) => {
+      if (user) {
+        // Force UI transition immediately on login success to avoid auth timing gaps.
+        setAuthScreenState('loggedIn', user);
+      }
       handleAuthState(user).catch((err) => {
         console.error('Auth state refresh failed', err);
       });
