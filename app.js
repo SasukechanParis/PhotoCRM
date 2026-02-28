@@ -6,6 +6,7 @@
   // ===== Storage Keys =====
   const STORAGE_KEY = 'photocrm_customers';
   const OPTIONS_KEY = 'photocrm_options';
+  const PLAN_MASTER_KEY = 'photocrm_plan_master';
   const THEME_KEY = 'photocrm_theme';
   const LANG_KEY = 'photocrm_lang';
   const TAX_SETTINGS_KEY = 'photocrm_tax_settings';
@@ -170,6 +171,43 @@
   }
   function saveOptions(data) { saveCloudValue(OPTIONS_KEY, data); }
 
+  function normalizePlanMasterItem(plan) {
+    const safe = (plan && typeof plan === 'object') ? plan : {};
+    const name = typeof safe.name === 'string' ? safe.name.trim() : '';
+    return {
+      id: (typeof safe.id === 'string' && safe.id.trim()) ? safe.id : generateId(),
+      name,
+      basePrice: toSafeNumber(safe.basePrice, 0),
+      defaultOptions: typeof safe.defaultOptions === 'string' ? safe.defaultOptions : '',
+    };
+  }
+
+  function loadPlanMaster() {
+    const loaded = getCloudValue(PLAN_MASTER_KEY, getLocalValue(PLAN_MASTER_KEY, []));
+    const list = Array.isArray(loaded) ? loaded : [];
+    return list
+      .map(normalizePlanMasterItem)
+      .filter((plan) => plan.name);
+  }
+
+  function savePlanMaster(data) {
+    const normalized = (Array.isArray(data) ? data : [])
+      .map(normalizePlanMasterItem)
+      .filter((plan) => plan.name);
+    planMaster = normalized;
+    saveLocalValue(PLAN_MASTER_KEY, normalized);
+    saveCloudValue(PLAN_MASTER_KEY, normalized);
+
+    if (!options || typeof options !== 'object') options = loadOptions();
+    options.plan = normalized.map((plan) => plan.name);
+    saveOptions(options);
+  }
+
+  function findPlanMasterByValue(value) {
+    if (!value) return null;
+    return planMaster.find((plan) => plan.id === value || plan.name === value) || null;
+  }
+
   function loadCustomFieldDefinitions() {
     return getCloudValue(CUSTOM_FIELDS_KEY, []);
   }
@@ -194,6 +232,13 @@
   // ===== State =====
   let customers = loadCustomers();
   let options = loadOptions();
+  let planMaster = loadPlanMaster();
+  if (planMaster.length === 0 && Array.isArray(options.plan) && options.plan.length > 0) {
+    planMaster = options.plan
+      .filter((name) => typeof name === 'string' && name.trim())
+      .map((name) => normalizePlanMasterItem({ name }));
+    savePlanMaster(planMaster);
+  }
   let currentSort = { key: 'shootingDate', dir: 'desc' };
   let editingId = null;
   let deletingId = null;
@@ -327,6 +372,70 @@
     };
   }
 
+  function resolveCustomerPlanName(customer) {
+    const match = findPlanMasterByValue(customer?.planMasterId || customer?.plan || '');
+    return match?.name || customer?.plan || '—';
+  }
+
+  function syncTotalsFromPlanPricing() {
+    const basePriceInput = $('#form-base-price');
+    const adjustmentInput = $('#form-price-adjustment');
+    const totalPriceInput = $('#form-total-price');
+    const revenueInput = $('#form-revenue');
+    if (!basePriceInput || !adjustmentInput) return;
+
+    const basePrice = toSafeNumber(basePriceInput.value, 0);
+    const adjustment = toSafeNumber(adjustmentInput.value, 0);
+    const totalPrice = basePrice + adjustment;
+    if (totalPriceInput) totalPriceInput.value = String(totalPrice);
+    if (revenueInput) revenueInput.value = String(totalPrice);
+  }
+
+  function syncAdjustmentFromRevenueInput() {
+    const basePriceInput = $('#form-base-price');
+    const adjustmentInput = $('#form-price-adjustment');
+    const totalPriceInput = $('#form-total-price');
+    const revenueInput = $('#form-revenue');
+    if (!basePriceInput || !adjustmentInput || !revenueInput) return;
+
+    const basePrice = toSafeNumber(basePriceInput.value, 0);
+    const revenue = toSafeNumber(revenueInput.value, 0);
+    const adjustment = revenue - basePrice;
+    adjustmentInput.value = String(adjustment);
+    if (totalPriceInput) totalPriceInput.value = String(revenue);
+  }
+
+  function syncAdjustmentFromTotalInput() {
+    const basePriceInput = $('#form-base-price');
+    const adjustmentInput = $('#form-price-adjustment');
+    const totalPriceInput = $('#form-total-price');
+    const revenueInput = $('#form-revenue');
+    if (!basePriceInput || !adjustmentInput || !totalPriceInput) return;
+
+    const basePrice = toSafeNumber(basePriceInput.value, 0);
+    const total = toSafeNumber(totalPriceInput.value, 0);
+    const adjustment = total - basePrice;
+    adjustmentInput.value = String(adjustment);
+    if (revenueInput) revenueInput.value = String(total);
+  }
+
+  function handlePlanSelectChange(event) {
+    const selectedValue = event?.target?.value || '';
+    const selectedPlan = findPlanMasterByValue(selectedValue);
+    if (!selectedPlan) return;
+
+    const planNameInput = $('#form-plan-name');
+    const basePriceInput = $('#form-base-price');
+    const optionsInput = $('#form-plan-options');
+    const adjustmentInput = $('#form-price-adjustment');
+
+    if (planNameInput) planNameInput.value = selectedPlan.name;
+    if (basePriceInput) basePriceInput.value = String(toSafeNumber(selectedPlan.basePrice, 0));
+    if (optionsInput) optionsInput.value = selectedPlan.defaultOptions || '';
+    if (adjustmentInput) adjustmentInput.value = '0';
+    syncTotalsFromPlanPricing();
+  }
+
   function updateCurrency(currency) {
     if (!CURRENCY_CONFIG[currency]) return;
     currentCurrency = currency;
@@ -439,20 +548,45 @@
 
   // ===== Populate Select Options =====
   function populateSelects() {
-    const keys = ['plan', 'costume', 'hairMakeup'];
-    keys.forEach(key => {
+    const planSelect = $('#form-plan');
+    if (planSelect) {
+      const curVal = planSelect.value;
+      planSelect.innerHTML = `<option value="">${t('selectDefault')}</option>`;
+      const plans = Array.isArray(planMaster) ? planMaster : [];
+      plans.forEach((plan) => {
+        const opt = document.createElement('option');
+        opt.value = plan.id;
+        opt.textContent = plan.name;
+        planSelect.appendChild(opt);
+      });
+
+      if (curVal) {
+        const matched = findPlanMasterByValue(curVal);
+        if (matched) {
+          planSelect.value = matched.id;
+        } else {
+          const legacyOpt = document.createElement('option');
+          legacyOpt.value = curVal;
+          legacyOpt.textContent = curVal;
+          planSelect.appendChild(legacyOpt);
+          planSelect.value = curVal;
+        }
+      }
+    }
+
+    const keys = ['costume', 'hairMakeup'];
+    keys.forEach((key) => {
       const sel = $(`#form-${key}`);
       if (!sel) return;
       const curVal = sel.value;
       sel.innerHTML = `<option value="">${t('selectDefault')}</option>`;
       const opts = options[key] || [];
-      opts.forEach(o => {
+      opts.forEach((o) => {
         const opt = document.createElement('option');
         opt.value = o;
         opt.textContent = o;
         sel.appendChild(opt);
       });
-      // Add "Other" option
       const otherOpt = document.createElement('option');
       otherOpt.value = '__other__';
       otherOpt.textContent = t('selectOther');
@@ -740,7 +874,7 @@
         <td class="customer-name">${escapeHtml(c.customerName || '')}</td>
         <td>${escapeHtml(c.contact || '')}</td>
         <td>${formatDate(c.meetingDate)}</td>
-        <td><span class="badge badge-purple">${escapeHtml(c.plan || '—')}</span></td>
+        <td><span class="badge badge-purple">${escapeHtml(resolveCustomerPlanName(c))}</span></td>
         <td style="font-weight:600;color:var(--text-primary);">${formatCurrency(c.revenue)}</td>
         <td>${c.paymentChecked ? `<span class="badge badge-success">${t('paid')}</span>` : `<span class="badge badge-warning">${t('unpaid')}</span>`}</td>
         <td><span class="badge badge-cyan">${escapeHtml(getPhotographerName(c.assignedTo))}</span></td>
@@ -983,14 +1117,17 @@
         if (f.type === 'checkbox') {
           el.checked = !!c[f.key];
         } else if (f.type === 'select') {
-          const val = c[f.key] || '';
+          const rawVal = f.key === 'plan' ? (c.planMasterId || c[f.key] || '') : (c[f.key] || '');
+          const val = f.key === 'plan'
+            ? (findPlanMasterByValue(rawVal)?.id || rawVal)
+            : rawVal;
           if (val && el.tagName === 'SELECT') {
             let found = false;
             for (const opt of el.options) { if (opt.value === val) { found = true; break; } }
             if (!found) {
               const opt = document.createElement('option');
               opt.value = val; opt.textContent = val;
-              el.insertBefore(opt, el.lastElementChild);
+              el.appendChild(opt);
             }
             el.value = val;
           }
@@ -1002,10 +1139,12 @@
       const planDetails = normalizePlanDetails(c.planDetails, c.revenue);
       const planNameInput = $('#form-plan-name');
       const basePriceInput = $('#form-base-price');
+      const adjustmentInput = $('#form-price-adjustment');
       const optionsInput = $('#form-plan-options');
       const totalPriceInput = $('#form-total-price');
       if (planNameInput) planNameInput.value = planDetails.planName;
       if (basePriceInput) basePriceInput.value = String(planDetails.basePrice);
+      if (adjustmentInput) adjustmentInput.value = String(planDetails.totalPrice - planDetails.basePrice);
       if (optionsInput) optionsInput.value = planDetails.options;
       if (totalPriceInput) totalPriceInput.value = String(planDetails.totalPrice);
 
@@ -1014,10 +1153,12 @@
       $('#modal-title').textContent = t('modalAddTitle');
       const planNameInput = $('#form-plan-name');
       const basePriceInput = $('#form-base-price');
+      const adjustmentInput = $('#form-price-adjustment');
       const optionsInput = $('#form-plan-options');
       const totalPriceInput = $('#form-total-price');
       if (planNameInput) planNameInput.value = '';
       if (basePriceInput) basePriceInput.value = '';
+      if (adjustmentInput) adjustmentInput.value = '0';
       if (optionsInput) optionsInput.value = '';
       if (totalPriceInput) totalPriceInput.value = '';
       renderCustomFields();
@@ -1054,15 +1195,34 @@
     });
     data.customFields = customFields;
 
+    const planSelect = $('#form-plan');
+    const selectedPlan = findPlanMasterByValue(planSelect?.value || '');
+    if (selectedPlan) {
+      data.planMasterId = selectedPlan.id;
+      data.plan = selectedPlan.name;
+    } else {
+      data.planMasterId = data.plan || '';
+    }
+
     const planNameInput = $('#form-plan-name');
     const basePriceInput = $('#form-base-price');
+    const adjustmentInput = $('#form-price-adjustment');
     const optionsInput = $('#form-plan-options');
     const totalPriceInput = $('#form-total-price');
+    const revenueInput = $('#form-revenue');
+    const basePrice = toSafeNumber(basePriceInput?.value, 0);
+    const adjustment = toSafeNumber(adjustmentInput?.value, 0);
+    const totalFromAdjustment = basePrice + adjustment;
+    const finalRevenue = totalFromAdjustment;
+    if (totalPriceInput) totalPriceInput.value = String(finalRevenue);
+    if (revenueInput) revenueInput.value = String(finalRevenue);
+    data.revenue = finalRevenue;
+
     const rawPlanDetails = {
-      planName: planNameInput?.value?.trim() || '',
-      basePrice: toSafeNumber(basePriceInput?.value, 0),
-      options: optionsInput?.value || '',
-      totalPrice: totalPriceInput?.value,
+      planName: planNameInput?.value?.trim() || selectedPlan?.name || '',
+      basePrice,
+      options: optionsInput?.value || selectedPlan?.defaultOptions || '',
+      totalPrice: finalRevenue,
     };
     data.planDetails = normalizePlanDetails(rawPlanDetails, data.revenue);
 
@@ -1095,7 +1255,7 @@
     $('#detail-contact').textContent = c.contact || '—';
     $('#detail-shooting-date').textContent = formatDate(c.shootingDate);
     $('#detail-location').textContent = c.location || '—';
-    $('#detail-plan').textContent = c.plan || '—';
+    $('#detail-plan').textContent = resolveCustomerPlanName(c);
     $('#detail-revenue').textContent = formatCurrency(c.revenue);
     $('#detail-payment').innerHTML = c.paymentChecked ? `<span class="badge badge-success">${t('paid')}</span>` : `<span class="badge badge-warning">${t('unpaid')}</span>`;
     $('#detail-notes').textContent = c.notes || '—';
@@ -1104,7 +1264,7 @@
     const detailBasePrice = $('#detail-base-price');
     const detailPlanOptions = $('#detail-plan-options');
     const detailTotalPrice = $('#detail-total-price');
-    if (detailPlanName) detailPlanName.textContent = planDetails.planName || '—';
+    if (detailPlanName) detailPlanName.textContent = planDetails.planName || resolveCustomerPlanName(c);
     if (detailBasePrice) detailBasePrice.textContent = formatCurrency(planDetails.basePrice);
     if (detailPlanOptions) detailPlanOptions.textContent = planDetails.options || '—';
     if (detailTotalPrice) detailTotalPrice.textContent = formatCurrency(planDetails.totalPrice);
@@ -1176,7 +1336,56 @@
     container.innerHTML = '';
     const currencySelect = $('#currency-select');
     if (currencySelect) currencySelect.value = currentCurrency;
-    const keys = ['plan', 'costume', 'hairMakeup'];
+
+    const planSection = document.createElement('div');
+    planSection.className = 'settings-section';
+    planSection.innerHTML = '<h3>プラン管理</h3>';
+    const planList = document.createElement('div');
+    planList.className = 'settings-item-list';
+    if (planMaster.length === 0) {
+      const empty = document.createElement('div');
+      empty.className = 'settings-item';
+      empty.innerHTML = '<span>登録済みプランはありません</span>';
+      planList.appendChild(empty);
+    } else {
+      planMaster.forEach((plan, index) => {
+        const item = document.createElement('div');
+        item.className = 'settings-item';
+        item.innerHTML = `
+          <div style="flex:1;">
+            <div style="font-weight:600;">${escapeHtml(plan.name)}</div>
+            <div style="font-size:0.85rem;color:var(--text-muted);">${formatCurrency(plan.basePrice)}</div>
+            <div style="font-size:0.8rem;color:var(--text-muted);white-space:pre-wrap;">${escapeHtml(plan.defaultOptions || 'オプション説明なし')}</div>
+          </div>
+          <div style="display:flex; gap:6px;">
+            <button class="btn-icon-sm" onclick="editPlanMaster(${index})">✏️</button>
+            <button class="btn-icon-sm" onclick="removePlanMaster(${index})">✕</button>
+          </div>
+        `;
+        planList.appendChild(item);
+      });
+    }
+    planSection.appendChild(planList);
+
+    const planAddBox = document.createElement('div');
+    planAddBox.className = 'settings-add-box';
+    planAddBox.style.display = 'grid';
+    planAddBox.style.gridTemplateColumns = '1fr';
+    planAddBox.style.gap = '8px';
+    planAddBox.innerHTML = `
+      <input type="hidden" id="edit-plan-index" value="" />
+      <input type="text" id="add-plan-name" placeholder="プラン名 (例: Standard)" />
+      <input type="number" id="add-plan-base-price" min="0" step="1" placeholder="基本料金 (例: 120000)" />
+      <textarea id="add-plan-default-options" placeholder="デフォルトのオプション説明" style="min-height:70px;"></textarea>
+      <div style="display:flex; gap:8px;">
+        <button class="btn btn-primary btn-sm" onclick="addPlanMaster()">${t('settingsAddBtn')}</button>
+        <button class="btn btn-secondary btn-sm" onclick="resetPlanMasterForm()">クリア</button>
+      </div>
+    `;
+    planSection.appendChild(planAddBox);
+    container.appendChild(planSection);
+
+    const keys = ['costume', 'hairMakeup'];
     keys.forEach(key => {
       const section = document.createElement('div');
       section.className = 'settings-section';
@@ -1206,6 +1415,78 @@
       container.appendChild(section);
     });
   }
+
+  window.resetPlanMasterForm = function () {
+    const editInput = $('#edit-plan-index');
+    const nameInput = $('#add-plan-name');
+    const baseInput = $('#add-plan-base-price');
+    const optionInput = $('#add-plan-default-options');
+    if (editInput) editInput.value = '';
+    if (nameInput) nameInput.value = '';
+    if (baseInput) baseInput.value = '';
+    if (optionInput) optionInput.value = '';
+  };
+
+  window.editPlanMaster = function (index) {
+    const plan = planMaster[index];
+    if (!plan) return;
+    const editInput = $('#edit-plan-index');
+    const nameInput = $('#add-plan-name');
+    const baseInput = $('#add-plan-base-price');
+    const optionInput = $('#add-plan-default-options');
+    if (editInput) editInput.value = String(index);
+    if (nameInput) nameInput.value = plan.name;
+    if (baseInput) baseInput.value = String(plan.basePrice);
+    if (optionInput) optionInput.value = plan.defaultOptions || '';
+  };
+
+  window.addPlanMaster = function () {
+    const editInput = $('#edit-plan-index');
+    const nameInput = $('#add-plan-name');
+    const baseInput = $('#add-plan-base-price');
+    const optionInput = $('#add-plan-default-options');
+    const name = nameInput?.value?.trim() || '';
+    if (!name) {
+      showToast('プラン名を入力してください。', 'error');
+      return;
+    }
+
+    const editIndexRaw = editInput?.value ?? '';
+    const editIndex = editIndexRaw === '' ? -1 : Number(editIndexRaw);
+    const hasEditTarget = Number.isInteger(editIndex) && editIndex >= 0 && editIndex < planMaster.length;
+    const duplicateIndex = planMaster.findIndex((plan, idx) => idx !== editIndex && plan.name.toLowerCase() === name.toLowerCase());
+    if (duplicateIndex !== -1) {
+      showToast('同名のプランが既に存在します。', 'error');
+      return;
+    }
+
+    const nextPlan = normalizePlanMasterItem({
+      id: hasEditTarget ? planMaster[editIndex].id : generateId(),
+      name,
+      basePrice: baseInput?.value,
+      defaultOptions: optionInput?.value || '',
+    });
+
+    if (hasEditTarget) {
+      planMaster[editIndex] = nextPlan;
+    } else {
+      planMaster.push(nextPlan);
+    }
+    savePlanMaster(planMaster);
+    window.resetPlanMasterForm();
+    renderSettings();
+    populateSelects();
+  };
+
+  window.removePlanMaster = function (index) {
+    if (!planMaster[index]) return;
+    if (!confirm(t('confirmDeleteMessage') || 'Are you sure?')) return;
+    planMaster.splice(index, 1);
+    savePlanMaster(planMaster);
+    window.resetPlanMasterForm();
+    renderSettings();
+    populateSelects();
+  };
 
   window.addOption = function (key) {
     const input = $(`#add-${key}`);
@@ -1238,7 +1519,7 @@
   // ===== Message Analyzer Integration =====
   // ===== Import/Export =====
   function handleSyncExportClick() {
-    const data = { customers, options, exportedAt: new Date().toISOString() };
+    const data = { customers, options, planMaster, exportedAt: new Date().toISOString() };
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -1260,8 +1541,10 @@
       try {
         const data = JSON.parse(event.target.result);
         const stats = await window.SyncManager.mergeData(data);
+        if (Array.isArray(data.planMaster)) savePlanMaster(data.planMaster);
         customers = loadCustomers();
         options = loadOptions();
+        planMaster = loadPlanMaster();
         updateLanguage(currentLang);
         showToast(`Imported: ${stats.customers} new, ${stats.updated} updated, ${stats.team} members.`);
       } catch (err) {
@@ -1352,7 +1635,7 @@
         if (!eventDate || !eventDate.startsWith(monthStr)) return;
 
         const customerName = c.customerName || '未設定';
-        const plan = c.plan || '未設定';
+        const plan = resolveCustomerPlanName(c);
         const contact = c.contact || '未設定';
         const notes = c.notes || 'なし';
         const summary = `${df.icon} ${df.label} - ${customerName}`;
@@ -2015,6 +2298,11 @@
     bindEventOnce(document.getElementById('lang-select'), 'change', handleLanguageSelectChange, 'lang-select-change');
     bindEventOnce(document.getElementById('currency-select'), 'change', handleCurrencySelectChange, 'currency-select-change');
     bindEventOnce(document.getElementById('btn-theme'), 'click', toggleTheme, 'theme-toggle-click');
+    bindEventOnce(document.getElementById('form-plan'), 'change', handlePlanSelectChange, 'form-plan-select-change');
+    bindEventOnce(document.getElementById('form-base-price'), 'input', syncTotalsFromPlanPricing, 'form-base-price-input');
+    bindEventOnce(document.getElementById('form-price-adjustment'), 'input', syncTotalsFromPlanPricing, 'form-price-adjustment-input');
+    bindEventOnce(document.getElementById('form-revenue'), 'input', syncAdjustmentFromRevenueInput, 'form-revenue-input');
+    bindEventOnce(document.getElementById('form-total-price'), 'input', syncAdjustmentFromTotalInput, 'form-total-price-input');
     bindEventOnce(document.getElementById('btn-add'), 'click', handleAddCustomerClick, 'add-customer-click');
     bindEventOnce(document.getElementById('btn-settings'), 'click', handleOpenSettingsClick, 'open-settings-click');
     bindEventOnce(document.getElementById('btn-sync-export'), 'click', handleSyncExportClick, 'sync-export-click');
@@ -2062,7 +2350,7 @@
     bindFeatureEventListeners();
 
     // Hook dynamic "Other" behavior after elements are present.
-    const keys_to_hook = ['plan', 'costume', 'hairMakeup'];
+    const keys_to_hook = ['costume', 'hairMakeup'];
     keys_to_hook.forEach(k => hookSelectOther(k));
     hookPhotographerOther();
 
@@ -2110,6 +2398,13 @@
     if (!CURRENCY_CONFIG[currentCurrency]) currentCurrency = 'USD';
     customers = loadCustomers();
     options = loadOptions();
+    planMaster = loadPlanMaster();
+    if (planMaster.length === 0 && Array.isArray(options.plan) && options.plan.length > 0) {
+      planMaster = options.plan
+        .filter((name) => typeof name === 'string' && name.trim())
+        .map((name) => normalizePlanMasterItem({ name }));
+      savePlanMaster(planMaster);
+    }
     calendarFilters = loadCalendarFilters();
   }
 
