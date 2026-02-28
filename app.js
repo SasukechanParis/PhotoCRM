@@ -2100,6 +2100,54 @@
 
   window.debugHideLoginScreen = debugHideLoginScreen;
 
+  function forceShowLoggedInUi() {
+    const authScreen = document.getElementById('auth-screen');
+    const appContainer = document.getElementById('app-container');
+    if (authScreen) authScreen.style.display = 'none';
+    if (appContainer) appContainer.style.display = 'block';
+  }
+
+  async function getCurrentUserAsyncWithTimeout(timeoutMs = 5000) {
+    console.log(`🔍 getCurrentUserAsync start (${timeoutMs}ms timeout)`);
+    let timeoutId = null;
+    let timedOut = false;
+
+    try {
+      const user = await Promise.race([
+        window.FirebaseService.getCurrentUserAsync(),
+        new Promise((resolve) => {
+          timeoutId = setTimeout(() => {
+            timedOut = true;
+            console.log(`⏱ getCurrentUserAsync timeout after ${timeoutMs}ms`);
+            resolve(null);
+          }, timeoutMs);
+        }),
+      ]);
+
+      if (!timedOut) {
+        console.log('🔍 getCurrentUserAsync resolved:', user ? user.email : 'none');
+      }
+      return user || null;
+    } catch (err) {
+      console.error('getCurrentUserAsync failed', err);
+      console.log('🔍 getCurrentUserAsync resolved: none (error)');
+      return null;
+    } finally {
+      if (timeoutId) clearTimeout(timeoutId);
+    }
+  }
+
+  async function handleAuthStateSafely(user) {
+    try {
+      await handleAuthState(user);
+    } catch (err) {
+      console.error('Auth update error:', err);
+      showToast('クラウドデータの読み込みに失敗しました。再度お試しください。');
+    } finally {
+      forceShowLoggedInUi();
+    }
+  }
+
   async function handleAuthState(user) {
     // UI control is handled by onAuthChanged. This function handles data loading only.
     const resolvedUser = user || window.FirebaseService?.getCurrentUser?.() || null;
@@ -2143,17 +2191,35 @@
       return;
     }
 
+    let authCheckSettled = false;
+    const authCheckFailsafeTimer = setTimeout(() => {
+      if (authCheckSettled) return;
+      console.warn('⏱ Auth check failsafe fired after 10s');
+      const fallbackUser = window.FirebaseService?.getCurrentUser?.() || null;
+      if (fallbackUser) {
+        isLoggedIn = true;
+        setAuthScreenState('loggedIn', fallbackUser);
+        forceShowLoggedInUi();
+      } else {
+        isLoggedIn = false;
+        setAuthScreenState('loggedOut');
+      }
+      authCheckSettled = true;
+    }, 10000);
+
     try {
       await window.FirebaseService.whenReady();
     } catch (err) {
       console.error('Firebase initialization failed', err);
       showToast('Firebase初期化に失敗しました。');
       setAuthScreenState('loggedOut');
+      authCheckSettled = true;
+      clearTimeout(authCheckFailsafeTimer);
       return;
     }
 
     // Check if a user session already exists before waiting for onAuthChanged
-    const existingUser = await window.FirebaseService.getCurrentUserAsync().catch(() => null);
+    const existingUser = await getCurrentUserAsyncWithTimeout(5000);
     console.log('🔍 Existing session check:', existingUser ? existingUser.email : 'none');
 
     if (existingUser) {
@@ -2164,11 +2230,13 @@
       if (authScreen) authScreen.style.display = 'none';
       if (appContainer) appContainer.style.display = 'block';
       setAuthScreenState('loggedIn', existingUser);
-      handleAuthState(existingUser).catch(err => console.error('Auth update error:', err));
+      handleAuthStateSafely(existingUser);
     } else {
       // No existing session — show login screen immediately, no delay
       setAuthScreenState('loggedOut');
     }
+    authCheckSettled = true;
+    clearTimeout(authCheckFailsafeTimer);
 
     // onAuthChanged handles subsequent login/logout events
     isLoggedIn = !!existingUser;
@@ -2184,7 +2252,7 @@
           if (authScreen) authScreen.style.display = 'none';
           if (appContainer) appContainer.style.display = 'block';
           setAuthScreenState('loggedIn', user);
-          handleAuthState(user).catch(err => console.error('Auth update error:', err));
+          handleAuthStateSafely(user);
         }
       } else {
         if (isLoggedIn) {
