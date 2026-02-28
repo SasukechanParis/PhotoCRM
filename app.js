@@ -2107,34 +2107,42 @@
     if (appContainer) appContainer.style.display = 'block';
   }
 
-  async function getCurrentUserAsyncWithTimeout(timeoutMs = 5000) {
+  async function getCurrentUserAsync() {
+    const timeoutMs = 2000;
     console.log(`🔍 getCurrentUserAsync start (${timeoutMs}ms timeout)`);
-    let timeoutId = null;
-    let timedOut = false;
 
-    try {
-      const user = await Promise.race([
-        window.FirebaseService.getCurrentUserAsync(),
-        new Promise((resolve) => {
-          timeoutId = setTimeout(() => {
-            timedOut = true;
-            console.log(`⏱ getCurrentUserAsync timeout after ${timeoutMs}ms`);
-            resolve(null);
-          }, timeoutMs);
-        }),
-      ]);
-
-      if (!timedOut) {
-        console.log('🔍 getCurrentUserAsync resolved:', user ? user.email : 'none');
-      }
-      return user || null;
-    } catch (err) {
-      console.error('getCurrentUserAsync failed', err);
-      console.log('🔍 getCurrentUserAsync resolved: none (error)');
-      return null;
-    } finally {
-      if (timeoutId) clearTimeout(timeoutId);
+    const immediateUser = window.FirebaseService?.getCurrentUser?.() || null;
+    if (immediateUser) {
+      console.log('🔍 getCurrentUserAsync resolved (immediate):', immediateUser.email || 'none');
+      return immediateUser;
     }
+
+    return new Promise((resolve) => {
+      let settled = false;
+      let unsubscribe = null;
+
+      const finish = (user, reason) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timeoutId);
+        if (typeof unsubscribe === 'function') unsubscribe();
+        console.log(`🔍 getCurrentUserAsync resolved (${reason}):`, user ? user.email : 'none');
+        resolve(user || null);
+      };
+
+      const timeoutId = setTimeout(() => {
+        finish(null, 'timeout');
+      }, timeoutMs);
+
+      try {
+        unsubscribe = window.FirebaseService.onAuthChanged((user) => {
+          finish(user || null, 'auth');
+        });
+      } catch (err) {
+        console.error('getCurrentUserAsync listener setup failed', err);
+        finish(null, 'error');
+      }
+    });
   }
 
   async function handleAuthStateSafely(user) {
@@ -2168,6 +2176,9 @@
     } catch (err) {
       console.error('Cloud data load failed', err);
       showToast('クラウドデータの読み込みに失敗しました。再度お試しください。');
+    } finally {
+      const appContainer = document.getElementById('app-container');
+      if (appContainer) appContainer.style.display = 'block';
     }
   }
 
@@ -2184,17 +2195,10 @@
     setAuthScreenState('checking');
     registerPwaServiceWorker();
 
-    if (!window.FirebaseService) {
-      console.error('FirebaseService is not available.');
-      showToast('Firebase設定の読み込みに失敗しました。');
-      setAuthScreenState('loggedOut');
-      return;
-    }
-
     let authCheckSettled = false;
     const authCheckFailsafeTimer = setTimeout(() => {
       if (authCheckSettled) return;
-      console.warn('⏱ Auth check failsafe fired after 10s');
+      console.warn('⏱ Auth check failsafe fired after 3s');
       const fallbackUser = window.FirebaseService?.getCurrentUser?.() || null;
       if (fallbackUser) {
         isLoggedIn = true;
@@ -2205,7 +2209,16 @@
         setAuthScreenState('loggedOut');
       }
       authCheckSettled = true;
-    }, 10000);
+    }, 3000);
+
+    if (!window.FirebaseService) {
+      console.error('FirebaseService is not available.');
+      showToast('Firebase設定の読み込みに失敗しました。');
+      setAuthScreenState('loggedOut');
+      authCheckSettled = true;
+      clearTimeout(authCheckFailsafeTimer);
+      return;
+    }
 
     try {
       await window.FirebaseService.whenReady();
@@ -2219,7 +2232,7 @@
     }
 
     // Check if a user session already exists before waiting for onAuthChanged
-    const existingUser = await getCurrentUserAsyncWithTimeout(5000);
+    const existingUser = await getCurrentUserAsync();
     console.log('🔍 Existing session check:', existingUser ? existingUser.email : 'none');
 
     if (existingUser) {
