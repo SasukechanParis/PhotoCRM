@@ -1099,15 +1099,44 @@
     });
   }
 
+  function positionListColumnsMenu() {
+    if (!listColumnsMenu || !listColumnsButton) return;
+    const buttonRect = listColumnsButton.getBoundingClientRect();
+    const viewportPadding = 8;
+    const maxWidth = Math.min(360, window.innerWidth - (viewportPadding * 2));
+    listColumnsMenu.style.width = `${Math.max(260, maxWidth)}px`;
+
+    let left = buttonRect.right - Math.max(260, maxWidth);
+    left = Math.max(viewportPadding, left);
+    if (left + Math.max(260, maxWidth) > window.innerWidth - viewportPadding) {
+      left = window.innerWidth - Math.max(260, maxWidth) - viewportPadding;
+    }
+
+    let top = buttonRect.bottom + 8;
+    const estimatedHeight = listColumnsMenu.offsetHeight || 320;
+    if (top + estimatedHeight > window.innerHeight - viewportPadding) {
+      top = Math.max(viewportPadding, buttonRect.top - estimatedHeight - 8);
+    }
+
+    listColumnsMenu.style.left = `${left}px`;
+    listColumnsMenu.style.top = `${top}px`;
+  }
+
+  function handleListColumnsViewportChange() {
+    if (!isListColumnsMenuOpen) return;
+    positionListColumnsMenu();
+  }
+
   function setListColumnsMenuOpen(isOpen) {
     if (!listColumnsMenu || !listColumnsButton) return;
     isListColumnsMenuOpen = !!isOpen;
     if (isListColumnsMenuOpen) {
       renderListColumnsMenu();
-      listColumnsMenu.style.zIndex = '99999';
+      listColumnsMenu.style.zIndex = '2147483647';
       listColumnsMenu.style.backgroundColor = '#ffffff';
       listColumnsMenu.style.display = 'block';
       listColumnsMenu.classList.add('active');
+      positionListColumnsMenu();
     } else {
       listColumnsMenu.classList.remove('active');
       listColumnsMenu.style.display = 'none';
@@ -3198,6 +3227,8 @@
     bindEventOnce(document, 'click', handleListColumnsOutsideClick, 'list-columns-outside-click');
     bindEventOnce(document, 'keydown', handleDashboardQuickMenuEscape, 'dashboard-quick-menu-escape');
     bindEventOnce(document, 'keydown', handleListColumnsEscape, 'list-columns-escape');
+    bindEventOnce(window, 'resize', handleListColumnsViewportChange, 'list-columns-viewport-resize');
+    bindEventOnce(window, 'scroll', handleListColumnsViewportChange, 'list-columns-viewport-scroll', true);
     bindEventOnce(document.getElementById('form-plan'), 'change', handlePlanSelectChange, 'form-plan-select-change');
     bindEventOnce(document.getElementById('form-costume'), 'change', updateCostumePriceFromSelection, 'form-costume-select-change');
     bindEventOnce(document.getElementById('form-hairMakeup'), 'change', updateHairMakeupPriceFromSelection, 'form-hairmakeup-select-change');
