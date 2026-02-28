@@ -1928,11 +1928,14 @@
       clearTimeout(authNullTimer);
       authNullTimer = null;
     }
-    setAuthScreenState('loggedOut');
-    window.FirebaseService.signOut().catch((err) => {
-      console.error('Google logout failed', err);
-      showToast('ログアウトに失敗しました。');
-    });
+    window.FirebaseService.signOut()
+      .catch((err) => {
+        console.error('Google logout failed', err);
+        showToast('ログアウトに失敗しました。');
+      })
+      .finally(() => {
+        window.location.reload();
+      });
   }
 
   function bindCoreUIEventListeners() {
@@ -2115,44 +2118,6 @@
     if (appContainer) appContainer.style.display = 'block';
   }
 
-  async function getCurrentUserAsync() {
-    const timeoutMs = 2000;
-    console.log(`🔍 getCurrentUserAsync start (${timeoutMs}ms timeout)`);
-
-    const immediateUser = window.FirebaseService?.getCurrentUser?.() || null;
-    if (immediateUser) {
-      console.log('🔍 getCurrentUserAsync resolved (immediate):', immediateUser.email || 'none');
-      return immediateUser;
-    }
-
-    return new Promise((resolve) => {
-      let settled = false;
-      let unsubscribe = null;
-
-      const finish = (user, reason) => {
-        if (settled) return;
-        settled = true;
-        clearTimeout(timeoutId);
-        if (typeof unsubscribe === 'function') unsubscribe();
-        console.log(`🔍 getCurrentUserAsync resolved (${reason}):`, user ? user.email : 'none');
-        resolve(user || null);
-      };
-
-      const timeoutId = setTimeout(() => {
-        finish(null, 'timeout');
-      }, timeoutMs);
-
-      try {
-        unsubscribe = window.FirebaseService.onAuthChanged((user) => {
-          finish(user || null, 'auth');
-        });
-      } catch (err) {
-        console.error('getCurrentUserAsync listener setup failed', err);
-        finish(null, 'error');
-      }
-    });
-  }
-
   async function handleAuthStateSafely(user) {
     try {
       await handleAuthState(user);
@@ -2203,28 +2168,10 @@
     setAuthScreenState('checking');
     registerPwaServiceWorker();
 
-    let authCheckSettled = false;
-    const authCheckFailsafeTimer = setTimeout(() => {
-      if (authCheckSettled) return;
-      console.warn('⏱ Auth check failsafe fired after 3s');
-      const fallbackUser = window.FirebaseService?.getCurrentUser?.() || null;
-      if (fallbackUser) {
-        isLoggedIn = true;
-        setAuthScreenState('loggedIn', fallbackUser);
-        forceShowLoggedInUi();
-      } else {
-        isLoggedIn = false;
-        setAuthScreenState('loggedOut');
-      }
-      authCheckSettled = true;
-    }, 3000);
-
     if (!window.FirebaseService) {
       console.error('FirebaseService is not available.');
       showToast('Firebase設定の読み込みに失敗しました。');
       setAuthScreenState('loggedOut');
-      authCheckSettled = true;
-      clearTimeout(authCheckFailsafeTimer);
       return;
     }
 
@@ -2234,53 +2181,43 @@
       console.error('Firebase initialization failed', err);
       showToast('Firebase初期化に失敗しました。');
       setAuthScreenState('loggedOut');
-      authCheckSettled = true;
-      clearTimeout(authCheckFailsafeTimer);
       return;
     }
 
-    // Check if a user session already exists before waiting for onAuthChanged
-    const existingUser = await getCurrentUserAsync();
-    console.log('🔍 Existing session check:', existingUser ? existingUser.email : 'none');
-
-    if (existingUser) {
-      // Session already valid — show app immediately
-      isLoggedIn = true;
-      const authScreen = document.getElementById('auth-screen');
-      const appContainer = document.getElementById('app-container');
-      if (authScreen) authScreen.style.display = 'none';
-      if (appContainer) appContainer.style.display = 'block';
-      setAuthScreenState('loggedIn', existingUser);
-      handleAuthStateSafely(existingUser);
-    } else {
-      // No existing session — show login screen immediately, no delay
-      setAuthScreenState('loggedOut');
-    }
-    authCheckSettled = true;
-    clearTimeout(authCheckFailsafeTimer);
-
-    // onAuthChanged handles subsequent login/logout events
-    isLoggedIn = !!existingUser;
+    // onAuthChanged is the single source of truth for auth state.
     window.FirebaseService.onAuthChanged((user) => {
       console.log("🔔 Auth State Changed. User:", user ? user.email : "LoggedOut");
 
       if (user) {
-        if (!isLoggedIn) {
-          // Fresh login via popup
-          isLoggedIn = true;
-          const authScreen = document.getElementById('auth-screen');
-          const appContainer = document.getElementById('app-container');
-          if (authScreen) authScreen.style.display = 'none';
-          if (appContainer) appContainer.style.display = 'block';
-          setAuthScreenState('loggedIn', user);
-          handleAuthStateSafely(user);
+        if (authNullTimer) {
+          clearTimeout(authNullTimer);
+          authNullTimer = null;
         }
-      } else {
-        if (isLoggedIn) {
-          // Genuine logout
-          isLoggedIn = false;
-          setAuthScreenState('loggedOut');
+        isLoggedIn = true;
+        setAuthScreenState('loggedIn', user);
+        handleAuthStateSafely(user);
+        return;
+      }
+
+      if (isLoggedIn) {
+        if (authNullTimer) clearTimeout(authNullTimer);
+        authNullTimer = setTimeout(() => {
+          authNullTimer = null;
+          const latestUser = window.FirebaseService?.getCurrentUser?.() || null;
+          if (!latestUser) {
+            isLoggedIn = false;
+            setAuthScreenState('loggedOut');
+          }
+        }, 1000);
+        return;
+      }
+
+      if (!isLoggedIn) {
+        if (authNullTimer) {
+          clearTimeout(authNullTimer);
+          authNullTimer = null;
         }
+        setAuthScreenState('loggedOut');
       }
     });
   });
