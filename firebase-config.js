@@ -1,6 +1,10 @@
 (function () {
   'use strict';
 
+  const GOOGLE_OAUTH_ACCESS_TOKEN_KEY = 'photocrm_google_oauth_access_token';
+  const GOOGLE_CALENDAR_SCOPE = 'https://www.googleapis.com/auth/calendar.events';
+  const GOOGLE_CALENDAR_READ_SCOPE = 'https://www.googleapis.com/auth/calendar.readonly';
+
   const firebaseConfig = {
     apiKey: "AIzaSyD6fb5NWN0bAe0vW1Z9piQxv9aYE0e-tGs",
     authDomain: "photocrm-app.firebaseapp.com",
@@ -32,6 +36,9 @@
     'photocrm_currency',
     'photocrm_custom_fields',
     'photocrm_calendar_filters',
+    'photocrm_form_field_visibility',
+    'photocrm_google_calendar_auto_sync',
+    'photocrm_google_calendar_selected_id',
     'preferred_view'
   ];
 
@@ -43,6 +50,24 @@
 
   let redirectResolved = false;
   let redirectResultPromise = null;
+  let googleOAuthAccessToken = (() => {
+    try {
+      return localStorage.getItem(GOOGLE_OAUTH_ACCESS_TOKEN_KEY) || '';
+    } catch {
+      return '';
+    }
+  })();
+
+  function setGoogleOAuthAccessToken(token) {
+    const next = String(token || '').trim();
+    googleOAuthAccessToken = next;
+    try {
+      if (next) localStorage.setItem(GOOGLE_OAUTH_ACCESS_TOKEN_KEY, next);
+      else localStorage.removeItem(GOOGLE_OAUTH_ACCESS_TOKEN_KEY);
+    } catch {
+      // no-op
+    }
+  }
 
   async function ensureInitialized() {
     await firebaseInitPromise;
@@ -90,7 +115,11 @@
     return userRootRef(uid).collection('meta').doc('migration');
   }
 
-  function userClientsRef(uid) {
+  function userProjectsRef(uid) {
+    return userRootRef(uid).collection('projects');
+  }
+
+  function userLegacyClientsRef(uid) {
     return userRootRef(uid).collection('clients');
   }
 
@@ -115,6 +144,19 @@
     await batch.commit();
   }
 
+  async function mergeCollectionRecords(collectionRef, records) {
+    if (!Array.isArray(records) || records.length === 0) return;
+    const batch = db.batch();
+    records.forEach((record) => {
+      const docId = String(record.id || collectionRef.doc().id);
+      batch.set(collectionRef.doc(docId), {
+        ...record,
+        id: docId,
+      }, { merge: true });
+    });
+    await batch.commit();
+  }
+
 
   function hasLocalData(payload) {
     return Object.keys(payload).some((key) => {
@@ -125,29 +167,60 @@
     });
   }
 
+  function buildLocalDataSummary(payload = localMigrationPayload()) {
+    const customers = Array.isArray(payload.photocrm_customers) ? payload.photocrm_customers.length : 0;
+    const expenses = Array.isArray(payload.photocrm_expenses) ? payload.photocrm_expenses.length : 0;
+    return {
+      hasLocalData: customers > 0 || expenses > 0,
+      customers,
+      expenses,
+    };
+  }
+
+  async function getCloudDataSummary(uid) {
+    const [projectsSnap, legacyClientsSnap, expensesSnap] = await Promise.all([
+      userProjectsRef(uid).get(),
+      userLegacyClientsRef(uid).get(),
+      userExpensesRef(uid).get(),
+    ]);
+    const projects = projectsSnap.size;
+    const legacyClients = legacyClientsSnap.size;
+    const expenses = expensesSnap.size;
+    return {
+      projects,
+      legacyClients,
+      expenses,
+      hasCloudData: (projects + legacyClients + expenses) > 0,
+    };
+  }
+
   async function hasAnyCloudData(uid) {
-    const [settingsSnap, clientsSnap, expensesSnap] = await Promise.all([
+    const [settingsSnap, projectsSnap, legacyClientsSnap, expensesSnap] = await Promise.all([
       userMetaRef(uid).get(),
-      userClientsRef(uid).limit(1).get(),
+      userProjectsRef(uid).limit(1).get(),
+      userLegacyClientsRef(uid).limit(1).get(),
       userExpensesRef(uid).limit(1).get(),
     ]);
 
-    return settingsSnap.exists || !clientsSnap.empty || !expensesSnap.empty;
+    return settingsSnap.exists || !projectsSnap.empty || !legacyClientsSnap.empty || !expensesSnap.empty;
   }
 
-  async function migrateLocalDataToCloud(user) {
+  async function migrateLocalDataToCloud(user, options = {}) {
     const payload = localMigrationPayload();
     const uid = user.uid;
+    const overwrite = options.overwrite === true;
 
     const customers = normalizeRecordsForUser(payload.photocrm_customers || [], uid);
     const expenses = normalizeRecordsForUser(payload.photocrm_expenses || [], uid);
 
     if (customers.length) {
-      await overwriteCollection(userClientsRef(uid), customers);
+      if (overwrite) await overwriteCollection(userProjectsRef(uid), customers);
+      else await mergeCollectionRecords(userProjectsRef(uid), customers);
     }
 
     if (expenses.length) {
-      await overwriteCollection(userExpensesRef(uid), expenses);
+      if (overwrite) await overwriteCollection(userExpensesRef(uid), expenses);
+      else await mergeCollectionRecords(userExpensesRef(uid), expenses);
     }
 
     const settings = {};
@@ -166,20 +239,32 @@
       migratedAt: firebase.firestore.FieldValue.serverTimestamp(),
       customerCount: customers.length,
       expenseCount: expenses.length,
+      overwrite,
+      source: 'localStorage_manual_merge',
     }, { merge: true });
+
+    return {
+      customerCount: customers.length,
+      expenseCount: expenses.length,
+      overwrite,
+      hadLocalData: hasLocalData(payload),
+    };
   }
 
   async function loadCloudDataForUser(user) {
     const uid = user.uid;
-    const [settingsSnap, clientSnap, expenseSnap] = await Promise.all([
+    const [settingsSnap, projectSnap, legacyClientSnap, expenseSnap] = await Promise.all([
       userMetaRef(uid).get(),
-      userClientsRef(uid).get(),
+      userProjectsRef(uid).get(),
+      userLegacyClientsRef(uid).get(),
       userExpensesRef(uid).get(),
     ]);
 
+    const customerDocs = projectSnap.docs.length > 0 ? projectSnap.docs : legacyClientSnap.docs;
+
     const loaded = {
       ...(settingsSnap.exists ? settingsSnap.data() : {}),
-      photocrm_customers: clientSnap.docs.map((doc) => ({ id: doc.id, ...doc.data(), userId: uid })),
+      photocrm_customers: customerDocs.map((doc) => ({ id: doc.id, ...doc.data(), userId: uid })),
       photocrm_expenses: expenseSnap.docs.map((doc) => ({ id: doc.id, ...doc.data(), userId: uid })),
     };
 
@@ -215,7 +300,7 @@
 
     if (key === 'photocrm_customers') {
       const customers = normalizeRecordsForUser(value, user.uid);
-      await overwriteCollection(userClientsRef(user.uid), customers);
+      await overwriteCollection(userProjectsRef(user.uid), customers);
       return;
     }
 
@@ -252,6 +337,23 @@
     getAllCachedData() {
       return { ...cache };
     },
+    getLocalDataSummary() {
+      return buildLocalDataSummary();
+    },
+    async getCloudDataSummary() {
+      await ensureInitialized();
+      const user = auth.currentUser;
+      if (!user) return { projects: 0, legacyClients: 0, expenses: 0, hasCloudData: false };
+      return getCloudDataSummary(user.uid);
+    },
+    async mergeLocalDataToCloud(options = {}) {
+      await ensureInitialized();
+      const user = auth.currentUser;
+      if (!user) return { merged: false, reason: 'not_logged_in' };
+      const result = await migrateLocalDataToCloud(user, options);
+      await loadCloudDataForUser(user);
+      return { merged: true, ...result };
+    },
     isRedirectResolved() {
       return redirectResolved;
     },
@@ -272,18 +374,30 @@
       await ensureInitialized();
       const provider = new firebase.auth.GoogleAuthProvider();
       provider.setCustomParameters({ prompt: 'select_account' });
-      return auth.signInWithPopup(provider);
+      provider.addScope(GOOGLE_CALENDAR_SCOPE);
+      provider.addScope(GOOGLE_CALENDAR_READ_SCOPE);
+      const result = await auth.signInWithPopup(provider);
+      const credential = firebase.auth.GoogleAuthProvider.credentialFromResult(result);
+      setGoogleOAuthAccessToken(credential?.accessToken || '');
+      return result;
     },
     async signInWithPopup() {
       return this.signInWithGoogle();
     },
+    getGoogleAccessToken() {
+      return String(googleOAuthAccessToken || '');
+    },
     async signOut() {
       await ensureInitialized();
+      setGoogleOAuthAccessToken('');
       return auth.signOut();
     },
     onAuthChanged(callback) {
       // Register synchronously after whenReady() has been awaited by caller
-      return auth.onAuthStateChanged(callback);
+      return auth.onAuthStateChanged((user) => {
+        if (!user) setGoogleOAuthAccessToken('');
+        callback(user);
+      });
     },
     getCurrentUser() {
       return auth ? auth.currentUser : null;

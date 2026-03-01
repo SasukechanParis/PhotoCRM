@@ -1,0 +1,149 @@
+{
+  "customers": [],
+  "options": {
+    "plan": [],
+    "dynamicItemHints": [
+      "衣装",
+      "ヘアメイク",
+      "ブーケ"
+    ]
+  },
+  "planMaster": [
+    {
+      "name": "ハーフデイ",
+      "price": 30000,
+      "cost": 5000
+    }
+  ],
+  "dashboardConfig": [
+    {
+      "key": "totalCustomers",
+      "visible": true
+    },
+    {
+      "key": "monthlyShoots",
+      "visible": true
+    },
+    {
+      "key": "monthlyRevenue",
+      "visible": true
+    },
+    {
+      "key": "monthlyProfit",
+      "visible": true
+    },
+    {
+      "key": "yearlyRevenue",
+      "visible": true
+    },
+    {
+      "key": "yearlyExpense",
+      "visible": true
+    },
+    {
+      "key": "yearlyProfit",
+      "visible": true
+    },
+    {
+      "key": "unpaid",
+      "visible": true
+    },
+    {
+      "key": "expenseSection",
+      "visible": true
+    }
+  ],
+  "listColumnConfig": [
+    {
+      "key": "shootingDate",
+      "visible": true
+    },
+    {
+      "key": "inquiryDate",
+      "visible": false
+    },
+    {
+      "key": "contractDate",
+      "visible": false
+    },
+    {
+      "key": "customerName",
+      "visible": true
+    },
+    {
+      "key": "contact",
+      "visible": true
+    },
+    {
+      "key": "meetingDate",
+      "visible": false
+    },
+    {
+      "key": "plan",
+      "visible": true
+    },
+    {
+      "key": "revenue",
+      "visible": true
+    },
+    {
+      "key": "paymentChecked",
+      "visible": true
+    },
+    {
+      "key": "assignedTo",
+      "visible": false
+    }
+  ],
+  "contractTemplateText": "【撮影契約書】\n本契約は {{customer_name}} 様（以下「お客様」）と撮影事業者（以下「撮影者」）の間で締結されます。\n\n1. 撮影日: {{shooting_date}}\n2. 撮影プラン: {{plan_name}}\n3. 撮影場所: {{location}}\n4. 料金: {{total_price}}\n\n【キャンセルポリシー】\n- 撮影日の14日前まで: 無料\n- 撮影日の13日〜3日前: 料金の50%\n- 撮影前日〜当日: 料金の100%\n\n【納品】\n- 納品目安: 撮影日より30日以内\n- 納品形式: オンライン納品\n\n【同意】\n本契約内容を確認し、双方合意の上で撮影を実施します。",
+  "dynamicItemNameSuggestions": [
+    "衣装",
+    "ヘアメイク"
+  ],
+  "dynamicItemSuggestionMap": {
+    "ヘアメイク": [
+      {
+        "label": "フジタ",
+        "revenue": 40000,
+        "cost": 0
+      }
+    ],
+    "衣装": [
+      {
+        "label": "ヴェラウォン",
+        "revenue": 300000,
+        "cost": 80000
+      }
+    ],
+    "プラン": [
+      {
+        "label": "ハーフデイ",
+        "revenue": 30000,
+        "cost": 0
+      }
+    ]
+  },
+  "expenses": [],
+  "taxSettings": {
+    "enabled": false,
+    "rate": 10,
+    "label": "Tax",
+    "included": false,
+    "companyName": "",
+    "address": "",
+    "email": "",
+    "phone": "",
+    "bank": "",
+    "invoiceTemplate": "modern",
+    "invoiceFooterMessage": "この度はありがとうございます。"
+  },
+  "invoiceSenderProfile": {
+    "name": "",
+    "contact": ""
+  },
+  "theme": "light",
+  "language": "ja",
+  "currency": "JPY",
+  "exportedAt": "2026-03-01T13:07:00.167Z",
+  "backupType": "auto-daily"
+}

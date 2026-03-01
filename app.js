@@ -2,6 +2,7 @@
 
 (function () {
   'use strict';
+  const DEFAULT_PLAN_TAG_COLORS = ['#8b5cf6', '#7c3aed', '#6d28d9', '#a855f7', '#9333ea', '#7e22ce'];
   // ===== Storage Keys =====
   const STORAGE_KEY = 'photocrm_customers';
   const OPTIONS_KEY = 'photocrm_options';
@@ -20,70 +21,430 @@
   const CONTRACT_TEMPLATE_KEY = 'photocrm_contract_template';
   const DYNAMIC_ITEM_NAME_SUGGESTIONS_KEY = 'photocrm_dynamic_item_name_suggestions';
   const DYNAMIC_ITEM_SUGGESTIONS_KEY = 'photocrm_dynamic_item_suggestions';
-  const DEFAULT_INVOICE_MESSAGE = 'この度はありがとうございます。';
+  const STATUS_COLOR_MAP_KEY = 'photocrm_status_color_map';
+  const HERO_METRICS_VISIBLE_KEY = 'photocrm_hero_metrics_visible';
+  const HERO_METRICS_CONFIG_KEY = 'photocrm_hero_metrics_config';
+  const FORM_FIELD_VISIBILITY_KEY = 'photocrm_form_field_visibility';
+  const GOOGLE_CALENDAR_AUTO_SYNC_KEY = 'photocrm_google_calendar_auto_sync';
+  const GOOGLE_CALENDAR_SELECTED_ID_KEY = 'photocrm_google_calendar_selected_id';
+  const GOOGLE_CALENDAR_DEFAULT_ID = 'sasuke.photographe@gmail.com';
+  const LOCAL_GUEST_MODE_KEY = 'photocrm_local_guest_mode';
+  const IDB_MIRROR_DB_NAME = 'PholioDB';
+  const IDB_MIRROR_DB_VERSION = 1;
+  const IDB_MIRROR_STORE_NAME = 'kv_mirror';
+  const SAFE_MODE_MINIMAL_BOOT = false;
+  const FORCE_DARK_MODE = false;
+  const ENABLE_STATS_FEATURES = true;
+  const DEFAULT_INVOICE_MESSAGE_KEY = 'invoiceDefaultMessage';
   const FREE_PLAN_LIMIT = 30;
 
   const DASHBOARD_CARD_DEFINITIONS = [
-    { key: 'totalCustomers', labelKey: 'cardTotalCustomers', fallbackLabel: '総顧客数' },
-    { key: 'monthlyShoots', labelKey: 'cardMonthlyShoots', fallbackLabel: '今月の撮影' },
-    { key: 'monthlyRevenue', labelKey: 'cardMonthlyRevenue', fallbackLabel: '今月の売上' },
-    { key: 'monthlyProfit', labelKey: 'cardProfit', fallbackLabel: '利益' },
-    { key: 'yearlyRevenue', labelKey: 'yearlyRevenueTotal', fallbackLabel: '今年の総売上' },
-    { key: 'yearlyExpense', labelKey: 'yearlyExpenseTotal', fallbackLabel: '今年の総経費' },
-    { key: 'yearlyProfit', labelKey: 'yearlyProfitTotal', fallbackLabel: '今年の総利益' },
-    { key: 'unpaid', labelKey: 'cardUnpaid', fallbackLabel: '入金未確認' },
-    { key: 'expenseSection', labelKey: 'expenseTracking', fallbackLabel: '経費管理セクション' },
+    { key: 'totalCustomers', labelKey: 'cardTotalCustomers', fallbackLabel: 'Total Customers' },
+    { key: 'monthlyShoots', labelKey: 'cardMonthlyShoots', fallbackLabel: 'Monthly Shoots' },
+    { key: 'monthlyRevenue', labelKey: 'cardMonthlyRevenue', fallbackLabel: 'Monthly Revenue' },
+    { key: 'monthlyProfit', labelKey: 'cardProfit', fallbackLabel: 'Profit' },
+    { key: 'yearlyRevenue', labelKey: 'yearlyRevenueTotal', fallbackLabel: 'Yearly Revenue' },
+    { key: 'yearlyExpense', labelKey: 'yearlyExpenseTotal', fallbackLabel: 'Yearly Expense' },
+    { key: 'yearlyProfit', labelKey: 'yearlyProfitTotal', fallbackLabel: 'Yearly Profit' },
+    { key: 'unpaid', labelKey: 'cardUnpaid', fallbackLabel: 'Unpaid' },
+    { key: 'expenseSection', labelKey: 'expenseTracking', fallbackLabel: 'Expense Section' },
+  ];
+
+  const HERO_METRIC_DEFINITIONS = [
+    { key: 'monthlyNetProfit', labelKey: 'heroMetricMonthlyNetProfit', fallbackLabel: 'Monthly Net Profit' },
+    { key: 'averageMargin', labelKey: 'heroMetricAverageMargin', fallbackLabel: 'Average Profit Rate' },
+    { key: 'yearlyNetProfit', labelKey: 'heroMetricYearlyNetProfit', fallbackLabel: 'Yearly Net Profit' },
   ];
 
   const LIST_COLUMN_DEFINITIONS = [
-    { key: 'shootingDate', labelKey: 'thShootingDate', fallbackLabel: '撮影日', sortKey: 'shootingDate' },
-    { key: 'inquiryDate', labelKey: 'thInquiryDate', fallbackLabel: '問い合わせ日', sortKey: 'inquiryDate' },
-    { key: 'contractDate', labelKey: 'thContractDate', fallbackLabel: '成約日', sortKey: 'contractDate' },
-    { key: 'customerName', labelKey: 'thCustomerName', fallbackLabel: 'お客様名', sortKey: 'customerName' },
-    { key: 'contact', labelKey: 'thContact', fallbackLabel: '連絡先', sortKey: 'contact' },
-    { key: 'meetingDate', labelKey: 'thMeetingDate', fallbackLabel: '打ち合わせ日', sortKey: 'meetingDate' },
-    { key: 'plan', labelKey: 'thPlan', fallbackLabel: 'プラン', sortKey: 'plan' },
-    { key: 'revenue', labelKey: 'thRevenue', fallbackLabel: '売上', sortKey: 'revenue' },
-    { key: 'paymentChecked', labelKey: 'thPayment', fallbackLabel: '入金', sortKey: 'paymentChecked' },
-    { key: 'assignedTo', labelKey: 'thPhotographer', fallbackLabel: '担当', sortKey: 'assignedTo' },
+    { key: 'shootingDate', labelKey: 'thShootingDate', fallbackLabel: 'Shooting Date', sortKey: 'shootingDate' },
+    { key: 'inquiryDate', labelKey: 'thInquiryDate', fallbackLabel: 'Inquiry Date', sortKey: 'inquiryDate' },
+    { key: 'contractDate', labelKey: 'thContractDate', fallbackLabel: 'Contract Date', sortKey: 'contractDate' },
+    { key: 'customerName', labelKey: 'thCustomerName', fallbackLabel: 'Customer', sortKey: 'customerName' },
+    { key: 'workflowStatus', labelKey: 'thStatus', fallbackLabel: 'Status', sortKey: 'workflowStatus' },
+    { key: 'contact', labelKey: 'thContact', fallbackLabel: 'Contact', sortKey: 'contact' },
+    { key: 'meetingDate', labelKey: 'thMeetingDate', fallbackLabel: 'Meeting Date', sortKey: 'meetingDate' },
+    { key: 'plan', labelKey: 'thPlan', fallbackLabel: 'Plan', sortKey: 'plan' },
+    { key: 'revenue', labelKey: 'thRevenue', fallbackLabel: 'Revenue', sortKey: 'revenue' },
+    { key: 'paymentChecked', labelKey: 'thPayment', fallbackLabel: 'Payment', sortKey: 'paymentChecked' },
+    { key: 'assignedTo', labelKey: 'thPhotographer', fallbackLabel: 'Staff', sortKey: 'assignedTo' },
   ];
 
+  const FORM_FIELD_VISIBILITY_DEFINITIONS = [
+    { key: 'inquiryDate', labelKey: 'labelInquiryDate', fallbackLabel: 'Inquiry Date' },
+    { key: 'contractDate', labelKey: 'labelContractDate', fallbackLabel: 'Contract Date' },
+    { key: 'location', labelKey: 'labelLocation', fallbackLabel: 'Location' },
+    { key: 'assignedTo', labelKey: 'labelAssignedTo', fallbackLabel: 'Photographer' },
+    { key: 'deliveryDate', labelKey: 'labelDeliveryDate', fallbackLabel: 'Delivery Date' },
+    { key: 'paymentConfirmDate', labelKey: 'labelPaymentConfirmDate', fallbackLabel: 'Payment Confirmation Date' },
+  ];
+
+  const WORKFLOW_STATUS_META = {
+    not_started: { labelKey: 'workflowNotStarted', className: 'workflow-not-started' },
+    shot: { labelKey: 'workflowShot', className: 'workflow-shot' },
+    retouching: { labelKey: 'workflowRetouching', className: 'workflow-retouching' },
+    completed: { labelKey: 'workflowCompleted', className: 'workflow-completed' },
+    cancelled: { labelKey: 'workflowCancelled', className: 'workflow-cancelled' },
+  };
+  const DEFAULT_STATUS_COLORS = {
+    not_started: '#9ca3af',
+    shot: '#f59e0b',
+    retouching: '#3b82f6',
+    completed: '#22c55e',
+    cancelled: '#ef4444',
+  };
   function getCloudValue(key, fallback) {
     const value = window.FirebaseService?.getCachedData(key);
     return value === undefined ? fallback : value;
   }
 
-  function getLocalValue(key, fallback) {
-    try {
-      const raw = localStorage.getItem(key);
+  const State = {
+    getRaw(key, fallback = null) {
+      try {
+        const value = localStorage.getItem(key);
+        return value === null ? fallback : value;
+      } catch {
+        return fallback;
+      }
+    },
+    getJSON(key, fallback) {
+      const raw = this.getRaw(key, null);
       if (raw === null) return fallback;
       try {
         return JSON.parse(raw);
       } catch {
         return raw;
       }
-    } catch {
-      return fallback;
-    }
+    },
+    setJSON(key, value) {
+      try {
+        localStorage.setItem(key, JSON.stringify(value));
+        return true;
+      } catch (err) {
+        console.warn(`Failed to persist state key: ${key}`, err);
+        return false;
+      }
+    },
+  };
+
+  function getLocalValue(key, fallback) {
+    return State.getJSON(key, fallback);
   }
 
-  function saveLocalValue(key, value) {
-    try {
-      localStorage.setItem(key, JSON.stringify(value));
-    } catch (err) {
-      console.warn(`Failed to save local value: ${key}`, err);
+  let idbMirrorDbPromise = null;
+
+  function openMirrorDatabase() {
+    if (typeof window === 'undefined' || !window.indexedDB) {
+      return Promise.resolve(null);
     }
+    if (idbMirrorDbPromise) return idbMirrorDbPromise;
+
+    idbMirrorDbPromise = new Promise((resolve) => {
+      try {
+        const request = window.indexedDB.open(IDB_MIRROR_DB_NAME, IDB_MIRROR_DB_VERSION);
+        request.onupgradeneeded = () => {
+          const db = request.result;
+          if (!db.objectStoreNames.contains(IDB_MIRROR_STORE_NAME)) {
+            db.createObjectStore(IDB_MIRROR_STORE_NAME, { keyPath: 'key' });
+          }
+        };
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => {
+          console.warn('IndexedDB open failed:', request.error);
+          resolve(null);
+        };
+      } catch (err) {
+        console.warn('IndexedDB unavailable:', err);
+        resolve(null);
+      }
+    });
+
+    return idbMirrorDbPromise;
   }
 
-  function saveCloudValue(key, value) {
-    window.FirebaseService?.saveKey(key, value).catch((err) => {
-      console.error(`Failed to save ${key}`, err);
+  function mirrorToIndexedDB(key, value) {
+    if (!key) return;
+    openMirrorDatabase().then((db) => {
+      if (!db) return;
+      try {
+        const tx = db.transaction(IDB_MIRROR_STORE_NAME, 'readwrite');
+        tx.objectStore(IDB_MIRROR_STORE_NAME).put({
+          key,
+          value,
+          updatedAt: new Date().toISOString(),
+        });
+      } catch (err) {
+        console.warn(`IndexedDB mirror write failed: ${key}`, err);
+      }
     });
   }
 
+  function getMirrorTargetKeys() {
+    return [
+      STORAGE_KEY,
+      OPTIONS_KEY,
+      PLAN_MASTER_KEY,
+      DASHBOARD_CONFIG_KEY,
+      LIST_COLUMN_CONFIG_KEY,
+      CONTRACT_TEMPLATE_KEY,
+      EXPENSES_KEY,
+      LANG_KEY,
+      THEME_KEY,
+      CURRENCY_KEY,
+      TAX_SETTINGS_KEY,
+      INVOICE_SENDER_PROFILE_KEY,
+      CUSTOM_FIELDS_KEY,
+      CALENDAR_FILTERS_KEY,
+      DYNAMIC_ITEM_NAME_SUGGESTIONS_KEY,
+      DYNAMIC_ITEM_SUGGESTIONS_KEY,
+      STATUS_COLOR_MAP_KEY,
+      HERO_METRICS_VISIBLE_KEY,
+      HERO_METRICS_CONFIG_KEY,
+      FORM_FIELD_VISIBILITY_KEY,
+      GOOGLE_CALENDAR_AUTO_SYNC_KEY,
+      GOOGLE_CALENDAR_SELECTED_ID_KEY,
+    ];
+  }
+
+  function readRawLocalStorage(key) {
+    return State.getRaw(key, null);
+  }
+
+  function writeLocalStorageValue(key, value) {
+    return State.setJSON(key, value);
+  }
+
+  async function getMirrorRecordMap() {
+    const db = await openMirrorDatabase();
+    if (!db) return new Map();
+
+    return new Promise((resolve) => {
+      try {
+        const tx = db.transaction(IDB_MIRROR_STORE_NAME, 'readonly');
+        const store = tx.objectStore(IDB_MIRROR_STORE_NAME);
+
+        if (typeof store.getAll === 'function') {
+          const req = store.getAll();
+          req.onsuccess = () => {
+            const rows = Array.isArray(req.result) ? req.result : [];
+            resolve(new Map(rows.map((row) => [row.key, row])));
+          };
+          req.onerror = () => resolve(new Map());
+          return;
+        }
+
+        const records = new Map();
+        const cursorReq = store.openCursor();
+        cursorReq.onsuccess = (event) => {
+          const cursor = event.target.result;
+          if (!cursor) {
+            resolve(records);
+            return;
+          }
+          const row = cursor.value;
+          if (row && row.key) records.set(row.key, row);
+          cursor.continue();
+        };
+        cursorReq.onerror = () => resolve(new Map());
+      } catch {
+        resolve(new Map());
+      }
+    });
+  }
+
+  async function restoreLocalStorageFromIndexedDBIfNeeded() {
+    const customersRaw = readRawLocalStorage(STORAGE_KEY);
+    if (customersRaw !== null) return false;
+
+    const mirrorMap = await getMirrorRecordMap();
+    if (mirrorMap.size === 0) return false;
+
+    let restoredCount = 0;
+    getMirrorTargetKeys().forEach((key) => {
+      const localMirror = mirrorMap.get(`local:${key}`);
+      const cloudMirror = mirrorMap.get(`cloud:${key}`);
+      const candidate = localMirror || cloudMirror;
+      if (!candidate || candidate.value === undefined) return;
+      if (writeLocalStorageValue(key, candidate.value)) restoredCount += 1;
+    });
+
+    return restoredCount > 0;
+  }
+
+  function mirrorCurrentLocalStorageToIndexedDB() {
+    getMirrorTargetKeys().forEach((key) => {
+      const raw = readRawLocalStorage(key);
+      if (raw === null) return;
+      try {
+        mirrorToIndexedDB(`local:${key}`, JSON.parse(raw));
+      } catch {
+        mirrorToIndexedDB(`local:${key}`, raw);
+      }
+    });
+  }
+
+  function saveLocalValue(key, value) {
+    State.setJSON(key, value);
+    mirrorToIndexedDB(`local:${key}`, value);
+  }
+
+  function saveCloudValue(key, value) {
+    State.setJSON(key, value);
+    mirrorToIndexedDB(`local:${key}`, value);
+    mirrorToIndexedDB(`cloud:${key}`, value);
+    const currentUser = window.FirebaseService?.getCurrentUser?.();
+    if (currentUser) setCloudSyncIndicator('syncing');
+    else setCloudSyncIndicator('local');
+    try {
+      const maybePromise = window.FirebaseService?.saveKey?.(key, value);
+      if (maybePromise && typeof maybePromise.then === 'function') {
+        maybePromise.then(() => {
+          if (window.FirebaseService?.getCurrentUser?.()) setCloudSyncIndicator('ready');
+          else setCloudSyncIndicator('local');
+        }).catch((err) => {
+          console.error(`Failed to save ${key}`, err);
+          setCloudSyncIndicator('error');
+        });
+      }
+    } catch (err) {
+      console.error(`Failed to save ${key}`, err);
+      setCloudSyncIndicator('error');
+    }
+  }
+
   // ===== Language Management =====
-  let currentLang = getCloudValue(LANG_KEY, getLocalValue(LANG_KEY, 'en'));
-  if (!window.LOCALE || !window.LOCALE[currentLang]) currentLang = 'en';
+  let currentLang = getCloudValue(LANG_KEY, getLocalValue(LANG_KEY, 'ja'));
+  if (!window.LOCALE || !window.LOCALE[currentLang]) currentLang = 'ja';
+
+  function getLanguageSelectElement() {
+    return document.getElementById('languageSelect') || document.getElementById('lang-select');
+  }
+
+  function getHeroMetricLabelByLang(key) {
+    if (key === 'monthlyNetProfit') {
+      return t('heroMetricMonthlyNetProfit');
+    }
+    if (key === 'averageMargin') {
+      return t('heroMetricAverageMargin');
+    }
+    if (key === 'yearlyNetProfit') {
+      return t('heroMetricYearlyNetProfit');
+    }
+    return '';
+  }
+
+  function updateHeroMetricLabels() {
+    const monthlyLabel = document.getElementById('stat-monthly-net-profit-label');
+    if (monthlyLabel) monthlyLabel.textContent = getHeroMetricLabelByLang('monthlyNetProfit');
+    const marginLabel = document.getElementById('stat-average-margin-label');
+    if (marginLabel) marginLabel.textContent = getHeroMetricLabelByLang('averageMargin');
+    const yearlyLabel = document.getElementById('stat-yearly-net-profit-label');
+    if (yearlyLabel) yearlyLabel.textContent = getHeroMetricLabelByLang('yearlyNetProfit');
+  }
+
+  function applyExtendedStaticTranslations() {
+    const setText = (selector, key) => {
+      const el = document.querySelector(selector);
+      if (el) el.textContent = t(key);
+    };
+    const setPlaceholder = (selector, key) => {
+      const el = document.querySelector(selector);
+      if (el) el.placeholder = t(key);
+    };
+    const setTitle = (selector, key) => {
+      const el = document.querySelector(selector);
+      if (el) el.title = t(key);
+    };
+
+    const workflowLabel = document.querySelector('label[for="form-workflowStatus"]');
+    if (workflowLabel) workflowLabel.textContent = t('labelWorkflowStatus');
+    const workflowSelect = document.getElementById('form-workflowStatus');
+    if (workflowSelect) {
+      const optionMap = {
+        not_started: 'workflowNotStarted',
+        shot: 'workflowShot',
+        retouching: 'workflowRetouching',
+        completed: 'workflowCompleted',
+        cancelled: 'workflowCancelled',
+      };
+      Array.from(workflowSelect.options).forEach((option) => {
+        const key = optionMap[option.value];
+        if (key) option.textContent = t(key);
+      });
+    }
+
+    setText('.dynamic-items-header .form-section-title', 'sectionDynamicItems');
+    setText('#add-item-btn', 'btnAddDynamicItem');
+    setText('label[for="form-plan-price"]', 'labelPlanRevenue');
+    setText('label[for="form-plan-cost"]', 'labelPlanCost');
+    setPlaceholder('#form-plan-price', 'placeholderRevenueShort');
+    setPlaceholder('#form-plan-cost', 'placeholderCostShort');
+    setText('label[for="form-expense"]', 'labelExpenseYen');
+    setPlaceholder('#form-expense', 'placeholderExpense');
+    setText('label[for="form-plan-name"]', 'labelPlanName');
+    setText('label[for="form-base-price"]', 'labelBasePrice');
+    setText('label[for="form-price-adjustment"]', 'labelManualAdjustment');
+    setText('label[for="form-total-price"]', 'labelTotalPrice');
+    setPlaceholder('#form-plan-name', 'placeholderPlanName');
+    setPlaceholder('#form-base-price', 'placeholderBasePrice');
+    setPlaceholder('#form-price-adjustment', 'placeholderManualAdjustment');
+    setPlaceholder('#form-total-price', 'placeholderTotalPrice');
+
+    const planNameGroup = document.querySelector('label[for="form-plan-name"]')?.closest('.form-group');
+    const planDetailTitle = planNameGroup?.previousElementSibling;
+    if (planDetailTitle?.classList?.contains('form-section-title')) {
+      planDetailTitle.textContent = t('sectionPlanDetails');
+    }
+
+    const profitLabel = document.querySelector('label[for="form-profit"]');
+    if (profitLabel) profitLabel.textContent = t('labelProfitYen');
+
+    setText('.settings-tab-btn[data-tab="contract"]', 'contractSettings');
+    setText('#settings-content-contract h3', 'contractTemplateTitle');
+    setText('label[for="contract-template-editor"]', 'contractTemplateBody');
+    setText('#btn-contract-preset-standard', 'contractPresetStandard');
+    setText('#btn-contract-preset-bridal', 'contractPresetBridal');
+    setText('#btn-contract-preset-light', 'contractPresetLight');
+    setText('#btn-save-contract-template', 'contractTemplateSave');
+    setText('#data-protection-status', 'dataProtectionStatus');
+    setText('.data-protection-note', 'dataProtectionCloudStatus');
+    setPlaceholder('#tax-label-custom', 'taxCustomLabelPlaceholder');
+    setText('#btn-google-login-screen', 'googleLogin');
+    setText('#btn-google-login', 'googleLogin');
+    setText('#btn-logout', 'logout');
+    setText('#btn-header-logout', 'logout');
+    setText('.login-card p', 'loginScreenDescription');
+    setText('#settings-content-contract .help-text', 'contractTemplateHelp');
+    setTitle('#dashboard-month-picker', 'dashboardMonthHint');
+
+    const dateFormatHint = t('dateFormatHint');
+    document.querySelectorAll('input[type="date"]').forEach((input) => {
+      if (!input.dataset.baseTitle) {
+        input.dataset.baseTitle = input.title || '';
+      }
+      input.title = input.dataset.baseTitle
+        ? `${input.dataset.baseTitle} (${dateFormatHint})`
+        : dateFormatHint;
+
+      if (input.id) {
+        const label = document.querySelector(`label[for="${input.id}"]`);
+        const labelKey = label?.getAttribute('data-i18n');
+        if (label && labelKey) {
+          label.textContent = `${t(labelKey)} (${dateFormatHint})`;
+        }
+      }
+    });
+
+    const detailWorkflowLabel = document.getElementById('detail-workflow-status')?.closest('.detail-item')?.querySelector('.detail-label');
+    if (detailWorkflowLabel) detailWorkflowLabel.textContent = t('labelWorkflowStatus');
+    const detailPlanNameLabel = document.getElementById('detail-plan-name')?.closest('.detail-item')?.querySelector('.detail-label');
+    if (detailPlanNameLabel) detailPlanNameLabel.textContent = t('labelPlanName');
+    const detailBasePriceLabel = document.getElementById('detail-base-price')?.closest('.detail-item')?.querySelector('.detail-label');
+    if (detailBasePriceLabel) detailBasePriceLabel.textContent = t('labelBasePrice');
+    const detailTotalPriceLabel = document.getElementById('detail-total-price')?.closest('.detail-item')?.querySelector('.detail-label');
+    if (detailTotalPriceLabel) detailTotalPriceLabel.textContent = t('labelTotalPrice');
+    setCloudSyncIndicator(cloudSyncState);
+  }
 
   function t(key, params = {}) {
     if (!window.LOCALE || !window.LOCALE[currentLang]) {
@@ -103,10 +464,29 @@
   }
   window.t = t;
 
+  function getDefaultInvoiceMessage() {
+    return t(DEFAULT_INVOICE_MESSAGE_KEY);
+  }
+
+  function refreshUiAfterLanguageChange() {
+    renderTable();
+    renderWorkflowStatusLegend();
+    renderCalendar();
+    populateSelects();
+    updateDashboard();
+    renderExpenses();
+    renderDashboardQuickMenu();
+    renderListColumnsMenu();
+    updateGraphToggleButtonLabel();
+    updateHeroStatsToggleButtonLabel();
+    renderSettings();
+    syncDynamicItemRowsWithSettings();
+  }
+
   function updateLanguage(lang) {
     if (!window.LOCALE || !window.LOCALE[lang]) {
-      console.warn(`Unsupported language "${lang}". Falling back to English.`);
-      lang = 'en';
+      console.warn(`Unsupported language "${lang}". Falling back to Japanese.`);
+      lang = 'ja';
     }
 
     currentLang = lang;
@@ -142,47 +522,72 @@
       }
     });
 
+    // Update aria-label attributes
+    document.querySelectorAll('[data-i18n-aria-label]').forEach(el => {
+      const key = el.getAttribute('data-i18n-aria-label');
+      if (key) {
+        el.setAttribute('aria-label', t(key));
+      }
+    });
+
     // Update language selector
-    const langSelect = document.getElementById('lang-select');
+    const langSelect = getLanguageSelectElement();
     if (langSelect) {
       langSelect.value = lang;
+      langSelect.disabled = false;
+      langSelect.title = '';
     }
+    const themeBtn = document.getElementById('btn-theme');
+    if (themeBtn) {
+      const themeTitle = currentTheme === 'dark' ? t('themeSwitchToLight') : t('themeSwitchToDark');
+      themeBtn.title = themeTitle;
+      themeBtn.setAttribute('aria-label', themeTitle);
+    }
+    applyExtendedStaticTranslations();
+    updateHeroMetricLabels();
+    if (typeof setDashboardVisibility === 'function') setDashboardVisibility(dashboardVisible);
 
     const customerTable = document.getElementById('customer-table');
     if (customerTable) customerTable.style.tableLayout = 'auto';
     const customerTableWrapper = document.getElementById('table-wrapper');
     if (customerTableWrapper) customerTableWrapper.style.overflowX = 'auto';
 
-    // Re-render dynamic content
-    if (typeof renderTable === 'function') renderTable();
-    if (typeof updateStats === 'function') updateStats();
-    if (typeof renderCalendar === 'function') renderCalendar();
-    if (typeof populateSelects === 'function') populateSelects();
-    if (typeof updateDashboard === 'function') updateDashboard();
-    if (typeof renderExpenses === 'function') renderExpenses();
-    if (typeof renderDashboardQuickMenu === 'function') renderDashboardQuickMenu();
-    if (typeof renderListColumnsMenu === 'function') renderListColumnsMenu();
-
+    refreshUiAfterLanguageChange();
   }
   window.updateLanguage = updateLanguage;
+  window.updateUITS = updateLanguage;
 
   // ===== Default Custom Options =====
   const DEFAULT_OPTIONS = {
     plan: [],
-    dynamicItemHints: ['衣装', 'ヘアメイク', 'ブーケ'],
+    dynamicItemHints: [],
   };
+
+  function ensureLocalStorageDefaults() {
+    if (State.getRaw(STORAGE_KEY, null) === null) State.setJSON(STORAGE_KEY, []);
+    if (State.getRaw(EXPENSES_KEY, null) === null) State.setJSON(EXPENSES_KEY, []);
+    if (State.getRaw(PLAN_MASTER_KEY, null) === null) State.setJSON(PLAN_MASTER_KEY, []);
+    if (State.getRaw(OPTIONS_KEY, null) === null) State.setJSON(OPTIONS_KEY, DEFAULT_OPTIONS);
+  }
 
   // ===== Storage Helpers =====
   function loadCustomers() {
     const loaded = getCloudValue(STORAGE_KEY, []);
     const records = Array.isArray(loaded) ? loaded : [];
-    return withCurrentUserId(records).map((record) => ({
-      ...record,
-      planDetails: normalizePlanDetails(record?.planDetails, record?.revenue),
-      extraChargeItems: normalizeExtraChargeItems(record?.extraChargeItems),
-      costumePrice: toSafeNumber(record?.costumePrice, 0),
-      hairMakeupPrice: toSafeNumber(record?.hairMakeupPrice, 0),
-    }));
+    return withCurrentUserId(records).map((record) => {
+      const normalizedExtraChargeItems = normalizeExtraChargeItems(record?.extraChargeItems);
+      const fallbackExpense = toSafeNumber(record?.planCost, toSafeNumber(record?.planDetails?.planCost, 0))
+        + normalizedExtraChargeItems.reduce((sum, item) => sum + toSafeNumber(item?.cost, 0), 0);
+      return {
+        ...record,
+        planDetails: normalizePlanDetails(record?.planDetails, record?.revenue),
+        extraChargeItems: normalizedExtraChargeItems,
+        workflowStatus: normalizeWorkflowStatus(record?.workflowStatus),
+        expense: toSafeNumber(record?.expense, fallbackExpense),
+        costumePrice: toSafeNumber(record?.costumePrice, 0),
+        hairMakeupPrice: toSafeNumber(record?.hairMakeupPrice, 0),
+      };
+    });
   }
   function withCurrentUserId(records) {
     const uid = window.FirebaseService?.getCurrentUser?.()?.uid;
@@ -192,13 +597,20 @@
 
   function saveCustomers(data) {
     const records = Array.isArray(data) ? data : [];
-    const normalized = records.map((record) => ({
-      ...(record || {}),
-      planDetails: normalizePlanDetails(record?.planDetails, record?.revenue),
-      extraChargeItems: normalizeExtraChargeItems(record?.extraChargeItems),
-      costumePrice: toSafeNumber(record?.costumePrice, 0),
-      hairMakeupPrice: toSafeNumber(record?.hairMakeupPrice, 0),
-    }));
+    const normalized = records.map((record) => {
+      const normalizedExtraChargeItems = normalizeExtraChargeItems(record?.extraChargeItems);
+      const fallbackExpense = toSafeNumber(record?.planCost, toSafeNumber(record?.planDetails?.planCost, 0))
+        + normalizedExtraChargeItems.reduce((sum, item) => sum + toSafeNumber(item?.cost, 0), 0);
+      return {
+        ...(record || {}),
+        planDetails: normalizePlanDetails(record?.planDetails, record?.revenue),
+        extraChargeItems: normalizedExtraChargeItems,
+        workflowStatus: normalizeWorkflowStatus(record?.workflowStatus),
+        expense: toSafeNumber(record?.expense, fallbackExpense),
+        costumePrice: toSafeNumber(record?.costumePrice, 0),
+        hairMakeupPrice: toSafeNumber(record?.hairMakeupPrice, 0),
+      };
+    });
     saveCloudValue(STORAGE_KEY, withCurrentUserId(normalized));
   }
 
@@ -217,54 +629,9 @@
 
   function getContractPresetTemplates() {
     return {
-      standard: `【撮影契約書】
-本契約は {{customer_name}} 様（以下「お客様」）と撮影事業者（以下「撮影者」）の間で締結されます。
-
-1. 撮影日: {{shooting_date}}
-2. 撮影プラン: {{plan_name}}
-3. 撮影場所: {{location}}
-4. 料金: {{total_price}}
-
-【キャンセルポリシー】
-- 撮影日の14日前まで: 無料
-- 撮影日の13日〜3日前: 料金の50%
-- 撮影前日〜当日: 料金の100%
-
-【納品】
-- 納品目安: 撮影日より30日以内
-- 納品形式: オンライン納品
-
-【同意】
-本契約内容を確認し、双方合意の上で撮影を実施します。`,
-      bridal: `【ブライダル撮影契約】
-お客様名: {{customer_name}}
-撮影日: {{shooting_date}}
-プラン: {{plan_name}}
-場所: {{location}}
-契約金額: {{total_price}}
-
-【拘束時間】
-- 撮影開始〜終了までの拘束時間を基準に料金を算定します。
-- 延長が発生した場合、30分単位で追加料金を請求します。
-
-【キャンセル・日程変更】
-- 日程変更は空きがある場合のみ対応します。
-- 挙式都合による変更を除き、規定のキャンセル料が発生します。
-
-【著作権・利用】
-- 著作権は撮影者に帰属します。
-- お客様は私的利用の範囲で自由に使用できます。`,
-      light: `【撮影規約（ライト）】
-お客様: {{customer_name}}
-撮影日: {{shooting_date}}
-料金: {{total_price}}
-
-1. 撮影データは選定・補正後に納品します。
-2. SNS掲載可否はお客様確認後に決定します。
-3. 体調不良・天候不良時は双方協議の上で再調整します。
-4. ご連絡先: {{contact}}
-
-本規約に同意の上、撮影を進行します。`,
+      standard: t('contractPresetTextStandard'),
+      bridal: t('contractPresetTextBridal'),
+      light: t('contractPresetTextLight'),
     };
   }
 
@@ -337,6 +704,64 @@
     return label && label !== item.labelKey ? label : item.fallbackLabel;
   }
 
+  function getDefaultHeroMetricsConfig() {
+    const legacyVisible = getCloudValue(
+      HERO_METRICS_VISIBLE_KEY,
+      getLocalValue(HERO_METRICS_VISIBLE_KEY, false)
+    ) === true;
+    return HERO_METRIC_DEFINITIONS.map((item) => ({
+      key: item.key,
+      visible: legacyVisible,
+    }));
+  }
+
+  function normalizeHeroMetricsConfig(config) {
+    const allowedKeys = new Set(HERO_METRIC_DEFINITIONS.map((item) => item.key));
+    const unique = new Map();
+
+    if (Array.isArray(config)) {
+      config.forEach((item) => {
+        const key = item && typeof item.key === 'string' ? item.key : '';
+        if (!allowedKeys.has(key) || unique.has(key)) return;
+        unique.set(key, {
+          key,
+          visible: item.visible !== false,
+        });
+      });
+    }
+
+    HERO_METRIC_DEFINITIONS.forEach((item) => {
+      if (!unique.has(item.key)) {
+        unique.set(item.key, { key: item.key, visible: true });
+      }
+    });
+
+    return Array.from(unique.values());
+  }
+
+  function loadHeroMetricsConfig() {
+    const defaultConfig = getDefaultHeroMetricsConfig();
+    const loaded = getCloudValue(HERO_METRICS_CONFIG_KEY, getLocalValue(HERO_METRICS_CONFIG_KEY, defaultConfig));
+    return normalizeHeroMetricsConfig(loaded);
+  }
+
+  function saveHeroMetricsConfig(config) {
+    const normalized = normalizeHeroMetricsConfig(config);
+    heroMetricsConfig = normalized;
+    heroMetricsVisible = normalized.some((item) => item.visible !== false);
+    saveLocalValue(HERO_METRICS_CONFIG_KEY, normalized);
+    saveCloudValue(HERO_METRICS_CONFIG_KEY, normalized);
+    saveLocalValue(HERO_METRICS_VISIBLE_KEY, heroMetricsVisible);
+    saveCloudValue(HERO_METRICS_VISIBLE_KEY, heroMetricsVisible);
+  }
+
+  function getHeroMetricLabel(itemKey) {
+    const item = HERO_METRIC_DEFINITIONS.find((entry) => entry.key === itemKey);
+    if (!item) return itemKey;
+    const label = item.labelKey ? t(item.labelKey) : '';
+    return label && label !== item.labelKey ? label : item.fallbackLabel;
+  }
+
   function getDefaultListColumnConfig() {
     return LIST_COLUMN_DEFINITIONS.map((item) => ({
       key: item.key,
@@ -398,9 +823,14 @@
   function normalizePlanMasterItem(plan) {
     const safe = (plan && typeof plan === 'object') ? plan : {};
     const name = typeof safe.name === 'string' ? safe.name.trim() : '';
+    const revenue = toSafeNumber(safe.price, toSafeNumber(safe.basePrice, 0));
+    const cost = toSafeNumber(safe.cost, toSafeNumber(safe.baseCost, toSafeNumber(safe.planCost, 0)));
+    const color = normalizeHexColor(safe.color, getDefaultPlanTagColor(name));
     return {
       name,
-      price: toSafeNumber(safe.price, toSafeNumber(safe.basePrice, 0)),
+      price: revenue,
+      cost,
+      color,
     };
   }
 
@@ -452,17 +882,20 @@
   }
 
   // ===== State =====
+  ensureLocalStorageDefaults();
   let customers = loadCustomers();
   let options = loadOptions();
   let dynamicItemNameSuggestions = loadDynamicItemNameSuggestions();
   let dynamicItemSuggestionMap = loadDynamicItemSuggestionMap();
   let planMaster = loadPlanMaster();
-  if (planMaster.length === 0 && Array.isArray(options.plan) && options.plan.length > 0) {
+  function ensurePlanMasterFallbackFromOptions() {
+    if (planMaster.length > 0 || !Array.isArray(options.plan) || options.plan.length === 0) return;
     planMaster = options.plan
       .filter((name) => typeof name === 'string' && name.trim())
       .map((name) => normalizePlanMasterItem({ name }));
     savePlanMaster(planMaster);
   }
+  ensurePlanMasterFallbackFromOptions();
   let currentSort = { key: 'shootingDate', dir: 'desc' };
   let editingId = null;
   let deletingId = null;
@@ -490,13 +923,47 @@
   let listColumnConfig = loadListColumnConfig();
   let isListColumnsMenuOpen = false;
   let listColumnsHideTimer = null;
+  let statusColorMap = loadStatusColorMap();
+  let heroMetricsConfig = loadHeroMetricsConfig();
+  let heroMetricsVisible = heroMetricsConfig.some((item) => item.visible !== false);
   let contractTemplateText = loadContractTemplate();
+  let formFieldVisibilityConfig = loadFormFieldVisibilityConfig();
+  let googleCalendarAutoSyncEnabled = loadGoogleCalendarAutoSyncEnabled();
+  let googleCalendarSelectedId = loadGoogleCalendarSelectedId();
+  let googleCalendarList = [];
+  let googleCalendarListLoaded = false;
+  let googleCalendarListPromise = null;
+  let isGraphVisible = false;
+  let isMobileHeaderMenuOpen = false;
+  let graphHideTimer = null;
+  let isExpenseManuallyEdited = false;
 
   // Init calendar to current month
   const now = new Date();
   calYear = now.getFullYear();
   calMonth = now.getMonth();
   let selectedDashboardMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+  let revenueProfitChartInstance = null;
+  let requestTrendChartInstance = null;
+
+  function reloadRuntimeStateFromStorage() {
+    customers = loadCustomers();
+    options = loadOptions();
+    dynamicItemNameSuggestions = loadDynamicItemNameSuggestions();
+    dynamicItemSuggestionMap = loadDynamicItemSuggestionMap();
+    planMaster = loadPlanMaster();
+    ensurePlanMasterFallbackFromOptions();
+    calendarFilters = loadCalendarFilters();
+    dashboardVisible = getCloudValue(DASHBOARD_VISIBILITY_KEY, getLocalValue(DASHBOARD_VISIBILITY_KEY, true)) !== false;
+    dashboardConfig = loadDashboardConfig();
+    listColumnConfig = loadListColumnConfig();
+    statusColorMap = loadStatusColorMap();
+    heroMetricsConfig = loadHeroMetricsConfig();
+    contractTemplateText = loadContractTemplate();
+    formFieldVisibilityConfig = loadFormFieldVisibilityConfig();
+    googleCalendarAutoSyncEnabled = loadGoogleCalendarAutoSyncEnabled();
+    googleCalendarSelectedId = loadGoogleCalendarSelectedId();
+  }
 
   // ===== DOM =====
   const $ = (s) => document.querySelector(s);
@@ -518,6 +985,14 @@
   const listColumnsMenu = $('#list-columns-menu');
   const listColumnsMenuContent = $('#list-columns-menu-content');
   const listColumnsButton = $('#btn-list-columns');
+  const appHeader = document.querySelector('.app-header');
+  const headerActions = document.querySelector('.header-actions');
+  const mobileHeaderMenuButton = document.getElementById('btn-mobile-header-menu');
+  const cloudSyncIndicator = document.getElementById('cloud-sync-indicator');
+  const cloudSyncLabel = document.getElementById('cloud-sync-label');
+  const headerUserBadge = document.getElementById('header-user-badge');
+  const headerUserAvatar = document.getElementById('header-user-avatar');
+  const headerUserName = document.getElementById('header-user-name');
   const listView = $('#list-view');
   const calendarView = $('#calendar-view');
   const calendarFilterInputs = $$('.calendar-filter-input');
@@ -539,23 +1014,343 @@
     boundKeys.add(key);
   }
 
+  function safeRun(label, fn, fallback = null) {
+    try {
+      return fn();
+    } catch (err) {
+      console.error(`[SafeRun] ${label}`, err);
+      return fallback;
+    }
+  }
+
+  function applyMinimalSafeModeUI() {
+    if (!SAFE_MODE_MINIMAL_BOOT) return;
+    ['btn-toggle-dashboard', 'btn-toggle-graph'].forEach((id) => {
+      const el = document.getElementById(id);
+      if (el) el.style.display = 'none';
+    });
+    const quickMenu = document.getElementById('dashboard-quick-menu');
+    if (quickMenu) quickMenu.style.display = 'none';
+    const heroPanel = document.querySelector('.dashboard-hero-metrics');
+    if (heroPanel) heroPanel.classList.add('is-hidden');
+  }
+
+  function initializeManifestSafely() {
+    try {
+      const manifestLink = document.querySelector('link[rel="manifest"]');
+      if (!manifestLink) return;
+      if (window.location.protocol === 'file:') {
+        manifestLink.remove();
+      }
+    } catch (err) {
+      console.warn('Manifest initialization skipped', err);
+    }
+  }
+
+  function shouldStartInLocalGuestMode() {
+    if (window.location.protocol === 'file:') return true;
+    try {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get('guest') === '1') {
+        saveLocalValue(LOCAL_GUEST_MODE_KEY, true);
+        return true;
+      }
+    } catch {
+      // Ignore URL parsing failures.
+    }
+    return getLocalValue(LOCAL_GUEST_MODE_KEY, false) === true;
+  }
+
+  function activateLocalGuestMode(message = '') {
+    isLoggedIn = true;
+    saveLocalValue(LOCAL_GUEST_MODE_KEY, true);
+    safeRun('localMode.theme', () => applyTheme('dark'));
+    safeRun('localMode.language', () => updateLanguage(currentLang || 'ja'));
+    safeRun('localMode.renderTable', () => renderTable());
+    safeRun('localMode.renderExpenses', () => renderExpenses());
+    safeRun('localMode.updateDashboard', () => updateDashboard());
+    safeRun('localMode.populateSelects', () => populateSelects());
+    safeRun('localMode.syncCalendarFilterControls', () => syncCalendarFilterControls());
+    setAuthScreenState('loggedIn', { displayName: 'Guest (Local Mode)' });
+    const authStatus = document.getElementById('auth-status');
+    const loginBtn = document.getElementById('btn-google-login');
+    const logoutBtn = document.getElementById('btn-logout');
+    if (authStatus) authStatus.textContent = message || t('localGuestModeDefault');
+    if (loginBtn) loginBtn.style.display = '';
+    if (logoutBtn) logoutBtn.style.display = 'none';
+    setCloudSyncIndicator('local');
+    updateHeaderAuthUi({ displayName: 'Guest (Local Mode)' });
+    if (message) showToast(message);
+  }
+
   // ===== Field Config =====
   const fields = [
-    { key: 'inquiryDate', label: '問い合わせ日', type: 'date' },
-    { key: 'contractDate', label: '成約日', type: 'date' },
-    { key: 'shootingDate', label: '撮影日', type: 'date' },
-    { key: 'customerName', label: 'お客様名', type: 'text' },
-    { key: 'contact', label: '連絡先', type: 'text' },
-    { key: 'meetingDate', label: '打ち合わせ日', type: 'date' },
-    { key: 'plan', label: 'プラン', type: 'select' },
-    { key: 'billingDate', label: '請求日', type: 'date' },
-    { key: 'paymentChecked', label: '入金チェック', type: 'checkbox' },
-    { key: 'details', label: '詳細', type: 'textarea' },
-    { key: 'notes', label: '備考', type: 'textarea' },
-    { key: 'revenue', label: '売上', type: 'number' },
-    { key: 'assignedTo', label: '担当者', type: 'select' },
-    { key: 'location', label: '場所', type: 'text' },
+    { key: 'inquiryDate', labelKey: 'thInquiryDate', type: 'date' },
+    { key: 'contractDate', labelKey: 'thContractDate', type: 'date' },
+    { key: 'deliveryDate', labelKey: 'labelDeliveryDate', type: 'date' },
+    { key: 'shootingDate', labelKey: 'thShootingDate', type: 'date' },
+    { key: 'customerName', labelKey: 'thCustomerName', type: 'text' },
+    { key: 'contact', labelKey: 'thContact', type: 'text' },
+    { key: 'meetingDate', labelKey: 'thMeetingDate', type: 'date' },
+    { key: 'workflowStatus', labelKey: 'labelWorkflowStatus', type: 'select' },
+    { key: 'plan', labelKey: 'thPlan', type: 'select' },
+    { key: 'billingDate', labelKey: 'labelBillingDate', type: 'date' },
+    { key: 'paymentConfirmDate', labelKey: 'labelPaymentConfirmDate', type: 'date' },
+    { key: 'paymentChecked', labelKey: 'labelPaymentChecked', type: 'checkbox' },
+    { key: 'details', labelKey: 'labelDetails', type: 'textarea' },
+    { key: 'notes', labelKey: 'labelNotes', type: 'textarea' },
+    { key: 'revenue', labelKey: 'thRevenue', type: 'number' },
+    { key: 'assignedTo', labelKey: 'labelAssignedTo', type: 'select' },
+    { key: 'location', labelKey: 'labelLocation', type: 'text' },
   ];
+
+  function getFieldLabel(field) {
+    if (!field) return '';
+    if (field.labelKey) return t(field.labelKey);
+    return field.label || field.key || '';
+  }
+
+  function getDefaultFormFieldVisibilityConfig() {
+    return FORM_FIELD_VISIBILITY_DEFINITIONS.reduce((acc, item) => {
+      acc[item.key] = true;
+      return acc;
+    }, {});
+  }
+
+  function normalizeFormFieldVisibilityConfig(config) {
+    const source = (config && typeof config === 'object') ? config : {};
+    return FORM_FIELD_VISIBILITY_DEFINITIONS.reduce((acc, item) => {
+      acc[item.key] = source[item.key] !== false;
+      return acc;
+    }, {});
+  }
+
+  function loadFormFieldVisibilityConfig() {
+    return normalizeFormFieldVisibilityConfig(getLocalValue(
+      FORM_FIELD_VISIBILITY_KEY,
+      getDefaultFormFieldVisibilityConfig()
+    ));
+  }
+
+  function saveFormFieldVisibilityConfig(nextConfig) {
+    formFieldVisibilityConfig = normalizeFormFieldVisibilityConfig(nextConfig);
+    saveLocalValue(FORM_FIELD_VISIBILITY_KEY, formFieldVisibilityConfig);
+  }
+
+  function isFormFieldVisible(fieldKey) {
+    return formFieldVisibilityConfig?.[fieldKey] !== false;
+  }
+
+  function getFormFieldVisibilityLabel(key) {
+    const definition = FORM_FIELD_VISIBILITY_DEFINITIONS.find((item) => item.key === key);
+    if (!definition) return key;
+    const translated = t(definition.labelKey);
+    return translated && translated !== definition.labelKey ? translated : definition.fallbackLabel;
+  }
+
+  function resolveDefaultAssignedToValue() {
+    const photographers = window.TeamManager?.loadPhotographers?.();
+    if (Array.isArray(photographers) && photographers.length > 0) {
+      const firstId = String(photographers[0]?.id || '').trim();
+      if (firstId) return firstId;
+    }
+    const currentUser = window.FirebaseService?.getCurrentUser?.();
+    const fallback = String(currentUser?.uid || currentUser?.email || currentUser?.displayName || 'self').trim();
+    return fallback || 'self';
+  }
+
+  function applyModalFieldVisibility() {
+    FORM_FIELD_VISIBILITY_DEFINITIONS.forEach((item) => {
+      const visible = isFormFieldVisible(item.key);
+      document.querySelectorAll(`[data-input-key="${item.key}"]`).forEach((element) => {
+        element.style.display = visible ? '' : 'none';
+      });
+    });
+
+    if (!isFormFieldVisible('assignedTo')) {
+      const assignedToInput = document.getElementById('form-assignedTo');
+      if (assignedToInput && !String(assignedToInput.value || '').trim()) {
+        assignedToInput.value = resolveDefaultAssignedToValue();
+      }
+    }
+  }
+
+  function loadGoogleCalendarAutoSyncEnabled() {
+    return getCloudValue(
+      GOOGLE_CALENDAR_AUTO_SYNC_KEY,
+      getLocalValue(GOOGLE_CALENDAR_AUTO_SYNC_KEY, false)
+    ) === true;
+  }
+
+  function setGoogleCalendarAutoSyncEnabled(enabled) {
+    googleCalendarAutoSyncEnabled = !!enabled;
+    saveLocalValue(GOOGLE_CALENDAR_AUTO_SYNC_KEY, googleCalendarAutoSyncEnabled);
+    saveCloudValue(GOOGLE_CALENDAR_AUTO_SYNC_KEY, googleCalendarAutoSyncEnabled);
+  }
+
+  function loadGoogleCalendarSelectedId() {
+    const loaded = getCloudValue(
+      GOOGLE_CALENDAR_SELECTED_ID_KEY,
+      getLocalValue(GOOGLE_CALENDAR_SELECTED_ID_KEY, GOOGLE_CALENDAR_DEFAULT_ID)
+    );
+    const normalized = String(loaded || '').trim();
+    return normalized || GOOGLE_CALENDAR_DEFAULT_ID;
+  }
+
+  function setGoogleCalendarSelectedId(calendarId) {
+    const normalized = String(calendarId || '').trim() || GOOGLE_CALENDAR_DEFAULT_ID;
+    googleCalendarSelectedId = normalized;
+    saveLocalValue(GOOGLE_CALENDAR_SELECTED_ID_KEY, normalized);
+    saveCloudValue(GOOGLE_CALENDAR_SELECTED_ID_KEY, normalized);
+  }
+
+  function getTargetGoogleCalendarId() {
+    const normalized = String(googleCalendarSelectedId || '').trim();
+    return normalized || GOOGLE_CALENDAR_DEFAULT_ID;
+  }
+
+  function renderGoogleCalendarSelectOptions(selectElement, calendars = []) {
+    if (!selectElement) return;
+    const targetId = getTargetGoogleCalendarId();
+    const safeCalendars = Array.isArray(calendars) ? calendars : [];
+    if (safeCalendars.length === 0) {
+      selectElement.innerHTML = `<option value="${escapeHtml(targetId)}">${escapeHtml(targetId)}</option>`;
+      selectElement.value = targetId;
+      return;
+    }
+
+    selectElement.innerHTML = safeCalendars.map((calendar) => {
+      const id = String(calendar?.id || '').trim();
+      if (!id) return '';
+      const summary = String(calendar?.summary || id);
+      const marker = calendar?.primary ? ' ★' : '';
+      return `<option value="${escapeHtml(id)}">${escapeHtml(summary + marker)}</option>`;
+    }).join('');
+
+    const hasCurrent = safeCalendars.some((calendar) => String(calendar?.id || '').trim() === targetId);
+    if (hasCurrent) {
+      selectElement.value = targetId;
+      return;
+    }
+    const firstId = String(safeCalendars[0]?.id || '').trim();
+    if (firstId) {
+      setGoogleCalendarSelectedId(firstId);
+      selectElement.value = firstId;
+    }
+  }
+
+  async function fetchGoogleCalendarList(force = false) {
+    const token = window.FirebaseService?.getGoogleAccessToken?.() || '';
+    if (!token) {
+      googleCalendarList = [];
+      googleCalendarListLoaded = false;
+      return [];
+    }
+    if (googleCalendarListLoaded && !force) return googleCalendarList;
+    if (googleCalendarListPromise && !force) return googleCalendarListPromise;
+
+    googleCalendarListPromise = (async () => {
+      const response = await fetch('https://www.googleapis.com/calendar/v3/users/me/calendarList', {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        const message = body?.error?.message || `HTTP ${response.status}`;
+        throw new Error(message);
+      }
+
+      const items = Array.isArray(body?.items) ? body.items : [];
+      const normalized = items
+        .map((item) => ({
+          id: String(item?.id || '').trim(),
+          summary: String(item?.summary || item?.id || '').trim(),
+          primary: item?.primary === true,
+        }))
+        .filter((item) => !!item.id)
+        .sort((a, b) => {
+          if (a.primary && !b.primary) return -1;
+          if (!a.primary && b.primary) return 1;
+          return a.summary.localeCompare(b.summary);
+        });
+
+      googleCalendarList = normalized;
+      googleCalendarListLoaded = true;
+      return normalized;
+    })();
+
+    try {
+      return await googleCalendarListPromise;
+    } finally {
+      googleCalendarListPromise = null;
+    }
+  }
+
+  async function refreshGoogleCalendarSelectInSettings(force = false) {
+    const select = document.getElementById('settings-google-calendar-select');
+    const status = document.getElementById('settings-google-calendar-status');
+    const refreshBtn = document.getElementById('settings-google-calendar-refresh');
+    if (!select || !status) return;
+
+    const token = window.FirebaseService?.getGoogleAccessToken?.() || '';
+    if (!token) {
+      renderGoogleCalendarSelectOptions(select, []);
+      status.textContent = t('settingsGoogleCalendarNeedsLogin');
+      if (refreshBtn) refreshBtn.disabled = true;
+      select.disabled = true;
+      return;
+    }
+
+    status.textContent = t('settingsGoogleCalendarLoading');
+    select.disabled = true;
+    if (refreshBtn) refreshBtn.disabled = true;
+
+    try {
+      const calendars = await fetchGoogleCalendarList(force);
+      renderGoogleCalendarSelectOptions(select, calendars);
+      status.textContent = calendars.length > 0
+        ? t('settingsGoogleCalendarLoaded', { count: String(calendars.length) })
+        : t('settingsGoogleCalendarNoCalendars');
+    } catch (error) {
+      console.error('Failed to fetch Google Calendar list', error);
+      renderGoogleCalendarSelectOptions(select, []);
+      status.textContent = t('settingsGoogleCalendarLoadFailed');
+    } finally {
+      const selectCurrent = document.getElementById('settings-google-calendar-select');
+      const refreshCurrent = document.getElementById('settings-google-calendar-refresh');
+      if (selectCurrent) selectCurrent.disabled = false;
+      if (refreshCurrent) refreshCurrent.disabled = false;
+    }
+  }
+
+  function getLocaleForDates() {
+    if (currentLang === 'fr') return 'fr-FR';
+    if (currentLang === 'ja') return 'ja-JP';
+    return 'en-US';
+  }
+
+  function toTitleCaseMonth(monthName) {
+    if (!monthName) return '';
+    return monthName.charAt(0).toUpperCase() + monthName.slice(1);
+  }
+
+  function formatCalendarHeader(year, monthIndex) {
+    const monthValue = String(monthIndex + 1).padStart(2, '0');
+    const monthName = toTitleCaseMonth(
+      new Date(year, monthIndex, 1).toLocaleString(getLocaleForDates(), { month: 'long' })
+    );
+    const formatted = t('calendarHeaderFormat', {
+      year: String(year),
+      month: monthValue,
+      monthName,
+    });
+    if (!formatted || formatted === 'calendarHeaderFormat') {
+      return `${year}/${monthValue}`;
+    }
+    return formatted;
+  }
 
   // ===== Formatting =====
   function formatDate(val) {
@@ -591,20 +1386,163 @@
     return Number.isFinite(num) ? num : fallback;
   }
 
+  function normalizeWorkflowStatus(value) {
+    const normalized = String(value || '').trim().toLowerCase();
+    if (normalized === 'cancel' || normalized === 'canceled') return 'cancelled';
+    if (normalized === 'select_waiting' || normalized === 'selection_waiting' || normalized === 'waiting_select') return 'shot';
+    return WORKFLOW_STATUS_META[normalized] ? normalized : 'not_started';
+  }
+
+  function normalizeHexColor(value, fallback = '#8b5cf6') {
+    const raw = String(value || '').trim();
+    if (/^#[0-9a-fA-F]{6}$/.test(raw)) return raw.toLowerCase();
+    if (/^#[0-9a-fA-F]{3}$/.test(raw)) {
+      return `#${raw[1]}${raw[1]}${raw[2]}${raw[2]}${raw[3]}${raw[3]}`.toLowerCase();
+    }
+    return fallback.toLowerCase();
+  }
+
+  function hexToRgba(hexColor, alpha = 0.2) {
+    const hex = normalizeHexColor(hexColor).replace('#', '');
+    const r = parseInt(hex.slice(0, 2), 16);
+    const g = parseInt(hex.slice(2, 4), 16);
+    const b = parseInt(hex.slice(4, 6), 16);
+    return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+  }
+
+  function hashString(value) {
+    let hash = 0;
+    String(value || '').split('').forEach((char) => {
+      hash = ((hash << 5) - hash) + char.charCodeAt(0);
+      hash |= 0;
+    });
+    return Math.abs(hash);
+  }
+
+  function getDefaultPlanTagColor(name = '') {
+    const paletteIndex = hashString(name) % DEFAULT_PLAN_TAG_COLORS.length;
+    return DEFAULT_PLAN_TAG_COLORS[paletteIndex];
+  }
+
+  function normalizeStatusColorMap(source) {
+    const safe = (source && typeof source === 'object') ? source : {};
+    return Object.keys(WORKFLOW_STATUS_META).reduce((acc, key) => {
+      acc[key] = normalizeHexColor(safe[key], DEFAULT_STATUS_COLORS[key]);
+      return acc;
+    }, {});
+  }
+
+  function loadStatusColorMap() {
+    return normalizeStatusColorMap(
+      getCloudValue(STATUS_COLOR_MAP_KEY, getLocalValue(STATUS_COLOR_MAP_KEY, DEFAULT_STATUS_COLORS))
+    );
+  }
+
+  function saveStatusColorMap(nextMap) {
+    statusColorMap = normalizeStatusColorMap(nextMap);
+    saveLocalValue(STATUS_COLOR_MAP_KEY, statusColorMap);
+    saveCloudValue(STATUS_COLOR_MAP_KEY, statusColorMap);
+  }
+
+  function getWorkflowStatusMeta(value) {
+    return WORKFLOW_STATUS_META[normalizeWorkflowStatus(value)];
+  }
+
+  function getWorkflowStatusLabel(value) {
+    const meta = getWorkflowStatusMeta(value);
+    return t(meta?.labelKey || 'workflowNotStarted');
+  }
+
+  function getWorkflowStatusColor(status) {
+    const key = normalizeWorkflowStatus(status);
+    return normalizeHexColor(statusColorMap?.[key], DEFAULT_STATUS_COLORS[key]);
+  }
+
+  function renderWorkflowStatusDot(customer) {
+    const statusKey = normalizeWorkflowStatus(customer?.workflowStatus);
+    const statusMeta = getWorkflowStatusMeta(statusKey);
+    const statusLabel = getWorkflowStatusLabel(statusKey);
+    const statusColor = getWorkflowStatusColor(statusKey);
+    return `<span class="workflow-dot ${statusMeta.className}" title="${escapeHtml(statusLabel)}" aria-label="${escapeHtml(statusLabel)}" style="background:${statusColor}; box-shadow:0 0 0 2px ${hexToRgba(statusColor, 0.28)};"></span>`;
+  }
+
+  function renderWorkflowStatusLegend() {
+    const legendRoot = document.getElementById('workflow-status-legend');
+    if (!legendRoot) return;
+
+    const statusOrder = ['not_started', 'shot', 'retouching', 'completed', 'cancelled'];
+    const itemsHtml = statusOrder
+      .filter((statusKey) => !!WORKFLOW_STATUS_META[statusKey])
+      .map((statusKey) => {
+        const statusLabel = getWorkflowStatusLabel(statusKey);
+        const statusColor = getWorkflowStatusColor(statusKey);
+        return `
+          <span class="workflow-legend-item" title="${escapeHtml(statusLabel)}">
+            <span class="workflow-dot ${WORKFLOW_STATUS_META[statusKey].className}" style="background:${statusColor}; box-shadow:0 0 0 2px ${hexToRgba(statusColor, 0.22)};"></span>
+            <span>${escapeHtml(statusLabel)}</span>
+          </span>
+        `;
+      })
+      .join('');
+
+    legendRoot.innerHTML = `
+      <span class="workflow-legend-title">${escapeHtml(t('statusLegendTitle'))}</span>
+      ${itemsHtml}
+    `;
+  }
+
+  function renderWorkflowStatusBadge(customer) {
+    const statusKey = normalizeWorkflowStatus(customer?.workflowStatus);
+    const statusMeta = getWorkflowStatusMeta(statusKey);
+    const statusLabel = getWorkflowStatusLabel(statusKey);
+    const statusColor = getWorkflowStatusColor(statusKey);
+    return `<span class="badge badge-workflow ${statusMeta.className}" style="background:${hexToRgba(statusColor, 0.2)}; color:${statusColor}; border-color:${hexToRgba(statusColor, 0.4)};">${statusLabel}</span>`;
+  }
+
+  function resolvePlanTagColor(planName) {
+    const plan = findPlanMasterByValue(planName);
+    return normalizeHexColor(plan?.color, getDefaultPlanTagColor(planName));
+  }
+
+  function renderPlanBadge(planName) {
+    const name = planName || '—';
+    const color = resolvePlanTagColor(name);
+    return `<span class="badge badge-plan" style="background:${hexToRgba(color, 0.2)}; color:${color}; border-color:${hexToRgba(color, 0.45)};">${escapeHtml(name)}</span>`;
+  }
+
   function normalizeExtraChargeItems(items) {
     if (!Array.isArray(items)) return [];
     return items
       .map((item) => {
         const rawName = typeof item?.name === 'string' ? item.name.trim() : '';
         const rawDetail = typeof item?.detail === 'string' ? item.detail.trim() : '';
-        const name = rawName || '追加項目';
+        const name = rawName || t('dynamicItemDefaultName');
+        let revenue = toSafeNumber(item?.revenue, NaN);
+        let cost = toSafeNumber(item?.cost, NaN);
+        const hasRevenue = Number.isFinite(revenue);
+        const hasCost = Number.isFinite(cost);
+
+        if (!hasRevenue && !hasCost) {
+          const legacyAmount = toSafeNumber(item?.amount, 0);
+          if (normalizeDynamicItemType(item?.type) === 'cost') {
+            revenue = 0;
+            cost = legacyAmount;
+          } else {
+            revenue = legacyAmount;
+            cost = 0;
+          }
+        } else {
+          revenue = hasRevenue ? revenue : 0;
+          cost = hasCost ? cost : 0;
+        }
         return {
           name,
           detail: rawDetail,
-          amount: toSafeNumber(item?.amount, 0),
+          revenue,
+          cost,
         };
       })
-      .filter((item) => item.name || item.detail || item.amount !== 0);
+      .filter((item) => item.name || item.detail || item.revenue !== 0 || item.cost !== 0);
   }
 
   function normalizeDynamicItemSuggestionMap(source) {
@@ -614,14 +1552,78 @@
       const key = String(rawKey || '').trim().toLowerCase();
       if (!key || !Array.isArray(values)) return;
       const uniq = [];
+      const seen = new Set();
       values.forEach((value) => {
-        const next = String(value || '').trim();
-        if (!next || uniq.includes(next)) return;
-        uniq.push(next);
+        let label = '';
+        let revenue = 0;
+        let cost = 0;
+        if (typeof value === 'string') {
+          label = String(value).trim();
+          const parsed = extractPriceFromText(label);
+          if (extractTypeFromText(label) === 'cost') {
+            cost = parsed;
+          } else {
+            revenue = parsed;
+          }
+        } else if (value && typeof value === 'object') {
+          label = String(value.label ?? value.name ?? value.value ?? '').trim();
+          const rawRevenue = toSafeNumber(value.revenue, NaN);
+          const rawCost = toSafeNumber(value.cost, NaN);
+          const hasRevenue = Number.isFinite(rawRevenue);
+          const hasCost = Number.isFinite(rawCost);
+          if (hasRevenue || hasCost) {
+            revenue = hasRevenue ? rawRevenue : 0;
+            cost = hasCost ? rawCost : 0;
+          } else {
+            const legacyPrice = toSafeNumber(value.price, extractPriceFromText(label));
+            if (normalizeDynamicItemType(value.type) === 'cost') {
+              cost = legacyPrice;
+            } else {
+              revenue = legacyPrice;
+            }
+          }
+        }
+        if (!label) return;
+        const labelKey = label.toLowerCase();
+        if (seen.has(labelKey)) return;
+        seen.add(labelKey);
+        uniq.push({ label, revenue: toSafeNumber(revenue, 0), cost: toSafeNumber(cost, 0) });
       });
       if (uniq.length > 0) normalized[key] = uniq.slice(0, 30);
     });
     return normalized;
+  }
+
+  function extractPriceFromText(text) {
+    const value = String(text || '');
+    if (!value) return 0;
+    const match = value.match(/(?:¥|￥|\$|€)?\s*([0-9][0-9,\.]{0,15})\s*(?:円|JPY|USD|EUR)?/i);
+    if (!match) return 0;
+    const numeric = Number(String(match[1]).replace(/,/g, ''));
+    return Number.isFinite(numeric) ? Math.round(numeric) : 0;
+  }
+
+  function normalizeDynamicItemType(type) {
+    const normalized = String(type || '').trim().toLowerCase();
+    if (normalized === 'cost' || normalized === '原価' || normalized === 'expense') return 'cost';
+    return 'revenue';
+  }
+
+  function extractTypeFromText(text) {
+    const value = String(text || '').toLowerCase();
+    if (!value) return 'revenue';
+    if (value.includes('原価') || value.includes('cost')) return 'cost';
+    return 'revenue';
+  }
+
+  function isPlanCategoryName(name) {
+    const normalized = String(name || '').trim().toLowerCase();
+    return normalized === 'プラン' || normalized === 'plan';
+  }
+
+  function normalizeDynamicItemDetailList(values) {
+    const normalizedMap = normalizeDynamicItemSuggestionMap({ temp: values });
+    return Array.isArray(normalizedMap.temp) ? normalizedMap.temp : [];
   }
 
   function normalizeDynamicItemNameSuggestions(source) {
@@ -651,7 +1653,8 @@
   }
 
   function getDynamicItemNameSuggestions() {
-    return normalizeDynamicItemNameSuggestions(dynamicItemNameSuggestions);
+    return normalizeDynamicItemNameSuggestions(dynamicItemNameSuggestions)
+      .filter((name) => !isPlanCategoryName(name));
   }
 
   function loadDynamicItemSuggestionMap() {
@@ -667,10 +1670,23 @@
     return String(name || '').trim().toLowerCase();
   }
 
-  function getDynamicItemDetailSuggestions(name) {
+  function getDynamicItemDetailEntries(name) {
     const key = getDynamicItemSuggestionKey(name);
     if (!key) return [];
-    return Array.isArray(dynamicItemSuggestionMap[key]) ? dynamicItemSuggestionMap[key] : [];
+    const entries = dynamicItemSuggestionMap[key];
+    return Array.isArray(entries) ? entries : [];
+  }
+
+  function getDynamicItemDetailSuggestions(name) {
+    return getDynamicItemDetailEntries(name).map((entry) => String(entry?.label || '').trim()).filter(Boolean);
+  }
+
+  function getDynamicItemDetailEntry(name, label) {
+    const target = String(label || '').trim();
+    if (!target) return null;
+    const targetKey = target.toLowerCase();
+    const entries = getDynamicItemDetailEntries(name);
+    return entries.find((entry) => String(entry?.label || '').trim().toLowerCase() === targetKey) || null;
   }
 
   function rememberDynamicItemDetails(items = []) {
@@ -693,9 +1709,25 @@
       }
       if (!key || !detail) return;
       const bucket = Array.isArray(nextMap[key]) ? [...nextMap[key]] : [];
-      if (bucket.includes(detail)) return;
-      bucket.unshift(detail);
-      nextMap[key] = bucket.slice(0, 30);
+      const detailKey = detail.toLowerCase();
+      const foundIndex = bucket.findIndex((entry) => String(entry?.label || '').trim().toLowerCase() === detailKey);
+      const nextRevenue = toSafeNumber(item?.revenue, 0);
+      const nextCost = toSafeNumber(item?.cost, 0);
+      if (foundIndex !== -1) {
+        const currentRevenue = toSafeNumber(bucket[foundIndex]?.revenue, 0);
+        const currentCost = toSafeNumber(bucket[foundIndex]?.cost, 0);
+        if (nextRevenue !== currentRevenue) {
+          bucket[foundIndex] = { ...bucket[foundIndex], revenue: nextRevenue };
+          updated = true;
+        }
+        if (nextCost !== currentCost) {
+          bucket[foundIndex] = { ...bucket[foundIndex], cost: nextCost };
+          updated = true;
+        }
+        return;
+      }
+      bucket.unshift({ label: detail, revenue: nextRevenue, cost: nextCost });
+      nextMap[key] = normalizeDynamicItemDetailList(bucket);
       updated = true;
     });
 
@@ -706,12 +1738,14 @@
   function normalizePlanDetails(planDetails, fallbackRevenue = 0) {
     const safe = (planDetails && typeof planDetails === 'object') ? planDetails : {};
     const basePrice = toSafeNumber(safe.basePrice, 0);
+    const planCost = toSafeNumber(safe.planCost, toSafeNumber(safe.baseCost, 0));
     const fallbackTotal = toSafeNumber(fallbackRevenue, basePrice);
     const totalPrice = toSafeNumber(safe.totalPrice, fallbackTotal);
 
     return {
       planName: typeof safe.planName === 'string' ? safe.planName : '',
       basePrice,
+      planCost,
       options: typeof safe.options === 'string' ? safe.options : '',
       totalPrice,
     };
@@ -734,76 +1768,302 @@
       .join('');
   }
 
+  function getDynamicItemCategoryValue(row) {
+    if (!row) return '';
+    const nameInput = row.querySelector('.dynamic-item-name');
+    if (!nameInput) return '';
+    return String(nameInput.value || '').trim();
+  }
+
+  function getDynamicItemDetailValue(row) {
+    if (!row) return '';
+    const detailSelect = row.querySelector('.dynamic-item-detail-select');
+    const detailCustom = row.querySelector('.dynamic-item-detail-custom');
+    if (detailSelect) {
+      if (detailSelect.value === '__other__') return String(detailCustom?.value || '').trim();
+      return String(detailSelect.value || '').trim();
+    }
+    const detailInput = row.querySelector('.dynamic-item-detail');
+    return String(detailInput?.value || '').trim();
+  }
+
+  function getDynamicItemRevenueValue(row) {
+    if (!row) return 0;
+    const revenueInput = row.querySelector('.dynamic-item-revenue');
+    return toSafeNumber(revenueInput?.value, 0);
+  }
+
+  function setDynamicItemRevenueValue(row, value) {
+    if (!row) return;
+    const revenueInput = row.querySelector('.dynamic-item-revenue');
+    if (!revenueInput) return;
+    revenueInput.value = String(toSafeNumber(value, 0));
+  }
+
+  function getDynamicItemCostValue(row) {
+    if (!row) return 0;
+    const costInput = row.querySelector('.dynamic-item-cost');
+    return toSafeNumber(costInput?.value, 0);
+  }
+
+  function setDynamicItemCostValue(row, value) {
+    if (!row) return;
+    const costInput = row.querySelector('.dynamic-item-cost');
+    if (!costInput) return;
+    costInput.value = String(toSafeNumber(value, 0));
+  }
+
+  function applyDynamicItemPriceFromSelection(row) {
+    if (!row) return;
+    const detailSelect = row.querySelector('.dynamic-item-detail-select');
+    if (!detailSelect) return;
+    if (!detailSelect.value || detailSelect.value === '__other__') return;
+    const category = getDynamicItemCategoryValue(row);
+    const selected = getDynamicItemDetailEntry(category, detailSelect.value);
+    const optionLabel = String(detailSelect.value || '').trim();
+    const selectedRevenue = toSafeNumber(selected?.revenue, NaN);
+    const selectedCost = toSafeNumber(selected?.cost, NaN);
+    const hasSelectedRevenue = Number.isFinite(selectedRevenue);
+    const hasSelectedCost = Number.isFinite(selectedCost);
+
+    if (hasSelectedRevenue || hasSelectedCost) {
+      setDynamicItemRevenueValue(row, hasSelectedRevenue ? selectedRevenue : 0);
+      setDynamicItemCostValue(row, hasSelectedCost ? selectedCost : 0);
+      return;
+    }
+
+    const optionText = String(detailSelect.options?.[detailSelect.selectedIndex]?.textContent || optionLabel).trim();
+    const legacyPrice = extractPriceFromText(optionLabel) || extractPriceFromText(optionText);
+    if (normalizeDynamicItemType(selected?.type || extractTypeFromText(`${optionLabel} ${optionText}`)) === 'cost') {
+      setDynamicItemRevenueValue(row, 0);
+      setDynamicItemCostValue(row, legacyPrice);
+      return;
+    }
+    setDynamicItemRevenueValue(row, legacyPrice);
+    setDynamicItemCostValue(row, 0);
+  }
+
+  function setDynamicItemCustomDetailVisible(row, visible) {
+    const detailCustom = row?.querySelector('.dynamic-item-detail-custom');
+    if (!detailCustom) return;
+    detailCustom.classList.toggle('hidden', !visible);
+    if (visible) {
+      detailCustom.removeAttribute('disabled');
+    } else {
+      detailCustom.setAttribute('disabled', 'disabled');
+      detailCustom.value = '';
+    }
+  }
+
   function renderDynamicItemDetailDatalist(row) {
     if (!row) return;
-    const nameInput = row.querySelector('.dynamic-item-name');
-    const datalist = row.querySelector('.dynamic-item-detail-options');
-    if (!datalist) return;
-    const suggestions = getDynamicItemDetailSuggestions(nameInput?.value || '');
-    datalist.innerHTML = suggestions
-      .map((value) => `<option value="${escapeHtml(value)}"></option>`)
-      .join('');
+    const detailSelect = row.querySelector('.dynamic-item-detail-select');
+    if (!detailSelect) return;
+
+    const defaultLabel = t('selectDefault');
+    const otherLabel = t('dynamicItemOtherManual');
+
+    const currentDetail = detailSelect.dataset.currentDetail !== undefined
+      ? String(detailSelect.dataset.currentDetail || '').trim()
+      : getDynamicItemDetailValue(row);
+    delete detailSelect.dataset.currentDetail;
+
+    const category = getDynamicItemCategoryValue(row);
+    const options = getDynamicItemDetailEntries(category);
+    detailSelect.innerHTML = [
+      `<option value="">${escapeHtml(defaultLabel)}</option>`,
+      ...options.map((entry) => {
+        const label = String(entry?.label || '').trim();
+        const revenue = toSafeNumber(entry?.revenue, 0);
+        const cost = toSafeNumber(entry?.cost, 0);
+        const metaParts = [];
+        if (revenue > 0) metaParts.push(t('dynamicItemMetaRevenue', { amount: formatCurrency(revenue) }));
+        if (cost > 0) metaParts.push(t('dynamicItemMetaCost', { amount: formatCurrency(cost) }));
+        const caption = metaParts.length > 0 ? `${label} (${metaParts.join(' / ')})` : label;
+        return `<option value="${escapeHtml(label)}">${escapeHtml(caption)}</option>`;
+      }),
+      `<option value="__other__">${escapeHtml(otherLabel)}</option>`,
+    ].join('');
+
+    const hasCurrent = currentDetail && options.some((entry) => String(entry?.label || '').trim() === currentDetail);
+    if (hasCurrent) {
+      detailSelect.value = currentDetail;
+      setDynamicItemCustomDetailVisible(row, false);
+      return;
+    }
+
+    if (currentDetail) {
+      detailSelect.value = '__other__';
+      setDynamicItemCustomDetailVisible(row, true);
+      const detailCustom = row.querySelector('.dynamic-item-detail-custom');
+      if (detailCustom) detailCustom.value = currentDetail;
+      return;
+    }
+
+    detailSelect.value = '';
+    setDynamicItemCustomDetailVisible(row, false);
   }
 
   function getDynamicItemRows() {
     return Array.from(document.querySelectorAll('#dynamic-items-container .dynamic-item-row'));
   }
 
-  function getCurrentExtraChargeTotal() {
-    return getDynamicItemRows().reduce((sum, row) => {
-      const amountInput = row.querySelector('.dynamic-item-amount');
-      return sum + toSafeNumber(amountInput?.value, 0);
-    }, 0);
+  function getConfiguredDynamicItemNames() {
+    return getDynamicItemNameSuggestions();
   }
 
-  function collectDynamicChargeItems() {
-    return getDynamicItemRows()
-      .map((row) => {
-        const nameInput = row.querySelector('.dynamic-item-name');
-        const detailInput = row.querySelector('.dynamic-item-detail');
-        const amountInput = row.querySelector('.dynamic-item-amount');
+  function mergeDynamicItemsWithConfigured(items = []) {
+    const normalized = normalizeExtraChargeItems(items).map((item) => ({
+      ...item,
+      settingItem: item?.settingItem === true,
+      lockedCategory: item?.lockedCategory === true,
+    })).filter((item) => !isPlanCategoryName(item.name));
+    const configuredNames = getConfiguredDynamicItemNames();
+    if (configuredNames.length === 0) return normalized;
+
+    const usedIndexes = new Set();
+    const merged = configuredNames.map((configuredName) => {
+      const matchIndex = normalized.findIndex((item, index) => {
+        if (usedIndexes.has(index)) return false;
+        return String(item.name || '').trim().toLowerCase() === configuredName.toLowerCase();
+      });
+
+      if (matchIndex !== -1) {
+        usedIndexes.add(matchIndex);
         return {
-          name: (nameInput?.value || '').trim(),
-          detail: (detailInput?.value || '').trim(),
-          amount: toSafeNumber(amountInput?.value, 0),
+          ...normalized[matchIndex],
+          name: configuredName,
+          settingItem: true,
+          lockedCategory: true,
+        };
+      }
+
+      return {
+        name: configuredName,
+        detail: '',
+        revenue: 0,
+        cost: 0,
+        settingItem: true,
+        lockedCategory: true,
+      };
+    });
+
+    normalized.forEach((item, index) => {
+      if (usedIndexes.has(index)) return;
+      if (item.settingItem) return;
+      merged.push(item);
+    });
+
+    return merged;
+  }
+
+  function getCurrentExtraChargeBreakdown() {
+    return getDynamicItemRows().reduce((sum, row) => {
+      sum.revenue += getDynamicItemRevenueValue(row);
+      sum.cost += getDynamicItemCostValue(row);
+      return sum;
+    }, { revenue: 0, cost: 0 });
+  }
+
+  function collectDynamicChargeItems(includeMeta = false) {
+    const collected = getDynamicItemRows()
+      .map((row) => {
+        return {
+          name: getDynamicItemCategoryValue(row),
+          detail: getDynamicItemDetailValue(row),
+          revenue: getDynamicItemRevenueValue(row),
+          cost: getDynamicItemCostValue(row),
+          settingItem: row.dataset.settingItem === 'true',
+          lockedCategory: row.dataset.lockedCategory === 'true',
         };
       })
-      .filter((item) => item.name || item.detail || item.amount !== 0)
+      .filter((item) => {
+        if (item.settingItem) {
+          return !!item.detail || item.revenue !== 0 || item.cost !== 0;
+        }
+        return item.name || item.detail || item.revenue !== 0 || item.cost !== 0;
+      })
       .map((item) => ({
-        name: item.name || '追加項目',
+        name: item.name || t('dynamicItemDefaultName'),
         detail: item.detail,
-        amount: item.amount,
+        revenue: toSafeNumber(item.revenue, 0),
+        cost: toSafeNumber(item.cost, 0),
+        settingItem: item.settingItem,
+        lockedCategory: item.lockedCategory,
       }));
+
+    if (includeMeta) return collected;
+    return collected.map((item) => ({
+      name: item.name,
+      detail: item.detail,
+      revenue: toSafeNumber(item.revenue, 0),
+      cost: toSafeNumber(item.cost, 0),
+    }));
   }
 
   function createDynamicItemRow(item = {}) {
     dynamicItemRowSeed += 1;
     const nameDatalistId = `dynamic-item-name-options-${Date.now()}-${dynamicItemRowSeed}`;
-    const datalistId = `dynamic-item-detail-options-${Date.now()}-${dynamicItemRowSeed}`;
+    const normalizedName = String(item?.name || '').trim();
+    const isSettingItem = item?.settingItem === true;
+    const isLockedCategory = item?.lockedCategory === true || isSettingItem;
+    const normalizedRevenue = toSafeNumber(item?.revenue, 0);
+    const normalizedCost = toSafeNumber(item?.cost, 0);
     const row = document.createElement('div');
     row.className = 'dynamic-item-row';
     if (item?.planLinked) row.dataset.planLinked = 'true';
+    row.dataset.settingItem = isSettingItem ? 'true' : 'false';
+    row.dataset.lockedCategory = isLockedCategory ? 'true' : 'false';
     row.innerHTML = `
-      <input type="text" class="dynamic-item-name" list="${nameDatalistId}" placeholder="項目名（例：衣装）" value="${escapeHtml(item.name || '')}" />
+      <div class="dynamic-item-field dynamic-item-category-field">
+        <label class="dynamic-item-inline-label">${escapeHtml(t('dynamicItemCategory'))}</label>
+        ${isLockedCategory
+        ? `<span class="dynamic-item-category-label">${escapeHtml(normalizedName || t('dynamicItemDefaultName'))}</span>
+             <input type="hidden" class="dynamic-item-name" value="${escapeHtml(normalizedName || t('dynamicItemDefaultName'))}" />`
+        : `<input type="text" class="dynamic-item-name" list="${nameDatalistId}" placeholder="${escapeHtml(t('dynamicItemCategoryPlaceholder'))}" value="${escapeHtml(normalizedName)}" />`
+      }
+      </div>
       <datalist id="${nameDatalistId}" class="dynamic-item-name-options"></datalist>
-      <input type="text" class="dynamic-item-detail" list="${datalistId}" placeholder="内容（例：ブランド名など）" value="${escapeHtml(item.detail || '')}" />
-      <datalist id="${datalistId}" class="dynamic-item-detail-options"></datalist>
-      <input type="number" class="dynamic-item-amount" min="0" step="1" value="${toSafeNumber(item.amount, 0)}" />
-      <button type="button" class="btn btn-secondary dynamic-item-remove" aria-label="項目を削除" title="項目を削除">🗑</button>
+      <div class="dynamic-item-field dynamic-item-detail-field">
+        <label class="dynamic-item-inline-label">${escapeHtml(t('dynamicItemDetail'))}</label>
+        <select class="dynamic-item-detail-select" data-current-detail="${escapeHtml(item.detail || '')}"></select>
+        <input type="text" class="dynamic-item-detail-custom hidden" placeholder="${escapeHtml(t('dynamicItemDetailPlaceholder'))}" disabled />
+      </div>
+      <div class="dynamic-item-field dynamic-item-revenue-field">
+        <label class="dynamic-item-inline-label">${escapeHtml(t('dynamicItemRevenue'))}</label>
+        <input type="number" class="dynamic-item-revenue" min="0" step="1" value="${normalizedRevenue}" />
+      </div>
+      <div class="dynamic-item-field dynamic-item-cost-field">
+        <label class="dynamic-item-inline-label">${escapeHtml(t('dynamicItemCost'))}</label>
+        <input type="number" class="dynamic-item-cost" min="0" step="1" value="${normalizedCost}" />
+      </div>
+      <button type="button" class="btn btn-secondary dynamic-item-remove" aria-label="${escapeHtml(t('dynamicItemRemove'))}" title="${escapeHtml(isSettingItem ? t('dynamicItemManageInSettings') : t('dynamicItemRemove'))}" ${isSettingItem ? 'disabled' : ''}>🗑</button>
     `;
 
     const nameInput = row.querySelector('.dynamic-item-name');
-    const detailInput = row.querySelector('.dynamic-item-detail');
-    const amountInput = row.querySelector('.dynamic-item-amount');
+    const detailSelect = row.querySelector('.dynamic-item-detail-select');
+    const detailCustomInput = row.querySelector('.dynamic-item-detail-custom');
+    const revenueInput = row.querySelector('.dynamic-item-revenue');
+    const costInput = row.querySelector('.dynamic-item-cost');
     const removeButton = row.querySelector('.dynamic-item-remove');
 
-    bindEventOnce(nameInput, 'input', () => {
-      renderDynamicItemNameDatalist(row);
-      renderDynamicItemDetailDatalist(row);
+    if (nameInput && nameInput.type !== 'hidden') {
+      bindEventOnce(nameInput, 'input', () => {
+        renderDynamicItemNameDatalist(row);
+        renderDynamicItemDetailDatalist(row);
+        updateGrandTotal();
+      }, `dynamic-item-name-${Date.now()}-${Math.random()}`);
+    }
+
+    bindEventOnce(detailSelect, 'change', () => {
+      const isOther = detailSelect?.value === '__other__';
+      setDynamicItemCustomDetailVisible(row, isOther);
+      if (!isOther) applyDynamicItemPriceFromSelection(row);
       updateGrandTotal();
-    }, `dynamic-item-name-${Date.now()}-${Math.random()}`);
-    bindEventOnce(detailInput, 'input', updateGrandTotal, `dynamic-item-detail-${Date.now()}-${Math.random()}`);
-    bindEventOnce(amountInput, 'input', updateGrandTotal, `dynamic-item-amount-${Date.now()}-${Math.random()}`);
+    }, `dynamic-item-detail-select-${Date.now()}-${Math.random()}`);
+    bindEventOnce(detailCustomInput, 'input', updateGrandTotal, `dynamic-item-detail-custom-${Date.now()}-${Math.random()}`);
+    bindEventOnce(revenueInput, 'input', updateGrandTotal, `dynamic-item-revenue-${Date.now()}-${Math.random()}`);
+    bindEventOnce(costInput, 'input', updateGrandTotal, `dynamic-item-cost-${Date.now()}-${Math.random()}`);
     bindEventOnce(removeButton, 'click', () => {
       row.remove();
       updateGrandTotal();
@@ -819,119 +2079,177 @@
     if (!container) return;
     container.innerHTML = '';
 
-    normalizeExtraChargeItems(items).forEach((item) => {
+    mergeDynamicItemsWithConfigured(items).forEach((item) => {
       container.appendChild(createDynamicItemRow(item));
     });
 
     updateGrandTotal();
   }
 
+  function syncDynamicItemRowsWithSettings() {
+    const container = $('#dynamic-items-container');
+    const modal = document.getElementById('modal-overlay');
+    if (!container || !modal || modal.style.display !== 'flex') return;
+    const currentItems = collectDynamicChargeItems(true);
+    renderDynamicChargeItems(currentItems);
+  }
+
   function addDynamicChargeItem(item = {}) {
     const container = $('#dynamic-items-container');
     if (!container) return;
-    container.appendChild(createDynamicItemRow(item));
+    container.appendChild(createDynamicItemRow({
+      ...item,
+      settingItem: item?.settingItem === true,
+      lockedCategory: item?.lockedCategory === true,
+    }));
     updateGrandTotal();
   }
 
-  function ensurePlanLinkedFirstDynamicItem(planName) {
-    const normalizedPlanName = String(planName || '').trim();
-    if (!normalizedPlanName) return;
-
-    const container = $('#dynamic-items-container');
-    if (!container) return;
-
-    const rows = getDynamicItemRows();
-    let planRow = rows.find((row) => row.dataset.planLinked === 'true');
-    if (!planRow) {
-      planRow = rows.find((row) => ((row.querySelector('.dynamic-item-name')?.value || '').trim() === 'プラン'));
-    }
-
-    if (!planRow) {
-      planRow = createDynamicItemRow({ name: 'プラン', detail: normalizedPlanName, amount: 0, planLinked: true });
-      container.prepend(planRow);
-    } else if (container.firstElementChild !== planRow) {
-      container.prepend(planRow);
-    }
-
-    planRow.dataset.planLinked = 'true';
-    const nameInput = planRow.querySelector('.dynamic-item-name');
-    const detailInput = planRow.querySelector('.dynamic-item-detail');
-    const amountInput = planRow.querySelector('.dynamic-item-amount');
-
-    if (nameInput) nameInput.value = 'プラン';
-    if (detailInput) detailInput.value = normalizedPlanName;
-    if (amountInput && !amountInput.value) amountInput.value = '0';
-    renderDynamicItemDetailDatalist(planRow);
-    updateGrandTotal();
+  function getPlanPriceInput() {
+    return $('#form-plan-price');
   }
 
-  function getCurrentPricingBaseTotal() {
-    const basePrice = toSafeNumber($('#form-base-price')?.value, 0);
-    return basePrice + getCurrentExtraChargeTotal();
+  function getPlanCostInput() {
+    return $('#form-plan-cost');
+  }
+
+  function setPlanBasePriceValue(value) {
+    const numericValue = toSafeNumber(value, 0);
+    const basePriceInput = $('#form-base-price');
+    const planPriceInput = getPlanPriceInput();
+    if (basePriceInput) basePriceInput.value = String(numericValue);
+    if (planPriceInput) planPriceInput.value = String(numericValue);
+  }
+
+  function getPlanBasePriceValue() {
+    const planPriceInput = getPlanPriceInput();
+    const basePriceInput = $('#form-base-price');
+    if (planPriceInput) return toSafeNumber(planPriceInput.value, toSafeNumber(basePriceInput?.value, 0));
+    return toSafeNumber(basePriceInput?.value, 0);
+  }
+
+  function setPlanBaseCostValue(value) {
+    const numericValue = toSafeNumber(value, 0);
+    const planCostInput = getPlanCostInput();
+    if (planCostInput) planCostInput.value = String(numericValue);
+  }
+
+  function getPlanBaseCostValue() {
+    const planCostInput = getPlanCostInput();
+    return toSafeNumber(planCostInput?.value, 0);
+  }
+
+  function getCurrentPricingTotals() {
+    const planRevenue = getPlanBasePriceValue();
+    const planCost = getPlanBaseCostValue();
+    const breakdown = getCurrentExtraChargeBreakdown();
+    const revenueTotal = planRevenue + breakdown.revenue;
+    const estimatedExpense = planCost + breakdown.cost;
+    const expenseInput = $('#form-expense');
+    if (expenseInput && !isExpenseManuallyEdited) {
+      expenseInput.value = String(estimatedExpense);
+    }
+    const expenseTotal = expenseInput
+      ? toSafeNumber(expenseInput.value, estimatedExpense)
+      : estimatedExpense;
+    const profitTotal = revenueTotal - expenseTotal;
+    return {
+      planRevenue,
+      planCost,
+      extraRevenue: breakdown.revenue,
+      extraCost: breakdown.cost,
+      estimatedExpense,
+      expenseTotal,
+      revenueTotal,
+      profitTotal,
+    };
+  }
+
+  function updateProfitDisplay(value) {
+    const profitInput = $('#form-profit');
+    if (!profitInput) return;
+    const profit = toSafeNumber(value, 0);
+    profitInput.value = String(profit);
+    profitInput.classList.remove('profit-positive', 'profit-negative', 'profit-neutral');
+    if (profit > 0) profitInput.classList.add('profit-positive');
+    else if (profit < 0) profitInput.classList.add('profit-negative');
+    else profitInput.classList.add('profit-neutral');
   }
 
   function updateGrandTotal() {
     const totalPriceInput = $('#form-total-price');
     const revenueInput = $('#form-revenue');
     const adjustmentInput = $('#form-price-adjustment');
-    const basePrice = toSafeNumber($('#form-base-price')?.value, 0);
-    const extraChargeTotal = getCurrentExtraChargeTotal();
-    const adjustment = toSafeNumber(adjustmentInput?.value, 0);
-    const grandTotal = basePrice + extraChargeTotal + adjustment;
+    const totals = getCurrentPricingTotals();
 
-    if (totalPriceInput) totalPriceInput.value = String(grandTotal);
-    if (revenueInput) revenueInput.value = String(grandTotal);
-    return grandTotal;
+    if (adjustmentInput) adjustmentInput.value = '0';
+    if (totalPriceInput) totalPriceInput.value = String(totals.revenueTotal);
+    if (revenueInput) revenueInput.value = String(totals.revenueTotal);
+    updateProfitDisplay(totals.profitTotal);
+    return totals.revenueTotal;
   }
 
-  function syncTotalsFromPlanPricing() {
-    return updateGrandTotal();
+  function handlePlanPriceInputChange(event) {
+    const next = toSafeNumber(event?.target?.value, 0);
+    const basePriceInput = $('#form-base-price');
+    if (basePriceInput) basePriceInput.value = String(next);
+    updateGrandTotal();
+  }
+
+  function handleBasePriceInputChange(event) {
+    const next = toSafeNumber(event?.target?.value, 0);
+    const planPriceInput = getPlanPriceInput();
+    if (planPriceInput) planPriceInput.value = String(next);
+    updateGrandTotal();
+  }
+
+  function handlePlanCostInputChange() {
+    if (!isExpenseManuallyEdited) {
+      const expenseInput = $('#form-expense');
+      if (expenseInput) expenseInput.value = '';
+    }
+    updateGrandTotal();
   }
 
   function syncAdjustmentFromRevenueInput() {
-    const adjustmentInput = $('#form-price-adjustment');
-    const revenueInput = $('#form-revenue');
-    if (!adjustmentInput || !revenueInput) return;
+    // Revenue is now derived from plan + revenue-type option items.
+    updateGrandTotal();
+  }
 
-    const baseTotal = getCurrentPricingBaseTotal();
-    const revenue = toSafeNumber(revenueInput.value, 0);
-    const adjustment = revenue - baseTotal;
-    adjustmentInput.value = String(adjustment);
+  function handleExpenseInputChange() {
+    isExpenseManuallyEdited = true;
     updateGrandTotal();
   }
 
   function syncAdjustmentFromTotalInput() {
-    const adjustmentInput = $('#form-price-adjustment');
-    const totalPriceInput = $('#form-total-price');
-    if (!adjustmentInput || !totalPriceInput) return;
-
-    const baseTotal = getCurrentPricingBaseTotal();
-    const total = toSafeNumber(totalPriceInput.value, 0);
-    const adjustment = total - baseTotal;
-    adjustmentInput.value = String(adjustment);
+    // Total is synchronized with revenue and computed automatically.
     updateGrandTotal();
   }
 
   function handlePlanSelectChange(event) {
     const selectedValue = event?.target?.value || '';
     const selectedPlan = findPlanMasterByValue(selectedValue);
+    const planNameInput = $('#form-plan-name');
+    const adjustmentInput = $('#form-price-adjustment');
+    const expenseInput = $('#form-expense');
+
     if (!selectedPlan) {
-      const existingPlanRow = getDynamicItemRows().find((row) => row.dataset.planLinked === 'true');
-      if (existingPlanRow) existingPlanRow.remove();
+      if (planNameInput) planNameInput.value = '';
+      if (adjustmentInput) adjustmentInput.value = '0';
+      if (expenseInput) expenseInput.value = '';
+      isExpenseManuallyEdited = false;
+      setPlanBasePriceValue(0);
+      setPlanBaseCostValue(0);
       updateGrandTotal();
       return;
     }
 
-    const planNameInput = $('#form-plan-name');
-    const basePriceInput = $('#form-base-price');
-    const optionsInput = $('#form-plan-options');
-    const adjustmentInput = $('#form-price-adjustment');
-
     if (planNameInput) planNameInput.value = selectedPlan.name;
-    if (basePriceInput) basePriceInput.value = String(toSafeNumber(selectedPlan.price, 0));
-    if (optionsInput && !optionsInput.value.trim()) optionsInput.value = '';
+    setPlanBasePriceValue(selectedPlan.price);
+    setPlanBaseCostValue(selectedPlan.cost);
     if (adjustmentInput) adjustmentInput.value = '0';
-    ensurePlanLinkedFirstDynamicItem(selectedPlan.name);
+    if (expenseInput) expenseInput.value = '';
+    isExpenseManuallyEdited = false;
     updateGrandTotal();
   }
 
@@ -971,7 +2289,7 @@
       phone: '',
       bank: '',
       invoiceTemplate: 'modern',
-      invoiceFooterMessage: DEFAULT_INVOICE_MESSAGE,
+      invoiceFooterMessage: getDefaultInvoiceMessage(),
     };
 
     return { ...defaults, ...(getCloudValue(TAX_SETTINGS_KEY, {}) || {}) };
@@ -996,6 +2314,45 @@
     });
   }
 
+  function buildExportSnapshot(backupType = 'manual') {
+    return {
+      customers,
+      options,
+      planMaster,
+      dashboardConfig,
+      listColumnConfig,
+      statusColorMap,
+      heroMetricsConfig,
+      heroMetricsVisible,
+      googleCalendarAutoSyncEnabled,
+      googleCalendarSelectedId: getTargetGoogleCalendarId(),
+      contractTemplateText,
+      dynamicItemNameSuggestions: getDynamicItemNameSuggestions(),
+      dynamicItemSuggestionMap: normalizeDynamicItemSuggestionMap(dynamicItemSuggestionMap),
+      expenses: getExpenses(),
+      taxSettings: getTaxSettings(),
+      invoiceSenderProfile: getInvoiceSenderProfile(),
+      theme: currentTheme,
+      language: currentLang,
+      currency: currentCurrency,
+      exportedAt: new Date().toISOString(),
+      backupType,
+    };
+  }
+
+  function downloadJsonFile(filename, payload) {
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = filename;
+    anchor.style.display = 'none';
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 0);
+  }
+
   window.getTaxSettings = getTaxSettings; // Make global for generator
 
   function calculateTax(amount) {
@@ -1017,9 +2374,12 @@
   window.calculateTax = calculateTax;
 
   // ===== Theme Management =====
-  let currentTheme = getCloudValue(THEME_KEY, getLocalValue(THEME_KEY, 'dark'));
+  let currentTheme = FORCE_DARK_MODE
+    ? 'dark'
+    : getCloudValue(THEME_KEY, getLocalValue(THEME_KEY, 'dark'));
 
   function applyTheme(theme) {
+    if (FORCE_DARK_MODE) theme = 'dark';
     currentTheme = theme;
     document.documentElement.setAttribute('data-theme', theme);
     saveLocalValue(THEME_KEY, theme);
@@ -1029,40 +2389,152 @@
     const themeBtn = document.getElementById('btn-theme');
     if (themeBtn) {
       themeBtn.textContent = theme === 'dark' ? '🌙' : '☀️';
-      themeBtn.title = theme === 'dark' ? 'Light Mode' : 'Dark Mode';
+      themeBtn.title = theme === 'dark' ? t('themeSwitchToLight') : t('themeSwitchToDark');
+      themeBtn.setAttribute('aria-label', themeBtn.title);
     }
   }
   window.applyTheme = applyTheme;
 
   function toggleTheme() {
+    if (FORCE_DARK_MODE) {
+      applyTheme('dark');
+      return;
+    }
     const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
     applyTheme(newTheme);
   }
   window.toggleTheme = toggleTheme;
+
+  function updateToggleButtonText(buttonId, text, title, expanded = null) {
+    const button = document.getElementById(buttonId);
+    if (!button) return;
+    button.textContent = text;
+    button.title = title;
+    button.setAttribute('aria-label', title);
+    if (expanded !== null) {
+      button.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+    }
+  }
+
+  function updateHeroStatsToggleButtonLabel() {
+    const label = `📊 ${t('statsButton')}`;
+    const title = t('statsMenuTitle');
+    updateToggleButtonText('btn-toggle-dashboard', label, title, isDashboardQuickMenuOpen);
+  }
+
+  function setHeroMetricsVisibility(isVisible) {
+    const nextVisible = !!isVisible;
+    heroMetricsConfig = normalizeHeroMetricsConfig(heroMetricsConfig).map((item) => ({
+      ...item,
+      visible: nextVisible,
+    }));
+    saveHeroMetricsConfig(heroMetricsConfig);
+    applyHeroMetricsConfig();
+  }
+
+  function applyHeroMetricsConfig() {
+    const panel = document.querySelector('.dashboard-hero-metrics');
+    if (!panel) return;
+
+    const cards = Array.from(panel.querySelectorAll('.hero-metric-card[data-hero-metric-key]'));
+    const cardMap = new Map(cards.map((card) => [card.dataset.heroMetricKey, card]));
+    let visibleCount = 0;
+
+    normalizeHeroMetricsConfig(heroMetricsConfig).forEach((item) => {
+      const card = cardMap.get(item.key);
+      if (!card) return;
+      const isVisible = item.visible !== false;
+      card.style.display = isVisible ? '' : 'none';
+      if (isVisible) visibleCount += 1;
+    });
+
+    heroMetricsVisible = visibleCount > 0;
+    panel.classList.toggle('is-hidden', !heroMetricsVisible);
+    saveLocalValue(HERO_METRICS_VISIBLE_KEY, heroMetricsVisible);
+    saveCloudValue(HERO_METRICS_VISIBLE_KEY, heroMetricsVisible);
+    updateHeroStatsToggleButtonLabel();
+  }
+
+  function updateHeroMetricVisibility(itemKey, visible) {
+    heroMetricsConfig = normalizeHeroMetricsConfig(heroMetricsConfig).map((item) => (
+      item.key === itemKey ? { ...item, visible: !!visible } : item
+    ));
+    saveHeroMetricsConfig(heroMetricsConfig);
+    applyHeroMetricsConfig();
+    renderDashboardQuickMenu();
+  }
 
   function setDashboardVisibility(isVisible) {
     const nextVisible = !!isVisible;
     const visibilityChanged = dashboardVisible !== nextVisible;
     dashboardVisible = nextVisible;
     const collapsible = document.getElementById('dashboard-collapsible');
-    const toggleBtn = document.getElementById('btn-toggle-dashboard');
 
     if (collapsible) {
       collapsible.classList.toggle('is-collapsed', !dashboardVisible);
-    }
-
-    if (toggleBtn) {
-      const label = dashboardVisible ? '📊 統計を隠す' : '📊 統計を表示';
-      toggleBtn.textContent = label;
-      toggleBtn.title = label;
-      toggleBtn.setAttribute('aria-expanded', dashboardVisible ? 'true' : 'false');
     }
 
     saveLocalValue(DASHBOARD_VISIBILITY_KEY, dashboardVisible);
     if (visibilityChanged) {
       saveCloudValue(DASHBOARD_VISIBILITY_KEY, dashboardVisible);
     }
+    if (dashboardVisible && revenueProfitChartInstance) {
+      requestAnimationFrame(() => {
+        revenueProfitChartInstance.resize();
+        revenueProfitChartInstance.update('none');
+        if (requestTrendChartInstance) {
+          requestTrendChartInstance.resize();
+          requestTrendChartInstance.update('none');
+        }
+      });
+    }
     renderDashboardQuickMenu();
+  }
+
+  function updateGraphToggleButtonLabel() {
+    const label = isGraphVisible ? `📈 ${t('graphToggleOn')}` : `📈 ${t('graphToggleOff')}`;
+    const title = isGraphVisible ? t('graphToggleHide') : t('graphToggleShow');
+    updateToggleButtonText('btn-toggle-graph', label, title, isGraphVisible);
+  }
+
+  function setGraphVisibility(isVisible, shouldRender = true) {
+    const graphContainer = document.getElementById('graph-container');
+    isGraphVisible = !!isVisible;
+    updateGraphToggleButtonLabel();
+    if (!graphContainer) return;
+
+    if (graphHideTimer) {
+      clearTimeout(graphHideTimer);
+      graphHideTimer = null;
+    }
+
+    if (isGraphVisible) {
+      graphContainer.style.display = 'block';
+      requestAnimationFrame(() => {
+        graphContainer.classList.add('is-visible');
+      });
+      if (shouldRender) {
+        renderRevenueChart(selectedDashboardMonth.getFullYear());
+        renderRequestTrendChart(selectedDashboardMonth.getFullYear());
+      }
+      if (revenueProfitChartInstance) {
+        requestAnimationFrame(() => {
+          revenueProfitChartInstance.resize();
+          revenueProfitChartInstance.update('none');
+          if (requestTrendChartInstance) {
+            requestTrendChartInstance.resize();
+            requestTrendChartInstance.update('none');
+          }
+        });
+      }
+      return;
+    }
+
+    graphContainer.classList.remove('is-visible');
+    graphHideTimer = setTimeout(() => {
+      if (isGraphVisible) return;
+      graphContainer.style.display = 'none';
+    }, 220);
   }
 
   function renderDashboardQuickMenu() {
@@ -1073,9 +2545,26 @@
     rows.push(`
       <label class="dashboard-quick-item dashboard-quick-item-main">
         <input type="checkbox" id="dashboard-quick-visible" ${dashboardVisible ? 'checked' : ''}>
-        <span>統計エリアを表示</span>
+        <span>${escapeHtml(t('dashboardQuickShowArea'))}</span>
       </label>
       <div class="dashboard-quick-divider"></div>
+    `);
+
+    rows.push(`
+      <div class="dashboard-quick-item-main">${escapeHtml(t('quickMenuHeroMetrics'))}</div>
+    `);
+    normalizeHeroMetricsConfig(heroMetricsConfig).forEach((item) => {
+      rows.push(`
+        <label class="dashboard-quick-item">
+          <input type="checkbox" data-hero-metric-key="${item.key}" ${item.visible ? 'checked' : ''}>
+          <span>${escapeHtml(getHeroMetricLabel(item.key))}</span>
+        </label>
+      `);
+    });
+    rows.push(`<div class="dashboard-quick-divider"></div>`);
+
+    rows.push(`
+      <div class="dashboard-quick-item-main">${escapeHtml(t('quickMenuDashboardCards'))}</div>
     `);
 
     dashboardConfig.forEach((item) => {
@@ -1093,6 +2582,13 @@
     bindEventOnce(visibleInput, 'change', (e) => {
       setDashboardVisibility(!!e.target.checked);
     }, 'dashboard-quick-visible-change');
+
+    menuContent.querySelectorAll('input[data-hero-metric-key]').forEach((input) => {
+      const key = input.dataset.heroMetricKey;
+      bindEventOnce(input, 'change', (e) => {
+        updateHeroMetricVisibility(key, !!e.target.checked);
+      }, `dashboard-quick-hero-${key}`);
+    });
 
     menuContent.querySelectorAll('input[data-dashboard-key]').forEach((input) => {
       const key = input.dataset.dashboardKey;
@@ -1117,13 +2613,21 @@
       menu.style.display = 'none';
     }
     toggleBtn.setAttribute('data-menu-open', isDashboardQuickMenuOpen ? 'true' : 'false');
+    updateHeroStatsToggleButtonLabel();
   }
 
   function handleDashboardToggleButtonClick(event) {
-    event.preventDefault();
-    event.stopPropagation();
+    event?.preventDefault?.();
+    event?.stopPropagation?.();
     setListColumnsMenuOpen(false);
     setDashboardQuickMenuOpen(!isDashboardQuickMenuOpen);
+  }
+
+  function handleGraphToggleButtonClick(event) {
+    event?.preventDefault?.();
+    event?.stopPropagation?.();
+    setDashboardQuickMenuOpen(false);
+    setGraphVisibility(!isGraphVisible, true);
   }
 
   function handleDashboardQuickMenuOutsideClick(event) {
@@ -1200,15 +2704,11 @@
   }
 
   function getListSettingsButtonLabel() {
-    if (currentLang === 'fr') return '⚙ Configuration Colonnes';
-    if (currentLang === 'en') return '⚙ Column Settings';
-    return '⚙ 表示項目設定';
+    return `⚙ ${t('listColumnSettings')}`;
   }
 
   function getListSettingsHintLabel() {
-    if (currentLang === 'fr') return 'Afficher / masquer et réordonner';
-    if (currentLang === 'en') return 'Show / hide and reorder';
-    return '表示・非表示と並び替え';
+    return t('listColumnSettingsHint');
   }
 
   function updateListSettingsButtonLabel() {
@@ -1373,6 +2873,56 @@
     }
   }
 
+  function isMobileViewport() {
+    return window.matchMedia('(max-width: 768px)').matches;
+  }
+
+  function setMobileHeaderMenuOpen(isOpen) {
+    if (!appHeader || !mobileHeaderMenuButton || !headerActions) return;
+    if (!isMobileViewport()) {
+      isMobileHeaderMenuOpen = false;
+      appHeader.classList.remove('mobile-menu-open');
+      mobileHeaderMenuButton.setAttribute('aria-expanded', 'false');
+      return;
+    }
+    isMobileHeaderMenuOpen = !!isOpen;
+    appHeader.classList.toggle('mobile-menu-open', isMobileHeaderMenuOpen);
+    mobileHeaderMenuButton.setAttribute('aria-expanded', isMobileHeaderMenuOpen ? 'true' : 'false');
+  }
+
+  function handleMobileHeaderMenuToggleClick(event) {
+    if (!isMobileViewport()) return;
+    event?.preventDefault?.();
+    event?.stopPropagation?.();
+    setMobileHeaderMenuOpen(!isMobileHeaderMenuOpen);
+  }
+
+  function handleMobileHeaderMenuOutsideClick(event) {
+    if (!isMobileHeaderMenuOpen || !appHeader) return;
+    if (appHeader.contains(event.target)) return;
+    setMobileHeaderMenuOpen(false);
+  }
+
+  function handleMobileHeaderMenuEscape(event) {
+    if (event.key === 'Escape' && isMobileHeaderMenuOpen) {
+      setMobileHeaderMenuOpen(false);
+    }
+  }
+
+  function handleMobileHeaderActionClick(event) {
+    if (!isMobileHeaderMenuOpen || !isMobileViewport()) return;
+    if (!headerActions) return;
+    const clickable = event.target.closest('button, .btn, .theme-toggle, a');
+    if (!clickable) return;
+    setMobileHeaderMenuOpen(false);
+  }
+
+  function handleMobileHeaderViewportChange() {
+    if (!isMobileViewport()) {
+      setMobileHeaderMenuOpen(false);
+    }
+  }
+
   window.toggleDashboardCardVisibility = updateDashboardCardVisibility;
   window.moveDashboardCard = moveDashboardCard;
 
@@ -1441,7 +2991,7 @@
         const input = document.createElement('input');
         input.type = 'text';
         input.id = 'form-assignedTo';
-        input.placeholder = `カメラマン名を入力...`;
+        input.placeholder = t('placeholderPhotographerName');
         sel.replaceWith(input);
         input.focus();
         input.addEventListener('blur', () => {
@@ -1534,6 +3084,260 @@
     return !!parts && parts.year === year;
   }
 
+  function getDashboardChartMonthLabels() {
+    const locale = currentLang === 'fr' ? 'fr-FR' : (currentLang === 'ja' ? 'ja-JP' : 'en-US');
+    return Array.from({ length: 12 }, (_, index) => (
+      new Date(2000, index, 1).toLocaleString(locale, { month: 'short' })
+    ));
+  }
+
+  function getDashboardChartDatasetLabels() {
+    return {
+      revenue: t('chartMonthlyRevenue'),
+      profit: t('chartMonthlyProfit'),
+    };
+  }
+
+  function getDashboardRequestChartDatasetLabels(year) {
+    return {
+      current: t('chartRequestCurrentYear', { year: String(year) }),
+      previous: t('chartRequestPreviousYear', { year: String(year - 1) }),
+      comparison: t('chartComparison'),
+    };
+  }
+
+  function getCustomerExpenseValue(customer) {
+    const storedExpense = Number(customer?.expense);
+    if (Number.isFinite(storedExpense)) return storedExpense;
+    const planCost = toSafeNumber(customer?.planCost, toSafeNumber(customer?.planDetails?.planCost, 0));
+    const extraCost = normalizeExtraChargeItems(customer?.extraChargeItems)
+      .reduce((sum, item) => sum + toSafeNumber(item?.cost, 0), 0);
+    return planCost + extraCost;
+  }
+
+  function getCustomerProfitValue(customer) {
+    const revenue = toSafeNumber(customer?.revenue, toSafeNumber(customer?.planDetails?.totalPrice, 0));
+    const storedProfit = Number(customer?.profit);
+    if (Number.isFinite(storedProfit)) return storedProfit;
+    return revenue - getCustomerExpenseValue(customer);
+  }
+
+  function buildMonthlyRevenueProfitSeries(year) {
+    const revenueByMonth = Array(12).fill(0);
+    const profitByMonth = Array(12).fill(0);
+
+    customers.forEach((customer) => {
+      const parts = parseDateParts(customer?.shootingDate);
+      if (!parts || parts.year !== year || parts.month < 0 || parts.month > 11) return;
+
+      const revenue = toSafeNumber(customer?.revenue, toSafeNumber(customer?.planDetails?.totalPrice, 0));
+      const profit = getCustomerProfitValue(customer);
+      revenueByMonth[parts.month] += revenue;
+      profitByMonth[parts.month] += profit;
+    });
+
+    return { revenueByMonth, profitByMonth };
+  }
+
+  function getRequestBaseDate(customer) {
+    return customer?.contractDate || customer?.inquiryDate || customer?.createdAt || '';
+  }
+
+  function buildMonthlyRequestCountSeries(year) {
+    const currentYearCounts = Array(12).fill(0);
+    const previousYearCounts = Array(12).fill(0);
+
+    customers.forEach((customer) => {
+      const parts = parseDateParts(getRequestBaseDate(customer));
+      if (!parts || parts.month < 0 || parts.month > 11) return;
+      if (parts.year === year) {
+        currentYearCounts[parts.month] += 1;
+      } else if (parts.year === year - 1) {
+        previousYearCounts[parts.month] += 1;
+      }
+    });
+
+    return { currentYearCounts, previousYearCounts };
+  }
+
+  function renderRevenueChart(year) {
+    const canvas = document.getElementById('revenueChart');
+    if (!canvas || typeof window.Chart === 'undefined') return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    const labels = getDashboardChartMonthLabels();
+    const { revenueByMonth, profitByMonth } = buildMonthlyRevenueProfitSeries(year);
+    const datasetLabels = getDashboardChartDatasetLabels();
+
+    if (!revenueProfitChartInstance) {
+      revenueProfitChartInstance = new window.Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels,
+          datasets: [
+            {
+              label: datasetLabels.revenue,
+              data: revenueByMonth,
+              backgroundColor: '#007bff',
+              borderColor: '#007bff',
+              borderWidth: 1,
+              borderRadius: 6,
+              maxBarThickness: 28,
+            },
+            {
+              label: datasetLabels.profit,
+              data: profitByMonth,
+              backgroundColor: '#28a745',
+              borderColor: '#28a745',
+              borderWidth: 1,
+              borderRadius: 6,
+              maxBarThickness: 28,
+            },
+          ],
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          interaction: {
+            mode: 'index',
+            intersect: false,
+          },
+          plugins: {
+            legend: {
+              position: 'top',
+              labels: {
+                usePointStyle: true,
+                pointStyle: 'rectRounded',
+              },
+            },
+            tooltip: {
+              callbacks: {
+                label: (context) => `${context.dataset.label}: ${formatCurrency(Number(context.parsed?.y) || 0)}`,
+              },
+            },
+          },
+          scales: {
+            x: {
+              grid: { display: false },
+            },
+            y: {
+              beginAtZero: true,
+              ticks: {
+                callback: (value) => formatCurrency(Number(value) || 0),
+              },
+            },
+          },
+        },
+      });
+      return;
+    }
+
+    revenueProfitChartInstance.data.labels = labels;
+    if (revenueProfitChartInstance.data.datasets[0]) {
+      revenueProfitChartInstance.data.datasets[0].label = datasetLabels.revenue;
+      revenueProfitChartInstance.data.datasets[0].data = revenueByMonth;
+      revenueProfitChartInstance.data.datasets[0].backgroundColor = '#007bff';
+      revenueProfitChartInstance.data.datasets[0].borderColor = '#007bff';
+    }
+    if (revenueProfitChartInstance.data.datasets[1]) {
+      revenueProfitChartInstance.data.datasets[1].label = datasetLabels.profit;
+      revenueProfitChartInstance.data.datasets[1].data = profitByMonth;
+      revenueProfitChartInstance.data.datasets[1].backgroundColor = '#28a745';
+      revenueProfitChartInstance.data.datasets[1].borderColor = '#28a745';
+    }
+    revenueProfitChartInstance.update();
+  }
+
+  function renderRequestTrendChart(year) {
+    const canvas = document.getElementById('requestTrendChart');
+    if (!canvas || typeof window.Chart === 'undefined') return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    const labels = getDashboardChartMonthLabels();
+    const { currentYearCounts, previousYearCounts } = buildMonthlyRequestCountSeries(year);
+    const hasPreviousYearData = previousYearCounts.some((value) => value > 0);
+    const datasetLabels = getDashboardRequestChartDatasetLabels(year);
+
+    const datasets = [
+      {
+        label: datasetLabels.current,
+        data: currentYearCounts,
+        borderColor: '#2563eb',
+        backgroundColor: 'rgba(37,99,235,0.14)',
+        fill: false,
+        tension: 0.3,
+        borderWidth: 2,
+        pointRadius: 3,
+        pointHoverRadius: 5,
+      },
+    ];
+
+    if (hasPreviousYearData) {
+      datasets.push({
+        label: datasetLabels.previous,
+        data: previousYearCounts,
+        borderColor: '#94a3b8',
+        backgroundColor: 'rgba(148,163,184,0.12)',
+        fill: false,
+        tension: 0.3,
+        borderWidth: 2,
+        borderDash: [6, 4],
+        pointRadius: 2.5,
+        pointHoverRadius: 4.5,
+      });
+    }
+
+    if (!requestTrendChartInstance) {
+      requestTrendChartInstance = new window.Chart(ctx, {
+        type: 'line',
+        data: {
+          labels,
+          datasets,
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          interaction: {
+            mode: 'index',
+            intersect: false,
+          },
+          plugins: {
+            legend: {
+              position: 'top',
+              labels: {
+                usePointStyle: true,
+                pointStyle: 'circle',
+              },
+            },
+            tooltip: {
+              callbacks: {
+                label: (context) => `${context.dataset.label}: ${Number(context.parsed?.y) || 0}${t('chartRequestCountUnit')}`,
+              },
+            },
+          },
+          scales: {
+            x: {
+              grid: { display: false },
+            },
+            y: {
+              beginAtZero: true,
+              ticks: {
+                precision: 0,
+              },
+            },
+          },
+        },
+      });
+      return;
+    }
+
+    requestTrendChartInstance.data.labels = labels;
+    requestTrendChartInstance.data.datasets = datasets;
+    requestTrendChartInstance.update();
+  }
+
   function syncDashboardMonthPicker() {
     if (!dashboardMonthPicker) return;
     const { monthKey } = getMonthRange(selectedDashboardMonth);
@@ -1556,16 +3360,22 @@
 
     const monthlyShoots = customers.filter(c => isInYearMonth(c.shootingDate, year, month));
     const monthlyRevenue = monthlyShoots.reduce((sum, c) => sum + (Number(c.revenue) || 0), 0);
+    const monthlyProjectExpense = monthlyShoots.reduce((sum, c) => sum + getCustomerExpenseValue(c), 0);
+    const monthlyNetProfit = monthlyRevenue - monthlyProjectExpense;
+    const averageProfitRate = monthlyRevenue > 0 ? (monthlyNetProfit / monthlyRevenue) * 100 : 0;
 
     const expenses = getExpenses();
     const monthlyExpenses = expenses
       .filter(e => isInYearMonth(e.date, year, month))
       .reduce((sum, e) => sum + (Number(e.amount) || 0), 0);
-    const monthlyProfit = monthlyRevenue - monthlyExpenses;
+    const monthlyProfit = monthlyNetProfit;
 
     const yearlyRevenue = customers
       .filter(c => isInYear(c.shootingDate, year))
       .reduce((sum, c) => sum + (Number(c.revenue) || 0), 0);
+    const yearlyProjectProfit = customers
+      .filter((c) => isInYear(c.shootingDate, year))
+      .reduce((sum, c) => sum + getCustomerProfitValue(c), 0);
 
     const yearlyExpenses = expenses
       .filter(e => isInYear(e.date, year))
@@ -1574,10 +3384,28 @@
     const yearlyProfit = yearlyRevenue - yearlyExpenses;
     const unpaidCount = customers.filter((customer) => !customer.paymentChecked).length;
 
-    $('#stat-total').textContent = total;
-    $('#stat-monthly').textContent = monthlyShoots.length;
-    $('#stat-revenue').textContent = formatCurrency(monthlyRevenue);
-    $('#profit-month').textContent = formatCurrency(monthlyProfit);
+    const setTextById = (id, value) => {
+      const el = document.getElementById(id);
+      if (el) el.textContent = value;
+    };
+
+    setTextById('stat-total', total);
+    setTextById('stat-monthly', monthlyShoots.length);
+    setTextById('stat-revenue', formatCurrency(monthlyRevenue));
+    setTextById('profit-month', formatCurrency(monthlyProfit));
+    if ($('#stat-monthly-net-profit')) $('#stat-monthly-net-profit').textContent = formatCurrency(monthlyNetProfit);
+    const averageMarginEl = $('#stat-average-margin');
+    if (averageMarginEl) {
+      averageMarginEl.textContent = `${averageProfitRate.toFixed(1)}%`;
+      averageMarginEl.classList.toggle('is-positive', averageProfitRate > 0);
+      averageMarginEl.classList.toggle('is-negative', averageProfitRate < 0);
+    }
+    const yearlyNetProfitEl = $('#stat-yearly-net-profit');
+    if (yearlyNetProfitEl) {
+      yearlyNetProfitEl.textContent = formatCurrency(yearlyProjectProfit);
+      yearlyNetProfitEl.classList.toggle('is-positive', yearlyProjectProfit > 0);
+      yearlyNetProfitEl.classList.toggle('is-negative', yearlyProjectProfit < 0);
+    }
 
     if ($('#expense-month')) $('#expense-month').textContent = formatCurrency(monthlyExpenses);
     if ($('#revenue-month')) $('#revenue-month').textContent = formatCurrency(monthlyRevenue);
@@ -1590,10 +3418,15 @@
     if ($('#yearly-revenue-label')) $('#yearly-revenue-label').textContent = t('yearlyRevenueTotal');
     if ($('#yearly-profit-label')) $('#yearly-profit-label').textContent = t('yearlyProfitTotal');
     if ($('#yearly-expense-label')) $('#yearly-expense-label').textContent = t('yearlyExpenseTotal');
+    if (isGraphVisible || revenueProfitChartInstance || requestTrendChartInstance) {
+      renderRevenueChart(year);
+      renderRequestTrendChart(year);
+    }
   }
 
   // ===== Month Filter =====
   function updateMonthFilter() {
+    if (!filterMonth) return;
     const months = new Set();
     customers.forEach(c => { if (c.shootingDate) months.add(c.shootingDate.slice(0, 7)); });
     const sorted = [...months].sort().reverse();
@@ -1603,7 +3436,7 @@
       const [y, mo] = m.split('-');
       const opt = document.createElement('option');
       opt.value = m;
-      opt.textContent = `${y}/${Number(mo)}`;
+      opt.textContent = formatCalendarHeader(Number(y), Number(mo) - 1);
       filterMonth.appendChild(opt);
     });
     if (sorted.includes(current)) filterMonth.value = current;
@@ -1612,20 +3445,20 @@
   // ===== Filter & Sort =====
   function getFilteredCustomers() {
     let list = [...customers];
-    const query = searchInput.value.trim().toLowerCase();
+    const query = (searchInput?.value || '').trim().toLowerCase();
     if (query) {
       list = list.filter(c =>
         (c.customerName || '').toLowerCase().includes(query) ||
         (c.contact || '').toLowerCase().includes(query)
       );
     }
-    const pf = filterPayment.value;
+    const pf = filterPayment?.value || 'all';
     if (pf === 'paid') list = list.filter(c => c.paymentChecked);
     if (pf === 'unpaid') list = list.filter(c => !c.paymentChecked);
-    const mf = filterMonth.value;
+    const mf = filterMonth?.value || 'all';
     if (mf !== 'all') list = list.filter(c => c.shootingDate && c.shootingDate.startsWith(mf));
 
-    const pf_staff = $('#filter-photographer').value;
+    const pf_staff = $('#filter-photographer')?.value || 'all';
     if (pf_staff !== 'all') list = list.filter(c => c.assignedTo === pf_staff);
 
     const { key, dir } = currentSort;
@@ -1643,19 +3476,15 @@
 
   // ===== Render Table =====
   function getActionLabels() {
-    const actionDetail = t('actionDetail');
-    const actionHistory = t('actionHistory');
-    const actionContract = t('generateContract');
-    const thActions = t('thActions');
     return {
-      edit: t('edit') !== 'edit' ? t('edit') : (currentLang === 'fr' ? 'Modifier' : currentLang === 'en' ? 'Edit' : '編集'),
-      detail: actionDetail !== 'actionDetail' ? actionDetail : (currentLang === 'fr' ? 'Détails' : currentLang === 'en' ? 'Details' : '詳細'),
-      contract: actionContract !== 'generateContract' ? actionContract : (currentLang === 'fr' ? 'Contrat' : currentLang === 'en' ? 'Contract' : '契約書'),
-      history: actionHistory !== 'actionHistory' ? actionHistory : (currentLang === 'fr' ? 'Historique' : currentLang === 'en' ? 'History' : '履歴'),
-      delete: t('delete') !== 'delete' ? t('delete') : (currentLang === 'fr' ? 'Supprimer' : currentLang === 'en' ? 'Delete' : '削除'),
-      actions: thActions !== 'thActions' ? thActions : (currentLang === 'fr' ? 'Actions' : currentLang === 'en' ? 'Actions' : '操作'),
-      shootingDate: t('thShootingDate') !== 'thShootingDate' ? t('thShootingDate') : (currentLang === 'fr' ? 'Date de séance' : currentLang === 'en' ? 'Shooting Date' : '撮影日'),
-      revenue: t('thRevenue') !== 'thRevenue' ? t('thRevenue') : (currentLang === 'fr' ? 'Revenus' : currentLang === 'en' ? 'Revenue' : '売上'),
+      edit: t('edit'),
+      detail: t('actionDetail'),
+      contract: t('generateContract'),
+      history: t('actionHistory'),
+      delete: t('delete'),
+      actions: t('thActions'),
+      shootingDate: t('thShootingDate'),
+      revenue: t('thRevenue'),
     };
   }
 
@@ -1667,11 +3496,20 @@
       case 'meetingDate':
         return formatDate(customer[columnKey]);
       case 'customerName':
-        return escapeHtml(customer.customerName || '—');
+        return `<span>${escapeHtml(customer.customerName || '—')}</span>`;
+      case 'workflowStatus': {
+        const statusKey = normalizeWorkflowStatus(customer?.workflowStatus);
+        const statusLabel = getWorkflowStatusLabel(statusKey);
+        return `
+          <span class="status-dot-cell" title="${escapeHtml(statusLabel)}" aria-label="${escapeHtml(statusLabel)}">
+            ${renderWorkflowStatusDot(customer)}
+          </span>
+        `;
+      }
       case 'contact':
         return escapeHtml(customer.contact || '—');
       case 'plan':
-        return `<span class="badge badge-purple">${escapeHtml(resolveCustomerPlanName(customer))}</span>`;
+        return renderPlanBadge(resolveCustomerPlanName(customer));
       case 'revenue':
         return viewMode === 'card'
           ? `<strong>${formatCurrency(customer.revenue)}</strong>`
@@ -1703,25 +3541,27 @@
   }
 
   function getListColumnMinimumMessage() {
-    if (currentLang === 'fr') return 'Au moins une colonne doit être affichée.';
-    if (currentLang === 'en') return 'At least one column must remain visible.';
-    return '少なくとも1つの項目は表示してください。';
+    return t('listColumnMinimumMessage');
   }
 
   function renderTable() {
     const list = getFilteredCustomers();
     const actionLabels = getActionLabels();
     const visibleColumns = getVisibleListColumns();
+    const workflowLegend = document.getElementById('workflow-status-legend');
     renderTableHeaders(visibleColumns, actionLabels);
+    renderWorkflowStatusLegend();
 
     if (customers.length === 0) {
       tableWrapper.style.display = 'none';
       if (customerCardGrid) customerCardGrid.style.display = 'none';
+      if (workflowLegend) workflowLegend.style.display = 'none';
       emptyState.style.display = 'block';
       $('.toolbar').style.display = 'none';
     } else {
       tableWrapper.style.display = '';
       if (customerCardGrid) customerCardGrid.style.display = '';
+      if (workflowLegend) workflowLegend.style.display = 'flex';
       emptyState.style.display = 'none';
       $('.toolbar').style.display = '';
     }
@@ -1730,8 +3570,11 @@
     if (customerCardGrid) customerCardGrid.innerHTML = '';
     list.forEach(c => {
       const tr = document.createElement('tr');
+      const rowAccentColor = resolvePlanTagColor(resolveCustomerPlanName(c));
       tr.dataset.id = c.id;
       tr.style.cursor = 'pointer';
+      tr.style.setProperty('--row-accent', rowAccentColor);
+      tr.classList.add('customer-row-colorized');
       const dataCells = visibleColumns.map((column) => {
         const classList = [];
         if (column.key === 'customerName') classList.push('customer-name');
@@ -1773,32 +3616,41 @@
       tbody.appendChild(tr);
 
       if (customerCardGrid) {
-        const isNameVisible = visibleColumns.some((column) => column.key === 'customerName');
-        const isPlanVisible = visibleColumns.some((column) => column.key === 'plan');
-        const detailColumns = visibleColumns.filter((column) => column.key !== 'customerName' && column.key !== 'plan');
-        const cardHead = (isNameVisible || isPlanVisible)
-          ? `
-            <div class="customer-card-head">
-              ${isNameVisible ? `<div class="customer-card-name">${escapeHtml(c.customerName || '—')}</div>` : '<div></div>'}
-              ${isPlanVisible ? `<span class="badge badge-purple">${escapeHtml(resolveCustomerPlanName(c))}</span>` : ''}
-            </div>
-          `
-          : '';
-
-        const cardMetaRows = detailColumns.map((column) => `
-          <div class="customer-card-meta-row" data-column-key="${column.key}">
-            <span class="customer-card-meta-label">${escapeHtml(getListColumnLabel(column.key))}</span>
-            <span>${renderCustomerColumnValue(c, column.key, 'card')}</span>
-          </div>
-        `).join('');
+        const statusDot = renderWorkflowStatusDot(c);
+        const shootingLabel = t('thShootingDate');
+        const shootingValue = formatDate(c.shootingDate) || t('valUnset');
+        const revenueLabel = t('thRevenue');
+        const profitLabel = t('cardProfit');
+        const planLabel = t('thPlan');
+        const noteLabel = t('labelNotes');
+        const planValue = resolveCustomerPlanName(c) || t('valUnset');
+        const revenueValue = toSafeNumber(c.revenue, 0);
+        const profitValue = getCustomerProfitValue(c);
+        const profitClass = profitValue < 0 ? 'is-negative' : 'is-positive';
+        const noteValue = String(c.notes || c.details || '').replace(/\s+/g, ' ').trim() || t('valUnset');
 
         const card = document.createElement('article');
         card.className = 'customer-card';
+        card.classList.add('customer-row-colorized-card');
+        card.style.setProperty('--row-accent', rowAccentColor);
         card.dataset.id = c.id;
         card.innerHTML = `
-          ${cardHead}
-          <div class="customer-card-meta">
-            ${cardMetaRows || '<div class="customer-card-meta-row"><span class="customer-card-meta-label">—</span><span>—</span></div>'}
+          <div class="customer-card-mobile-head">
+            <div class="customer-card-mobile-left">
+              <span class="customer-card-status-dot">${statusDot}</span>
+              <div class="customer-card-mobile-main">
+                <div class="customer-card-mobile-name">${escapeHtml(c.customerName || t('valUnset'))}</div>
+                <div class="customer-card-mobile-date" title="${escapeHtml(`${shootingLabel}: ${shootingValue}`)}">${escapeHtml(`${shootingLabel}: ${shootingValue}`)}</div>
+              </div>
+            </div>
+            <div class="customer-card-mobile-metrics">
+              <span class="metric-badge metric-revenue" title="${escapeHtml(`${revenueLabel}: ${formatCurrency(revenueValue)}`)}">${escapeHtml(`${revenueLabel} ${formatCurrency(revenueValue)}`)}</span>
+              <span class="metric-badge metric-profit ${profitClass}" title="${escapeHtml(`${profitLabel}: ${formatCurrency(profitValue)}`)}">${escapeHtml(`${profitLabel} ${formatCurrency(profitValue)}`)}</span>
+            </div>
+          </div>
+          <div class="customer-card-mobile-foot">
+            <div class="customer-card-mobile-plan" title="${escapeHtml(`${planLabel}: ${planValue}`)}">${escapeHtml(`${planLabel}: ${planValue}`)}</div>
+            <div class="customer-card-mobile-note" title="${escapeHtml(`${noteLabel}: ${noteValue}`)}">${escapeHtml(`${noteLabel}: ${noteValue}`)}</div>
           </div>
           <div class="customer-card-actions action-buttons">
             <button type="button" class="table-action-btn action-btn btn-edit" title="${escapeHtml(actionLabels.edit)}" aria-label="${escapeHtml(actionLabels.edit)}" onclick="openModal('${c.id}')">
@@ -1886,11 +3738,12 @@
     grid.innerHTML = '';
 
     // Title
-    $('#cal-title').textContent = `${calYear}/${calMonth + 1}`;
+    $('#cal-title').textContent = formatCalendarHeader(calYear, calMonth);
 
-    const days = currentLang === 'ja' ? ['日', '月', '火', '水', '木', '金', '土'] :
-      currentLang === 'fr' ? ['Dim', 'Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam'] :
-        ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    const weekdaysRaw = t('calendarWeekdaysShort');
+    const days = weekdaysRaw && weekdaysRaw !== 'calendarWeekdaysShort'
+      ? weekdaysRaw.split(',').map((day) => day.trim())
+      : ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
     days.forEach((d, i) => {
       const hdr = document.createElement('div');
@@ -2022,10 +3875,156 @@
     bindEventOnce($('#filter-photographer'), 'change', renderTable, 'toolbar-filter-photographer');
   }
 
+  function shouldSyncGoogleCalendarEvent(previousCustomer, nextCustomer) {
+    if (!googleCalendarAutoSyncEnabled) return false;
+    if (!nextCustomer || !String(nextCustomer.shootingDate || '').trim()) return false;
+    const targetCalendarId = getTargetGoogleCalendarId();
+    if (String(nextCustomer.google_event_calendar_id || '').trim() !== targetCalendarId) return true;
+    if (!previousCustomer) return true;
+    if (!String(previousCustomer.shootingDate || '').trim()) return true;
+    if ((previousCustomer.shootingDate || '') !== (nextCustomer.shootingDate || '')) return true;
+    if (!String(nextCustomer.google_event_id || '').trim()) return true;
+    return (
+      (previousCustomer.customerName || '') !== (nextCustomer.customerName || '')
+      || (previousCustomer.plan || '') !== (nextCustomer.plan || '')
+      || (previousCustomer.location || '') !== (nextCustomer.location || '')
+      || (previousCustomer.notes || '') !== (nextCustomer.notes || '')
+      || toSafeNumber(previousCustomer.revenue, 0) !== toSafeNumber(nextCustomer.revenue, 0)
+    );
+  }
+
+  function toLocalDateTimeString(date) {
+    const y = date.getFullYear();
+    const m = String(date.getMonth() + 1).padStart(2, '0');
+    const d = String(date.getDate()).padStart(2, '0');
+    const hh = String(date.getHours()).padStart(2, '0');
+    const mm = String(date.getMinutes()).padStart(2, '0');
+    const ss = String(date.getSeconds()).padStart(2, '0');
+    return `${y}-${m}-${d}T${hh}:${mm}:${ss}`;
+  }
+
+  function resolveShootingEventDateRange(shootingDateValue) {
+    const raw = String(shootingDateValue || '').trim();
+    if (!raw) return null;
+
+    let startDate;
+    if (raw.includes('T')) {
+      startDate = new Date(raw);
+    } else {
+      startDate = new Date(`${raw}T10:00:00`);
+    }
+    if (Number.isNaN(startDate.getTime())) return null;
+    const endDate = new Date(startDate.getTime() + (60 * 60 * 1000));
+    return { startDate, endDate };
+  }
+
+  function buildGoogleCalendarEventPayload(customer) {
+    const range = resolveShootingEventDateRange(customer?.shootingDate);
+    if (!range) return null;
+
+    const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+    const customerName = customer?.customerName || t('icsUnset');
+    const planName = resolveCustomerPlanName(customer);
+    const summary = t('googleCalendarEventTitle', { customer: customerName });
+    const descriptionLines = [
+      `${t('googleCalendarDescPlan')}: ${planName || '—'}`,
+      `${t('googleCalendarDescLocation')}: ${customer?.location || '—'}`,
+      `${t('googleCalendarDescNotes')}: ${customer?.notes || customer?.details || '—'}`,
+      `${t('googleCalendarDescRevenue')}: ${formatCurrency(toSafeNumber(customer?.revenue, 0))}`,
+    ];
+
+    return {
+      summary,
+      description: descriptionLines.join('\n'),
+      location: customer?.location || '',
+      start: {
+        dateTime: toLocalDateTimeString(range.startDate),
+        timeZone,
+      },
+      end: {
+        dateTime: toLocalDateTimeString(range.endDate),
+        timeZone,
+      },
+    };
+  }
+
+  async function upsertGoogleCalendarEvent(customer) {
+    const payload = buildGoogleCalendarEventPayload(customer);
+    if (!payload) return null;
+    const accessToken = window.FirebaseService?.getGoogleAccessToken?.() || '';
+    if (!accessToken) {
+      throw new Error('missing_google_access_token');
+    }
+
+    const calendarId = getTargetGoogleCalendarId();
+    const baseUrl = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events`;
+    const existingEventId = String(customer?.google_event_id || '').trim();
+    const existingEventCalendarId = String(customer?.google_event_calendar_id || '').trim();
+    const shouldUpdateExisting = !!existingEventId && existingEventCalendarId === calendarId;
+    const endpoint = shouldUpdateExisting
+      ? `${baseUrl}/${encodeURIComponent(existingEventId)}`
+      : baseUrl;
+    const resolvedMethod = shouldUpdateExisting ? 'PUT' : 'POST';
+
+    const response = await fetch(endpoint, {
+      method: resolvedMethod,
+      headers: {
+        'Authorization': `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload),
+    });
+
+    const responseBody = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      const message = responseBody?.error?.message || `HTTP ${response.status}`;
+      throw new Error(message);
+    }
+    return {
+      ...responseBody,
+      __calendarId: calendarId,
+    };
+  }
+
+  async function runGoogleCalendarAutoSync(customerId, previousCustomer = null) {
+    if (!googleCalendarAutoSyncEnabled) return;
+    const customerIndex = customers.findIndex((entry) => entry.id === customerId);
+    if (customerIndex === -1) return;
+
+    const currentCustomer = customers[customerIndex];
+    if (!shouldSyncGoogleCalendarEvent(previousCustomer, currentCustomer)) return;
+
+    try {
+      const eventData = await upsertGoogleCalendarEvent(currentCustomer);
+      const nextEventId = String(eventData?.id || '').trim();
+      if (!nextEventId) return;
+
+      const currentEventId = String(currentCustomer.google_event_id || '').trim();
+      const nextEventCalendarId = String(eventData?.__calendarId || getTargetGoogleCalendarId()).trim();
+      const currentEventCalendarId = String(currentCustomer.google_event_calendar_id || '').trim();
+
+      if (nextEventId !== currentEventId || nextEventCalendarId !== currentEventCalendarId) {
+        customers[customerIndex] = {
+          ...currentCustomer,
+          google_event_id: nextEventId,
+          google_event_calendar_id: nextEventCalendarId,
+          updatedAt: new Date().toISOString(),
+        };
+        saveCustomers(customers);
+      }
+      showToast(t('googleCalendarSyncSuccess'));
+      return;
+    } catch (error) {
+      console.error('Google Calendar auto-sync failed', error);
+      showToast(t('googleCalendarSyncFailed'), 'error');
+    }
+  }
+
   // ===== Add / Edit Modal =====
   window.openModal = function (id) {
     if (!id && !checkCustomerLimit()) return;
     editingId = id || null;
+    isExpenseManuallyEdited = false;
     const form = $('#customer-form');
     form.reset();
     $('#form-id').value = '';
@@ -2064,29 +4063,34 @@
 
       const planDetails = normalizePlanDetails(c.planDetails, c.revenue);
       const planNameInput = $('#form-plan-name');
-      const basePriceInput = $('#form-base-price');
       const adjustmentInput = $('#form-price-adjustment');
-      const optionsInput = $('#form-plan-options');
       const totalPriceInput = $('#form-total-price');
+      const expenseInput = $('#form-expense');
+      const matchedPlanMaster = findPlanMasterByValue(c?.planMasterId || c?.plan || '');
       let extraChargeItems = normalizeExtraChargeItems(c.extraChargeItems);
       if (extraChargeItems.length === 0) {
         const legacyItems = [];
         const costumePrice = toSafeNumber(c.costumePrice, 0);
         const hairPrice = toSafeNumber(c.hairMakeupPrice, 0);
         if ((c.costume || '').trim() || costumePrice > 0) {
-          legacyItems.push({ name: '衣装', detail: (c.costume || '').trim(), amount: costumePrice });
+          legacyItems.push({ name: t('labelCostume'), detail: (c.costume || '').trim(), amount: costumePrice });
         }
         if ((c.hairMakeup || '').trim() || hairPrice > 0) {
-          legacyItems.push({ name: 'ヘアメイク', detail: (c.hairMakeup || '').trim(), amount: hairPrice });
+          legacyItems.push({ name: t('labelHairMakeup'), detail: (c.hairMakeup || '').trim(), amount: hairPrice });
         }
         extraChargeItems = normalizeExtraChargeItems(legacyItems);
       }
-      const fixedTotal = planDetails.basePrice + extraChargeItems.reduce((sum, item) => sum + toSafeNumber(item.amount, 0), 0);
       if (planNameInput) planNameInput.value = planDetails.planName;
-      if (basePriceInput) basePriceInput.value = String(planDetails.basePrice);
-      if (adjustmentInput) adjustmentInput.value = String(planDetails.totalPrice - fixedTotal);
-      if (optionsInput) optionsInput.value = planDetails.options;
+      setPlanBasePriceValue(planDetails.basePrice);
+      setPlanBaseCostValue(toSafeNumber(planDetails.planCost, toSafeNumber(matchedPlanMaster?.cost, 0)));
+      if (adjustmentInput) adjustmentInput.value = '0';
       if (totalPriceInput) totalPriceInput.value = String(planDetails.totalPrice);
+      const fallbackExpense = toSafeNumber(planDetails.planCost, toSafeNumber(matchedPlanMaster?.cost, 0))
+        + extraChargeItems.reduce((sum, item) => sum + toSafeNumber(item?.cost, 0), 0);
+      const hasStoredExpense = Number.isFinite(Number(c.expense));
+      const currentExpense = hasStoredExpense ? Number(c.expense) : fallbackExpense;
+      if (expenseInput) expenseInput.value = String(currentExpense);
+      isExpenseManuallyEdited = hasStoredExpense;
       renderDynamicChargeItems(extraChargeItems);
       updateGrandTotal();
 
@@ -2094,19 +4098,21 @@
     } else {
       $('#modal-title').textContent = t('modalAddTitle');
       const planNameInput = $('#form-plan-name');
-      const basePriceInput = $('#form-base-price');
       const adjustmentInput = $('#form-price-adjustment');
-      const optionsInput = $('#form-plan-options');
       const totalPriceInput = $('#form-total-price');
+      const expenseInput = $('#form-expense');
       if (planNameInput) planNameInput.value = '';
-      if (basePriceInput) basePriceInput.value = '';
+      setPlanBasePriceValue(0);
+      setPlanBaseCostValue(0);
       if (adjustmentInput) adjustmentInput.value = '0';
-      if (optionsInput) optionsInput.value = '';
       if (totalPriceInput) totalPriceInput.value = '';
+      if (expenseInput) expenseInput.value = '';
+      isExpenseManuallyEdited = false;
       renderDynamicChargeItems([]);
       updateGrandTotal();
       renderCustomFields();
     }
+    applyModalFieldVisibility();
     modalOverlay.style.display = 'flex';
     setTimeout(() => modalOverlay.classList.add('active'), 10);
   };
@@ -2122,6 +4128,9 @@
   window.saveCustomer = function () {
     const name = $('#form-customerName').value.trim();
     if (!name) { showToast(t('msgEnterName'), 'error'); return; }
+    const previousCustomer = editingId
+      ? (customers.find((entry) => entry.id === editingId) || null)
+      : null;
 
     const data = {};
     fields.forEach(f => {
@@ -2131,6 +4140,10 @@
       else if (f.type === 'number') data[f.key] = el.value ? Number(el.value) : null;
       else data[f.key] = el.value || '';
     });
+    if (!isFormFieldVisible('assignedTo') && !String(data.assignedTo || '').trim()) {
+      data.assignedTo = resolveDefaultAssignedToValue();
+    }
+    data.workflowStatus = normalizeWorkflowStatus(data.workflowStatus);
 
     const customFields = {};
     loadCustomFieldDefinitions().forEach(field => {
@@ -2149,21 +4162,33 @@
     }
 
     const planNameInput = $('#form-plan-name');
-    const basePriceInput = $('#form-base-price');
     const adjustmentInput = $('#form-price-adjustment');
-    const optionsInput = $('#form-plan-options');
     const totalPriceInput = $('#form-total-price');
     const revenueInput = $('#form-revenue');
-    const basePrice = toSafeNumber(basePriceInput?.value, 0);
+    const expenseInput = $('#form-expense');
+    const planRevenue = getPlanBasePriceValue();
+    const planCost = toSafeNumber(getPlanBaseCostValue(), toSafeNumber(selectedPlan?.cost, 0));
     const extraChargeItems = collectDynamicChargeItems();
     rememberDynamicItemDetails(extraChargeItems);
-    const extraChargeTotal = extraChargeItems.reduce((sum, item) => sum + toSafeNumber(item.amount, 0), 0);
-    const adjustment = toSafeNumber(adjustmentInput?.value, 0);
-    const totalFromAdjustment = basePrice + extraChargeTotal + adjustment;
-    const finalRevenue = toSafeNumber(updateGrandTotal(), totalFromAdjustment);
+    const extraChargeBreakdown = extraChargeItems.reduce((sum, item) => {
+      sum.revenue += toSafeNumber(item.revenue, 0);
+      sum.cost += toSafeNumber(item.cost, 0);
+      return sum;
+    }, { revenue: 0, cost: 0 });
+    if (adjustmentInput) adjustmentInput.value = '0';
+    const totalFromBreakdown = planRevenue + extraChargeBreakdown.revenue;
+    const finalRevenue = toSafeNumber(updateGrandTotal(), totalFromBreakdown);
+    const fallbackExpense = planCost + extraChargeBreakdown.cost;
+    const finalExpense = toSafeNumber(expenseInput?.value, fallbackExpense);
+    if (expenseInput) expenseInput.value = String(finalExpense);
+    const finalProfit = finalRevenue - finalExpense;
     if (totalPriceInput) totalPriceInput.value = String(finalRevenue);
     if (revenueInput) revenueInput.value = String(finalRevenue);
+    updateProfitDisplay(finalProfit);
     data.revenue = finalRevenue;
+    data.expense = finalExpense;
+    data.profit = finalProfit;
+    data.planCost = planCost;
     data.extraChargeItems = extraChargeItems;
     data.costumePrice = 0;
     data.hairMakeupPrice = 0;
@@ -2172,8 +4197,9 @@
 
     const rawPlanDetails = {
       planName: planNameInput?.value?.trim() || selectedPlan?.name || '',
-      basePrice,
-      options: optionsInput?.value || '',
+      basePrice: planRevenue,
+      planCost,
+      options: '',
       totalPrice: finalRevenue,
     };
     data.planDetails = normalizePlanDetails(rawPlanDetails, data.revenue);
@@ -2191,6 +4217,13 @@
     }
 
     saveCustomers(customers);
+    const savedCustomerId = data.id || editingId;
+    runGoogleCalendarAutoSync(
+      savedCustomerId,
+      previousCustomer ? { ...previousCustomer } : null
+    ).catch((error) => {
+      console.error('Google Calendar sync scheduling failed', error);
+    });
     closeModal();
     renderTable();
     if (calendarView.classList.contains('active')) renderCalendar();
@@ -2208,17 +4241,17 @@
     $('#detail-shooting-date').textContent = formatDate(c.shootingDate);
     $('#detail-location').textContent = c.location || '—';
     $('#detail-plan').textContent = resolveCustomerPlanName(c);
+    const detailWorkflowStatus = $('#detail-workflow-status');
+    if (detailWorkflowStatus) detailWorkflowStatus.innerHTML = renderWorkflowStatusBadge(c);
     $('#detail-revenue').textContent = formatCurrency(c.revenue);
     $('#detail-payment').innerHTML = c.paymentChecked ? `<span class="badge badge-success">${t('paid')}</span>` : `<span class="badge badge-warning">${t('unpaid')}</span>`;
     $('#detail-notes').textContent = c.notes || '—';
     const planDetails = normalizePlanDetails(c.planDetails, c.revenue);
     const detailPlanName = $('#detail-plan-name');
     const detailBasePrice = $('#detail-base-price');
-    const detailPlanOptions = $('#detail-plan-options');
     const detailTotalPrice = $('#detail-total-price');
     if (detailPlanName) detailPlanName.textContent = planDetails.planName || resolveCustomerPlanName(c);
     if (detailBasePrice) detailBasePrice.textContent = formatCurrency(planDetails.basePrice);
-    if (detailPlanOptions) detailPlanOptions.textContent = planDetails.options || '—';
     if (detailTotalPrice) detailTotalPrice.textContent = formatCurrency(planDetails.totalPrice);
 
     const detailContainer = $('#detail-body-container');
@@ -2288,9 +4321,11 @@
     const editInput = $('#edit-plan-index');
     const nameInput = $('#add-plan-name');
     const priceInput = $('#add-plan-price');
+    const costInput = $('#add-plan-cost');
     if (editInput) editInput.value = '';
     if (nameInput) nameInput.value = '';
     if (priceInput) priceInput.value = '';
+    if (costInput) costInput.value = '';
   }
 
   function setPlanMasterFormByIndex(index) {
@@ -2299,18 +4334,21 @@
     const editInput = $('#edit-plan-index');
     const nameInput = $('#add-plan-name');
     const priceInput = $('#add-plan-price');
+    const costInput = $('#add-plan-cost');
     if (editInput) editInput.value = String(index);
     if (nameInput) nameInput.value = plan.name;
     if (priceInput) priceInput.value = String(plan.price);
+    if (costInput) costInput.value = String(toSafeNumber(plan.cost, 0));
   }
 
   function savePlanMasterFromForm() {
     const editInput = $('#edit-plan-index');
     const nameInput = $('#add-plan-name');
     const priceInput = $('#add-plan-price');
+    const costInput = $('#add-plan-cost');
     const name = nameInput?.value?.trim() || '';
     if (!name) {
-      showToast('プラン名を入力してください。', 'error');
+      showToast(t('msgPlanNameRequired'), 'error');
       return;
     }
 
@@ -2319,13 +4357,19 @@
     const hasEditTarget = Number.isInteger(editIndex) && editIndex >= 0 && editIndex < planMaster.length;
     const duplicateIndex = planMaster.findIndex((plan, idx) => idx !== editIndex && plan.name.toLowerCase() === name.toLowerCase());
     if (duplicateIndex !== -1) {
-      showToast('同名のプランが既に存在します。', 'error');
+      showToast(t('msgPlanDuplicate'), 'error');
       return;
     }
+
+    const existingColor = hasEditTarget
+      ? normalizeHexColor(planMaster[editIndex]?.color, getDefaultPlanTagColor(name))
+      : getDefaultPlanTagColor(name);
 
     const nextPlan = normalizePlanMasterItem({
       name,
       price: priceInput?.value,
+      cost: costInput?.value,
+      color: existingColor,
     });
 
     if (hasEditTarget) {
@@ -2350,25 +4394,307 @@
     populateSelects();
   }
 
+  function updatePlanColorByIndex(index, color) {
+    if (!planMaster[index]) return;
+    const nextColor = normalizeHexColor(color, getDefaultPlanTagColor(planMaster[index].name));
+    const nextPlans = [...planMaster];
+    nextPlans[index] = normalizePlanMasterItem({
+      ...nextPlans[index],
+      color: nextColor,
+    });
+    savePlanMaster(nextPlans);
+    renderSettings();
+    renderTable();
+    if (editingId) openDetail(editingId);
+  }
+
+  function refreshDynamicItemSuggestionInputs() {
+    getDynamicItemRows().forEach((row) => {
+      renderDynamicItemNameDatalist(row);
+      renderDynamicItemDetailDatalist(row);
+    });
+  }
+
+  function persistDynamicItemHints(nextList) {
+    const normalized = normalizeDynamicItemNameSuggestions(nextList)
+      .filter((name) => !isPlanCategoryName(name));
+    saveDynamicItemNameSuggestions(normalized);
+    options = { ...(options || {}), dynamicItemHints: normalized };
+    saveOptions(options);
+    const nextMap = normalizeDynamicItemSuggestionMap(dynamicItemSuggestionMap);
+    delete nextMap[t('labelPlan')];
+    delete nextMap.プラン;
+    delete nextMap.plan;
+    saveDynamicItemSuggestionMap(nextMap);
+    refreshDynamicItemSuggestionInputs();
+    syncDynamicItemRowsWithSettings();
+    return normalized;
+  }
+
+  function addDynamicItemHintFromSettings() {
+    const input = $('#add-dynamic-item-name');
+    const name = (input?.value || '').trim();
+    if (!name) {
+      showToast(t('msgDynamicItemNameRequired'), 'error');
+      return;
+    }
+    if (isPlanCategoryName(name)) {
+      showToast(t('msgDynamicItemPlanBlockedAdd'), 'error');
+      return;
+    }
+
+    const current = getDynamicItemNameSuggestions();
+    if (current.some((item) => item.toLowerCase() === name.toLowerCase())) {
+      showToast(t('msgDynamicItemNameDuplicate'), 'error');
+      return;
+    }
+
+    persistDynamicItemHints([name, ...current]);
+    if (input) input.value = '';
+    renderSettings();
+  }
+
+  function updateDynamicItemHintByIndex(index, nextName) {
+    const current = getDynamicItemNameSuggestions();
+    if (!current[index]) return;
+    const previousName = current[index];
+
+    const name = String(nextName || '').trim();
+    if (!name) {
+      showToast(t('msgDynamicItemNameRequired'), 'error');
+      return;
+    }
+    if (isPlanCategoryName(name)) {
+      showToast(t('msgDynamicItemPlanBlockedSet'), 'error');
+      return;
+    }
+
+    const duplicateIndex = current.findIndex((item, idx) => idx !== index && item.toLowerCase() === name.toLowerCase());
+    if (duplicateIndex !== -1) {
+      showToast(t('msgDynamicItemNameDuplicate'), 'error');
+      return;
+    }
+
+    const previousKey = getDynamicItemSuggestionKey(previousName);
+    const nextKey = getDynamicItemSuggestionKey(name);
+    if (previousKey !== nextKey) {
+      const nextMap = normalizeDynamicItemSuggestionMap(dynamicItemSuggestionMap);
+      const previousDetails = Array.isArray(nextMap[previousKey]) ? nextMap[previousKey] : [];
+      const nextDetails = Array.isArray(nextMap[nextKey]) ? nextMap[nextKey] : [];
+      const mergedDetails = normalizeDynamicItemDetailList([...previousDetails, ...nextDetails]);
+      if (mergedDetails.length > 0) nextMap[nextKey] = mergedDetails;
+      else delete nextMap[nextKey];
+      delete nextMap[previousKey];
+      saveDynamicItemSuggestionMap(nextMap);
+    }
+
+    current[index] = name;
+    persistDynamicItemHints(current);
+    renderSettings();
+  }
+
+  function removeDynamicItemHintByIndex(index) {
+    const current = getDynamicItemNameSuggestions();
+    if (!current[index]) return;
+    if (!confirm(t('confirmDeleteMessage') || 'Are you sure?')) return;
+    const removedName = current[index];
+    current.splice(index, 1);
+    const removedKey = getDynamicItemSuggestionKey(removedName);
+    const nextMap = normalizeDynamicItemSuggestionMap(dynamicItemSuggestionMap);
+    delete nextMap[removedKey];
+    saveDynamicItemSuggestionMap(nextMap);
+    persistDynamicItemHints(current);
+    renderSettings();
+  }
+
+  function addDynamicItemDetailFromSettings(categoryIndex) {
+    const categories = getDynamicItemNameSuggestions();
+    const categoryName = categories[categoryIndex];
+    if (!categoryName) return;
+    const detailInput = $(`#add-dynamic-item-detail-name-${categoryIndex}`);
+    const revenueInput = $(`#add-dynamic-item-detail-revenue-${categoryIndex}`);
+    const costInput = $(`#add-dynamic-item-detail-cost-${categoryIndex}`);
+    const detail = String(detailInput?.value || '').trim();
+    const revenue = toSafeNumber(revenueInput?.value, 0);
+    const cost = toSafeNumber(costInput?.value, 0);
+    if (!detail) {
+      showToast(t('msgDynamicDetailRequired'), 'error');
+      return;
+    }
+
+    const key = getDynamicItemSuggestionKey(categoryName);
+    const nextMap = normalizeDynamicItemSuggestionMap(dynamicItemSuggestionMap);
+    const currentDetails = Array.isArray(nextMap[key]) ? [...nextMap[key]] : [];
+    if (currentDetails.some((entry) => String(entry?.label || '').trim().toLowerCase() === detail.toLowerCase())) {
+      showToast(t('msgDynamicDetailDuplicate'), 'error');
+      return;
+    }
+    nextMap[key] = normalizeDynamicItemDetailList([{ label: detail, revenue, cost }, ...currentDetails]);
+    saveDynamicItemSuggestionMap(nextMap);
+    if (detailInput) detailInput.value = '';
+    if (revenueInput) revenueInput.value = '';
+    if (costInput) costInput.value = '';
+    syncDynamicItemRowsWithSettings();
+    renderSettings();
+  }
+
+  function updateDynamicItemDetailByIndex(categoryIndex, detailIndex, nextDetailValue, nextRevenueValue, nextCostValue) {
+    const categories = getDynamicItemNameSuggestions();
+    const categoryName = categories[categoryIndex];
+    if (!categoryName) return;
+    const key = getDynamicItemSuggestionKey(categoryName);
+    const nextMap = normalizeDynamicItemSuggestionMap(dynamicItemSuggestionMap);
+    const details = Array.isArray(nextMap[key]) ? normalizeDynamicItemDetailList(nextMap[key]) : [];
+    if (!details[detailIndex]) return;
+
+    const detail = String(nextDetailValue || '').trim();
+    const revenue = toSafeNumber(nextRevenueValue, 0);
+    const cost = toSafeNumber(nextCostValue, 0);
+    if (!detail) {
+      showToast(t('msgDynamicDetailRequired'), 'error');
+      return;
+    }
+    const duplicateIndex = details.findIndex((entry, index) => (
+      index !== detailIndex
+      && String(entry?.label || '').trim().toLowerCase() === detail.toLowerCase()
+    ));
+    if (duplicateIndex !== -1) {
+      showToast(t('msgDynamicDetailDuplicate'), 'error');
+      return;
+    }
+
+    details[detailIndex] = { label: detail, revenue, cost };
+    nextMap[key] = normalizeDynamicItemDetailList(details);
+    saveDynamicItemSuggestionMap(nextMap);
+    syncDynamicItemRowsWithSettings();
+    renderSettings();
+  }
+
+  function removeDynamicItemDetailByIndex(categoryIndex, detailIndex) {
+    const categories = getDynamicItemNameSuggestions();
+    const categoryName = categories[categoryIndex];
+    if (!categoryName) return;
+    if (!confirm(t('confirmDeleteMessage') || 'Are you sure?')) return;
+    const key = getDynamicItemSuggestionKey(categoryName);
+    const nextMap = normalizeDynamicItemSuggestionMap(dynamicItemSuggestionMap);
+    const details = Array.isArray(nextMap[key]) ? normalizeDynamicItemDetailList(nextMap[key]) : [];
+    if (!details[detailIndex]) return;
+
+    details.splice(detailIndex, 1);
+    if (details.length > 0) nextMap[key] = normalizeDynamicItemDetailList(details);
+    else delete nextMap[key];
+    saveDynamicItemSuggestionMap(nextMap);
+    syncDynamicItemRowsWithSettings();
+    renderSettings();
+  }
+
   function renderSettings() {
     const container = $('#settings-list');
     if (!container) return;
     container.innerHTML = '';
 
     const planRows = planMaster.length === 0
-      ? `<div class="settings-item"><span>登録済みプランはありません</span></div>`
+      ? `<div class="settings-item"><span>${escapeHtml(t('settingsPlanEmpty'))}</span></div>`
       : planMaster.map((plan, index) => `
         <div class="settings-item">
           <div style="flex:1;">
             <div style="font-weight:600;">${escapeHtml(plan.name)}</div>
-            <div style="font-size:0.85rem;color:var(--text-muted);">${formatCurrency(plan.price)}</div>
+            <div style="font-size:0.85rem;color:var(--text-muted);">${escapeHtml(t('settingsPlanSummary', { revenue: formatCurrency(plan.price), cost: formatCurrency(plan.cost) }))}</div>
           </div>
-          <div style="display:flex; gap:6px;">
-            <button type="button" class="btn-icon-sm" data-plan-edit="${index}" title="編集">✏️</button>
-            <button type="button" class="btn-icon-sm" data-plan-remove="${index}" title="削除">✕</button>
+          <div style="display:flex; align-items:center; gap:6px;">
+            <label class="settings-color-label" title="${escapeHtml(t('settingsPlanColor'))}">
+              <span class="settings-color-dot" style="background:${resolvePlanTagColor(plan.name)};"></span>
+              <input type="color" class="settings-color-input" data-plan-color="${index}" value="${resolvePlanTagColor(plan.name)}" aria-label="${escapeHtml(t('settingsPlanColor'))}">
+            </label>
+            <button type="button" class="btn-icon-sm" data-plan-edit="${index}" title="${escapeHtml(t('edit'))}">✏️</button>
+            <button type="button" class="btn-icon-sm" data-plan-remove="${index}" title="${escapeHtml(t('delete'))}">✕</button>
           </div>
         </div>
       `).join('');
+
+    const dynamicItemHintRows = getDynamicItemNameSuggestions();
+    const dynamicItemRows = dynamicItemHintRows.length === 0
+      ? `<div class="settings-item"><span>${escapeHtml(t('settingsDynamicItemEmpty'))}</span></div>`
+      : dynamicItemHintRows.map((itemName, index) => {
+        const detailOptions = getDynamicItemDetailEntries(itemName);
+        const detailRows = detailOptions.length === 0
+          ? `<div class="settings-detail-empty">${escapeHtml(t('settingsDynamicDetailEmpty'))}</div>`
+          : detailOptions.map((detailEntry, detailIndex) => `
+            <div class="settings-detail-row">
+              <input
+                type="text"
+                class="settings-inline-input settings-inline-input-name"
+                data-dynamic-detail-name-input="${index}:${detailIndex}"
+                value="${escapeHtml(detailEntry.label || '')}"
+                placeholder="${escapeHtml(t('settingsDynamicDetailNamePlaceholder'))}"
+              />
+              <input
+                type="number"
+                class="settings-inline-input settings-inline-input-revenue"
+                data-dynamic-detail-revenue-input="${index}:${detailIndex}"
+                value="${toSafeNumber(detailEntry.revenue, 0)}"
+                min="0"
+                step="1"
+                placeholder="${escapeHtml(t('settingsDynamicRevenuePlaceholder'))}"
+              />
+              <input
+                type="number"
+                class="settings-inline-input settings-inline-input-cost"
+                data-dynamic-detail-cost-input="${index}:${detailIndex}"
+                value="${toSafeNumber(detailEntry.cost, 0)}"
+                min="0"
+                step="1"
+                placeholder="${escapeHtml(t('settingsDynamicCostPlaceholder'))}"
+              />
+              <button type="button" class="btn-icon-sm" data-dynamic-detail-save="${index}:${detailIndex}" title="${escapeHtml(t('save'))}">💾</button>
+              <button type="button" class="btn-icon-sm" data-dynamic-detail-remove="${index}:${detailIndex}" title="${escapeHtml(t('delete'))}">✕</button>
+            </div>
+          `).join('');
+        return `
+        <div class="settings-item settings-master-item">
+          <div class="settings-master-head">
+            <input
+              type="text"
+              class="settings-inline-input"
+              data-dynamic-item-input="${index}"
+              value="${escapeHtml(itemName)}"
+              placeholder="${escapeHtml(t('settingsDynamicCategoryPlaceholder'))}"
+            />
+            <div style="display:flex; gap:6px;">
+              <button type="button" class="btn-icon-sm" data-dynamic-item-save="${index}" title="${escapeHtml(t('save'))}">💾</button>
+              <button type="button" class="btn-icon-sm" data-dynamic-item-remove="${index}" title="${escapeHtml(t('delete'))}">✕</button>
+            </div>
+          </div>
+          <div class="settings-detail-list">${detailRows}</div>
+          <div class="settings-detail-add">
+            <input
+              type="text"
+              class="settings-inline-input settings-inline-input-name"
+              id="add-dynamic-item-detail-name-${index}"
+              data-dynamic-detail-add-input="${index}"
+              placeholder="${escapeHtml(t('settingsDynamicDetailNamePlaceholder'))}"
+            />
+            <input
+              type="number"
+              class="settings-inline-input settings-inline-input-revenue"
+              id="add-dynamic-item-detail-revenue-${index}"
+              min="0"
+              step="1"
+              placeholder="${escapeHtml(t('settingsDynamicRevenuePlaceholder'))}"
+            />
+            <input
+              type="number"
+              class="settings-inline-input settings-inline-input-cost"
+              id="add-dynamic-item-detail-cost-${index}"
+              min="0"
+              step="1"
+              placeholder="${escapeHtml(t('settingsDynamicCostPlaceholder'))}"
+            />
+            <button type="button" class="btn btn-secondary btn-sm" data-dynamic-detail-add="${index}">${escapeHtml(t('settingsDynamicAddDetail'))}</button>
+          </div>
+        </div>
+      `;
+      }).join('');
 
     const dashboardRows = dashboardConfig.map((item, index) => {
       const label = getDashboardCardLabel(item.key);
@@ -2382,35 +4708,76 @@
             <span>${escapeHtml(label)}</span>
           </label>
           <div class="dashboard-config-order">
-            <button type="button" class="btn-icon-sm" data-dashboard-move-key="${item.key}" data-dashboard-move-dir="-1" ${disableUp} title="上へ">↑</button>
-            <button type="button" class="btn-icon-sm" data-dashboard-move-key="${item.key}" data-dashboard-move-dir="1" ${disableDown} title="下へ">↓</button>
+            <button type="button" class="btn-icon-sm" data-dashboard-move-key="${item.key}" data-dashboard-move-dir="-1" ${disableUp} title="${escapeHtml(t('moveUp'))}">↑</button>
+            <button type="button" class="btn-icon-sm" data-dashboard-move-key="${item.key}" data-dashboard-move-dir="1" ${disableDown} title="${escapeHtml(t('moveDown'))}">↓</button>
           </div>
         </div>
       `;
     }).join('');
 
+    const formVisibilityRows = FORM_FIELD_VISIBILITY_DEFINITIONS.map((item) => `
+      <div class="settings-item dashboard-config-row">
+        <label class="dashboard-config-label">
+          <input type="checkbox" data-form-visibility-key="${item.key}" ${isFormFieldVisible(item.key) ? 'checked' : ''}>
+          <span>${escapeHtml(getFormFieldVisibilityLabel(item.key))}</span>
+        </label>
+      </div>
+    `).join('');
+
     container.innerHTML = `
       <div class="settings-section">
-        <h3>プラン管理</h3>
+        <h3>${escapeHtml(t('settingsPlanSection'))}</h3>
         <div class="settings-item-list">${planRows}</div>
         <div class="settings-add-box" style="display:grid; grid-template-columns:1fr; gap:8px;">
           <input type="hidden" id="edit-plan-index" value="">
-          <input type="text" id="add-plan-name" placeholder="プラン名 (例: Standard)">
-          <input type="number" id="add-plan-price" min="0" step="1" placeholder="金額 (例: 120000)">
+          <input type="text" id="add-plan-name" placeholder="${escapeHtml(t('settingsPlanNamePlaceholder'))}">
+          <input type="number" id="add-plan-price" min="0" step="1" placeholder="${escapeHtml(t('settingsPlanRevenuePlaceholder'))}">
+          <input type="number" id="add-plan-cost" min="0" step="1" placeholder="${escapeHtml(t('settingsPlanCostPlaceholder'))}">
           <div style="display:flex; gap:8px;">
             <button type="button" class="btn btn-primary btn-sm" id="btn-plan-save">${t('settingsAddBtn')}</button>
-            <button type="button" class="btn btn-secondary btn-sm" id="btn-plan-reset">クリア</button>
+            <button type="button" class="btn btn-secondary btn-sm" id="btn-plan-reset">${escapeHtml(t('clear'))}</button>
           </div>
         </div>
       </div>
       <div class="settings-section">
-        <h3>表示設定</h3>
+        <h3>${escapeHtml(t('settingsDynamicSection'))}</h3>
+        <div class="settings-item-list">${dynamicItemRows}</div>
+        <div class="settings-add-box" style="display:grid; grid-template-columns:1fr auto; gap:8px;">
+          <input type="text" id="add-dynamic-item-name" placeholder="${escapeHtml(t('settingsDynamicCategoryPlaceholder'))}">
+          <button type="button" class="btn btn-primary btn-sm" id="btn-dynamic-item-add">${escapeHtml(t('settingsDynamicAddCategory'))}</button>
+        </div>
+      </div>
+      <div class="settings-section">
+        <h3>${escapeHtml(t('settingsGoogleCalendarSection'))}</h3>
+        <div class="settings-item dashboard-config-row">
+          <label class="dashboard-config-label">
+            <input type="checkbox" id="settings-google-calendar-sync" ${googleCalendarAutoSyncEnabled ? 'checked' : ''}>
+            <span>${escapeHtml(t('settingsGoogleCalendarAutoSync'))}</span>
+          </label>
+        </div>
+        <div class="settings-detail-empty">${escapeHtml(t('settingsGoogleCalendarAutoSyncDesc'))}</div>
+        <div class="settings-item dashboard-config-row">
+          <label class="dashboard-config-label" for="settings-google-calendar-select">${escapeHtml(t('settingsGoogleCalendarSelectLabel'))}</label>
+          <div style="display:flex; align-items:center; gap:6px; min-width: 240px;">
+            <select id="settings-google-calendar-select" class="ui-button-standard" style="flex:1; min-width:0;"></select>
+            <button type="button" class="btn-icon-sm" id="settings-google-calendar-refresh" title="${escapeHtml(t('settingsGoogleCalendarRefresh'))}" aria-label="${escapeHtml(t('settingsGoogleCalendarRefresh'))}">↻</button>
+          </div>
+        </div>
+        <div class="settings-detail-empty" id="settings-google-calendar-status">${escapeHtml(t('settingsGoogleCalendarSelectHelp'))}</div>
+      </div>
+      <div class="settings-section">
+        <h3>${escapeHtml(t('settingsDisplaySection'))}</h3>
         <div class="settings-item-list dashboard-config-list">${dashboardRows}</div>
+      </div>
+      <div class="settings-section">
+        <h3>${escapeHtml(t('settingsInputVisibilitySection'))}</h3>
+        <div class="settings-item-list dashboard-config-list">${formVisibilityRows}</div>
       </div>
     `;
 
     bindEventOnce(container.querySelector('#btn-plan-save'), 'click', savePlanMasterFromForm, 'plan-master-save');
     bindEventOnce(container.querySelector('#btn-plan-reset'), 'click', resetPlanMasterFormInputs, 'plan-master-reset');
+    bindEventOnce(container.querySelector('#btn-dynamic-item-add'), 'click', addDynamicItemHintFromSettings, 'dynamic-item-add');
 
     container.querySelectorAll('button[data-plan-edit]').forEach((button) => {
       const index = Number(button.dataset.planEdit);
@@ -2420,6 +4787,69 @@
     container.querySelectorAll('button[data-plan-remove]').forEach((button) => {
       const index = Number(button.dataset.planRemove);
       bindEventOnce(button, 'click', () => removePlanMasterByIndex(index), `plan-master-remove-${index}`);
+    });
+
+    container.querySelectorAll('input[data-plan-color]').forEach((input) => {
+      const index = Number(input.dataset.planColor);
+      bindEventOnce(input, 'input', () => updatePlanColorByIndex(index, input.value), `plan-master-color-${index}`);
+      bindEventOnce(input, 'change', () => updatePlanColorByIndex(index, input.value), `plan-master-color-change-${index}`);
+    });
+
+    const addDynamicItemNameInput = container.querySelector('#add-dynamic-item-name');
+    bindEventOnce(addDynamicItemNameInput, 'keydown', (event) => {
+      if (event.key !== 'Enter') return;
+      event.preventDefault();
+      addDynamicItemHintFromSettings();
+    }, 'dynamic-item-add-enter');
+
+    container.querySelectorAll('button[data-dynamic-item-save]').forEach((button) => {
+      const index = Number(button.dataset.dynamicItemSave);
+      bindEventOnce(button, 'click', () => {
+        const input = container.querySelector(`input[data-dynamic-item-input="${index}"]`);
+        updateDynamicItemHintByIndex(index, input?.value || '');
+      }, `dynamic-item-save-${index}`);
+    });
+
+    container.querySelectorAll('button[data-dynamic-item-remove]').forEach((button) => {
+      const index = Number(button.dataset.dynamicItemRemove);
+      bindEventOnce(button, 'click', () => removeDynamicItemHintByIndex(index), `dynamic-item-remove-${index}`);
+    });
+
+    container.querySelectorAll('input[data-dynamic-detail-add-input]').forEach((input) => {
+      const index = Number(input.dataset.dynamicDetailAddInput);
+      bindEventOnce(input, 'keydown', (event) => {
+        if (event.key !== 'Enter') return;
+        event.preventDefault();
+        addDynamicItemDetailFromSettings(index);
+      }, `dynamic-detail-add-enter-${index}`);
+    });
+
+    container.querySelectorAll('button[data-dynamic-detail-add]').forEach((button) => {
+      const index = Number(button.dataset.dynamicDetailAdd);
+      bindEventOnce(button, 'click', () => addDynamicItemDetailFromSettings(index), `dynamic-detail-add-${index}`);
+    });
+
+    container.querySelectorAll('button[data-dynamic-detail-save]').forEach((button) => {
+      const raw = button.dataset.dynamicDetailSave || '';
+      const [categoryIndex, detailIndex] = raw.split(':').map(Number);
+      bindEventOnce(button, 'click', () => {
+        const nameInput = container.querySelector(`input[data-dynamic-detail-name-input="${categoryIndex}:${detailIndex}"]`);
+        const revenueInput = container.querySelector(`input[data-dynamic-detail-revenue-input="${categoryIndex}:${detailIndex}"]`);
+        const costInput = container.querySelector(`input[data-dynamic-detail-cost-input="${categoryIndex}:${detailIndex}"]`);
+        updateDynamicItemDetailByIndex(
+          categoryIndex,
+          detailIndex,
+          nameInput?.value || '',
+          revenueInput?.value || '0',
+          costInput?.value || '0',
+        );
+      }, `dynamic-detail-save-${raw}`);
+    });
+
+    container.querySelectorAll('button[data-dynamic-detail-remove]').forEach((button) => {
+      const raw = button.dataset.dynamicDetailRemove || '';
+      const [categoryIndex, detailIndex] = raw.split(':').map(Number);
+      bindEventOnce(button, 'click', () => removeDynamicItemDetailByIndex(categoryIndex, detailIndex), `dynamic-detail-remove-${raw}`);
     });
 
     container.querySelectorAll('input[data-dashboard-visible]').forEach((input) => {
@@ -2437,6 +4867,37 @@
         moveDashboardCard(key, direction);
       }, `settings-dashboard-move-${key}-${direction}`);
     });
+
+    const googleCalendarToggle = container.querySelector('#settings-google-calendar-sync');
+    bindEventOnce(googleCalendarToggle, 'change', (event) => {
+      setGoogleCalendarAutoSyncEnabled(!!event.target.checked);
+    }, 'settings-google-calendar-sync-toggle');
+
+    const googleCalendarSelect = container.querySelector('#settings-google-calendar-select');
+    bindEventOnce(googleCalendarSelect, 'change', (event) => {
+      const selectedId = String(event?.target?.value || '').trim();
+      if (!selectedId) return;
+      setGoogleCalendarSelectedId(selectedId);
+    }, 'settings-google-calendar-select-change');
+
+    const googleCalendarRefresh = container.querySelector('#settings-google-calendar-refresh');
+    bindEventOnce(googleCalendarRefresh, 'click', () => {
+      refreshGoogleCalendarSelectInSettings(true);
+    }, 'settings-google-calendar-refresh');
+
+    refreshGoogleCalendarSelectInSettings(false);
+
+    container.querySelectorAll('input[data-form-visibility-key]').forEach((input) => {
+      const key = input.dataset.formVisibilityKey || '';
+      bindEventOnce(input, 'change', (event) => {
+        const next = {
+          ...formFieldVisibilityConfig,
+          [key]: !!event.target.checked,
+        };
+        saveFormFieldVisibilityConfig(next);
+        applyModalFieldVisibility();
+      }, `settings-form-visibility-${key}`);
+    });
   };
 
   // ===== Toast =====
@@ -2451,13 +4912,8 @@
   // ===== Message Analyzer Integration =====
   // ===== Import/Export =====
   function handleSyncExportClick() {
-    const data = { customers, options, planMaster, dashboardConfig, listColumnConfig, contractTemplateText, exportedAt: new Date().toISOString() };
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `photocrm_backup_${new Date().toISOString().slice(0, 10)}.json`;
-    a.click();
+    const data = buildExportSnapshot('manual');
+    downloadJsonFile(`photocrm_backup_${new Date().toISOString().slice(0, 10)}.json`, data);
     showToast(t('msgExported') || 'Exported');
   }
 
@@ -2476,19 +4932,20 @@
         if (Array.isArray(data.planMaster)) savePlanMaster(data.planMaster);
         if (Array.isArray(data.dashboardConfig)) saveDashboardConfig(data.dashboardConfig);
         if (Array.isArray(data.listColumnConfig)) saveListColumnConfig(data.listColumnConfig);
+        if (data.statusColorMap && typeof data.statusColorMap === 'object') saveStatusColorMap(data.statusColorMap);
+        if (Array.isArray(data.heroMetricsConfig)) saveHeroMetricsConfig(data.heroMetricsConfig);
+        if (typeof data.heroMetricsVisible === 'boolean') setHeroMetricsVisibility(data.heroMetricsVisible);
+        if (typeof data.googleCalendarAutoSyncEnabled === 'boolean') setGoogleCalendarAutoSyncEnabled(data.googleCalendarAutoSyncEnabled);
+        if (typeof data.googleCalendarSelectedId === 'string') setGoogleCalendarSelectedId(data.googleCalendarSelectedId);
         if (typeof data.contractTemplateText === 'string') saveContractTemplate(data.contractTemplateText);
-        customers = loadCustomers();
-        options = loadOptions();
-        planMaster = loadPlanMaster();
-        dashboardConfig = loadDashboardConfig();
-        listColumnConfig = loadListColumnConfig();
-        contractTemplateText = loadContractTemplate();
+        reloadRuntimeStateFromStorage();
+        applyHeroMetricsConfig();
         applyDashboardConfig();
         updateLanguage(currentLang);
         showToast(`Imported: ${stats.customers} new, ${stats.updated} updated, ${stats.team} members.`);
       } catch (err) {
         console.error(err);
-        showToast('Invalid JSON', 'error');
+        showToast(t('invalidJson'), 'error');
       }
     };
     reader.readAsText(file);
@@ -2559,10 +5016,10 @@
   function createICSEventsForCalendarView() {
     const monthStr = `${calYear}-${String(calMonth + 1).padStart(2, '0')}`;
     const dateFields = [
-      { key: 'shootingDate', icon: '📷', label: '撮影' },
-      { key: 'meetingDate', icon: '🤝', label: '打ち合わせ' },
-      { key: 'inquiryDate', icon: '💌', label: '問い合わせ' },
-      { key: 'billingDate', icon: '💳', label: '請求' },
+      { key: 'shootingDate', icon: '📷', label: t('icsEventShooting') },
+      { key: 'meetingDate', icon: '🤝', label: t('icsEventMeeting') },
+      { key: 'inquiryDate', icon: '💌', label: t('icsEventInquiry') },
+      { key: 'billingDate', icon: '💳', label: t('icsEventBilling') },
     ].filter(df => calendarFilters[df.key]);
 
     const nowStamp = new Date().toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '');
@@ -2573,17 +5030,17 @@
         const eventDate = c[df.key];
         if (!eventDate || !eventDate.startsWith(monthStr)) return;
 
-        const customerName = c.customerName || '未設定';
+        const customerName = c.customerName || t('icsUnset');
         const plan = resolveCustomerPlanName(c);
-        const contact = c.contact || '未設定';
-        const notes = c.notes || 'なし';
+        const contact = c.contact || t('icsUnset');
+        const notes = c.notes || t('icsNone');
         const summary = `${df.icon} ${df.label} - ${customerName}`;
         const description = [
-          `予定種別: ${df.label}`,
-          `顧客名: ${customerName}`,
-          `プラン内容: ${plan}`,
-          `連絡先: ${contact}`,
-          `備考: ${notes}`,
+          `${t('icsDescType')}: ${df.label}`,
+          `${t('icsDescCustomer')}: ${customerName}`,
+          `${t('icsDescPlan')}: ${plan}`,
+          `${t('icsDescContact')}: ${contact}`,
+          `${t('icsDescNotes')}: ${notes}`,
         ].join('\n');
 
         events.push([
@@ -2607,17 +5064,17 @@
   function handleIcsExportClick() {
     const events = createICSEventsForCalendarView();
     if (events.length === 0) {
-      showToast('書き出し対象の予定がありません');
+      showToast(t('icsNoEvents'));
       return;
     }
 
     const ics = [
       'BEGIN:VCALENDAR',
       'VERSION:2.0',
-      'PRODID:-//PhotoCRM//Calendar Export//JA',
+      'PRODID:-//Pholio//Calendar Export//JA',
       'CALSCALE:GREGORIAN',
       'METHOD:PUBLISH',
-      'X-WR-CALNAME:PhotoCRM Calendar',
+      'X-WR-CALNAME:Pholio Calendar',
       'X-WR-TIMEZONE:Asia/Tokyo',
       ...events,
       'END:VCALENDAR'
@@ -2627,14 +5084,14 @@
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `photocrm-calendar-${calYear}${String(calMonth + 1).padStart(2, '0')}.ics`;
+    a.download = `pholio-calendar-${calYear}${String(calMonth + 1).padStart(2, '0')}.ics`;
     a.click();
     URL.revokeObjectURL(url);
   }
 
   // CSV Export
   function handleCsvExportClick() {
-    const headers = fields.map(f => f.label).join(',');
+    const headers = fields.map((f) => getFieldLabel(f)).join(',');
     const rows = customers.map(c => fields.map(f => {
       let v = c[f.key] ?? '';
       if (typeof v === 'string') v = v.replace(/"/g, '""');
@@ -2676,7 +5133,7 @@
           <div style="font-weight: 500; text-decoration: ${task.done ? 'line-through' : 'none'}; opacity: ${task.done ? 0.6 : 1};">${escapeHtml(task.name)}</div>
           <div style="font-size: 0.75rem; color: var(--text-muted);">
             <span style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: ${pColor}; margin-right: 4px;"></span>
-            ${task.dueDate ? formatDate(task.dueDate) : 'No date'}
+            ${task.dueDate ? formatDate(task.dueDate) : t('noDate')}
           </div>
         </div>
         <button class="btn-icon" onclick="window.deleteTask('${customer.id}', '${task.id}')" style="font-size: 0.8rem; color: var(--danger);">✕</button>
@@ -2702,7 +5159,7 @@
       t.done = !t.done;
       saveCustomers(customers);
       renderTasks(c);
-      showToast(t.done ? 'Task completed!' : 'Task reopened');
+      showToast(t.done ? t('taskCompleted') : t('taskReopened'));
     }
   };
 
@@ -2746,7 +5203,7 @@
     saveCustomers(customers);
     renderTasks(c);
     closeTaskModal();
-    showToast('Task added');
+    showToast(t('taskAdded'));
   };
 
 
@@ -2788,9 +5245,9 @@
     if (!summary) return;
 
     summary.innerHTML = `
-      <div class="invoice-summary-row"><span>Subtotal</span><strong>${formatCurrency(amounts.subtotal)}</strong></div>
+      <div class="invoice-summary-row"><span>${t('invoicePdfSubtotal')}</span><strong>${formatCurrency(amounts.subtotal)}</strong></div>
       <div class="invoice-summary-row"><span>${settings.label || 'Tax'}</span><strong>${formatCurrency(amounts.tax)}</strong></div>
-      <div class="invoice-summary-row invoice-summary-total"><span>Total</span><strong>${formatCurrency(amounts.total)}</strong></div>
+      <div class="invoice-summary-row invoice-summary-total"><span>${t('invoicePdfTotal')}</span><strong>${formatCurrency(amounts.total)}</strong></div>
     `;
   }
 
@@ -2807,11 +5264,11 @@
       const amount = (Number(item.quantity) || 0) * (Number(item.unitPrice) || 0);
 
       row.innerHTML = `
-        <input class="invoice-item-desc" type="text" value="${escapeHtml(item.description || '')}" placeholder="Item description">
+        <input class="invoice-item-desc" type="text" value="${escapeHtml(item.description || '')}" placeholder="${escapeHtml(t('invoiceItemDescription'))}">
         <input class="invoice-item-qty" type="number" min="0" step="1" value="${Number(item.quantity) || 1}">
         <input class="invoice-item-unit" type="number" min="0" step="0.01" value="${Number(item.unitPrice) || 0}">
         <div class="invoice-item-amount">${formatCurrency(amount)}</div>
-        <button type="button" class="btn-remove-line" title="Remove">✕</button>
+        <button type="button" class="btn-remove-line" title="${escapeHtml(t('remove'))}">✕</button>
       `;
 
       row.querySelectorAll('input').forEach(input => {
@@ -2842,7 +5299,7 @@
     invoiceBuilderCustomerId = customerId;
     const meta = document.getElementById('invoice-customer-meta');
     if (meta) {
-      meta.innerHTML = `<strong>${escapeHtml(customer.customerName || '—')}</strong> · ${escapeHtml(customer.contact || 'No contact')} · ${formatDate(customer.shootingDate)}`;
+      meta.innerHTML = `<strong>${escapeHtml(customer.customerName || '—')}</strong> · ${escapeHtml(customer.contact || t('noContact'))} · ${formatDate(customer.shootingDate)}`;
     }
 
     const items = normalizeInvoiceItems(customer.invoiceItems);
@@ -2867,7 +5324,7 @@
     if (recipientNameInput) recipientNameInput.value = customer.invoiceRecipientName || customer.customerName || '';
     if (senderContactInput) senderContactInput.value = customer.invoiceSenderContact || senderProfile.contact || settings.email || '';
     if (recipientContactInput) recipientContactInput.value = customer.invoiceRecipientContact || customer.contact || '';
-    if (messageInput) messageInput.value = customer.invoiceMessage || settings.invoiceFooterMessage || DEFAULT_INVOICE_MESSAGE;
+    if (messageInput) messageInput.value = customer.invoiceMessage || settings.invoiceFooterMessage || getDefaultInvoiceMessage();
 
     const modal = document.getElementById('invoice-builder-modal');
     modal.style.display = 'flex';
@@ -2907,7 +5364,7 @@
     })));
 
     if (!items.length) {
-      showToast('Please add at least one line item', 'error');
+      showToast(t('invoiceLineItemRequired'), 'error');
       return;
     }
 
@@ -2918,7 +5375,7 @@
     customer.invoiceRecipientName = document.getElementById('invoice-recipient-name')?.value?.trim() || '';
     customer.invoiceSenderContact = document.getElementById('invoice-sender-contact')?.value?.trim() || '';
     customer.invoiceRecipientContact = document.getElementById('invoice-recipient-contact')?.value?.trim() || '';
-    customer.invoiceMessage = document.getElementById('invoice-message')?.value?.trim() || DEFAULT_INVOICE_MESSAGE;
+    customer.invoiceMessage = document.getElementById('invoice-message')?.value?.trim() || getDefaultInvoiceMessage();
     const settings = getTaxSettings();
     saveTaxSettings({
       ...settings,
@@ -2965,10 +5422,10 @@
     table.innerHTML = `
       <thead>
         <tr style="border-bottom: 2px solid var(--border); text-align: left;">
-          <th style="padding: 10px;">Date</th>
-          <th style="padding: 10px;">Item</th>
-          <th style="padding: 10px;">Category</th>
-          <th style="padding: 10px; text-align: right;">Amount</th>
+          <th style="padding: 10px;">${t('tableDate')}</th>
+          <th style="padding: 10px;">${t('tableItem')}</th>
+          <th style="padding: 10px;">${t('category')}</th>
+          <th style="padding: 10px; text-align: right;">${t('amount')}</th>
           <th style="padding: 10px;"></th>
         </tr>
       </thead>
@@ -3025,7 +5482,7 @@
     saveExpenses(expenses);
     renderExpenses();
     closeExpenseModal();
-    showToast('Expense added');
+    showToast(t('expenseAdded'));
   };
 
   function bindExpenseModalEvents() {
@@ -3127,7 +5584,7 @@
       phone: $('#invoice-phone').value,
       bank: $('#invoice-bank').value,
       invoiceTemplate: $('#invoice-template').value || 'modern',
-      invoiceFooterMessage: currentSettings.invoiceFooterMessage || DEFAULT_INVOICE_MESSAGE,
+      invoiceFooterMessage: currentSettings.invoiceFooterMessage || getDefaultInvoiceMessage(),
     };
     saveTaxSettings(settings);
     showToast(t('msgSettingsSaved'));
@@ -3150,7 +5607,7 @@
     if (!textarea) return;
     saveContractTemplate(textarea.value);
     loadContractTemplateSettings();
-    showToast('契約書テンプレートを保存しました。');
+    showToast(t('contractTemplateSaved'));
   }
 
   window.getContractTemplateText = function () {
@@ -3194,7 +5651,7 @@
 
     if (window.generateContract) {
       window.generateContract(customer, 'custom');
-      showToast(t('contractGenerated') || '契約書を作成しました');
+      showToast(t('contractGenerated'));
       return;
     }
 
@@ -3206,24 +5663,21 @@
   function handleLanguageSelectChange(event) {
     const selected = event?.target?.value;
     if (!selected) return;
-    updateLanguage(selected);
-  }
-
-  function handleCurrencySelectChange(event) {
-    const selected = event?.target?.value;
-    if (!selected) return;
-    updateCurrency(selected);
+    updateUITS(selected);
+    setMobileHeaderMenuOpen(false);
   }
 
   function handleOpenSettingsClick() {
     setDashboardQuickMenuOpen(false);
     setListColumnsMenuOpen(false);
+    setMobileHeaderMenuOpen(false);
     renderSettings();
     loadContractTemplateSettings();
     settingsOverlay?.classList.add('active');
   }
 
   function handleAddCustomerClick() {
+    setMobileHeaderMenuOpen(false);
     openModal();
   }
 
@@ -3254,41 +5708,61 @@
     });
   }
 
-  function handleGoogleLoginClick() {
-    if (!window.FirebaseService) {
-      showToast('Firebase設定の読み込みに失敗しました。');
-      return;
-    }
-    if (typeof window.FirebaseService.signInWithPopup !== 'function') {
-      showToast('Googleログイン設定に問題があります。');
-      return;
-    }
-    window.FirebaseService.signInWithPopup().catch((err) => {
-      console.error('Firebase Auth Error:', err.code, err.message);
+  async function handleGoogleLoginClick() {
+    try {
+      if (window.location.protocol === 'file:') {
+        activateLocalGuestMode(t('localGuestModeFile'));
+        return;
+      }
+
+      if (!window.FirebaseService) {
+        showToast(t('firebaseConfigLoadFailed'));
+        return;
+      }
+      if (typeof window.FirebaseService.signInWithPopup !== 'function') {
+        showToast(t('googleConfigIssue'));
+        return;
+      }
+
+      await window.FirebaseService.signInWithPopup();
+    } catch (err) {
+      const code = String(err?.code || '');
+      console.error('Firebase Auth Error:', err?.code, err?.message);
       console.error(err);
-      showToast('Googleログインに失敗しました。');
-    });
+
+      if (code === 'auth/operation-not-supported-in-this-environment') {
+        activateLocalGuestMode(t('localGuestModeUnsupported'));
+        alert(t('googleLoginUnavailableAlert'));
+        return;
+      }
+
+      showToast(t('googleLoginFailed'));
+      alert(t('googleLoginFailedAlert'));
+    }
   }
 
   function handleGoogleLogoutClick() {
-    authWatcherDisabled = true;
-    if (typeof authUnsubscribe === 'function') {
-      authUnsubscribe();
-      authUnsubscribe = null;
-    }
     isLoggedIn = false;
-    window.FirebaseService?.signOut?.().catch((err) => {
-      console.error('Google logout failed', err);
-    });
-    try { window.localStorage.clear(); } catch {}
-    try { window.sessionStorage.clear(); } catch {}
-    window.location.href = window.location.origin + window.location.pathname;
+    mergePromptedUid = null;
+    saveLocalValue(LOCAL_GUEST_MODE_KEY, true);
+    setCloudSyncIndicator('syncing');
+    Promise.resolve(window.FirebaseService?.signOut?.())
+      .catch((err) => {
+        console.error('Google logout failed', err);
+      })
+      .finally(() => {
+        setCloudSyncIndicator('local');
+        activateLocalGuestMode(t('localGuestModeDefault'));
+      });
   }
 
   function bindCoreUIEventListeners() {
-    bindEventOnce(document.getElementById('lang-select'), 'change', handleLanguageSelectChange, 'lang-select-change');
+    bindEventOnce(getLanguageSelectElement(), 'change', handleLanguageSelectChange, 'lang-select-change');
     bindEventOnce(document.getElementById('btn-theme'), 'click', toggleTheme, 'theme-toggle-click');
-    bindEventOnce(document.getElementById('btn-toggle-dashboard'), 'click', handleDashboardToggleButtonClick, 'dashboard-visibility-toggle');
+    if (ENABLE_STATS_FEATURES) {
+      bindEventOnce(document.getElementById('btn-toggle-dashboard'), 'click', handleDashboardToggleButtonClick, 'dashboard-visibility-toggle');
+      bindEventOnce(document.getElementById('btn-toggle-graph'), 'click', handleGraphToggleButtonClick, 'graph-visibility-toggle');
+    }
     bindEventOnce(document.getElementById('btn-list-columns'), 'click', handleListColumnsToggleButtonClick, 'list-columns-toggle');
     bindEventOnce(document, 'click', handleDashboardQuickMenuOutsideClick, 'dashboard-quick-menu-outside-click');
     bindEventOnce(document, 'click', handleListColumnsOutsideClick, 'list-columns-outside-click');
@@ -3296,12 +5770,21 @@
     bindEventOnce(document, 'keydown', handleListColumnsEscape, 'list-columns-escape');
     bindEventOnce(window, 'resize', handleListColumnsViewportChange, 'list-columns-viewport-resize');
     bindEventOnce(window, 'scroll', handleListColumnsViewportChange, 'list-columns-viewport-scroll', true);
+    bindEventOnce(mobileHeaderMenuButton, 'click', handleMobileHeaderMenuToggleClick, 'mobile-header-menu-toggle');
+    bindEventOnce(document, 'click', handleMobileHeaderMenuOutsideClick, 'mobile-header-menu-outside');
+    bindEventOnce(document, 'keydown', handleMobileHeaderMenuEscape, 'mobile-header-menu-escape');
+    bindEventOnce(headerActions, 'click', handleMobileHeaderActionClick, 'mobile-header-menu-action-click');
+    bindEventOnce(window, 'resize', handleMobileHeaderViewportChange, 'mobile-header-menu-viewport');
     bindEventOnce(document.getElementById('form-plan'), 'change', handlePlanSelectChange, 'form-plan-select-change');
-    bindEventOnce(document.getElementById('form-base-price'), 'input', updateGrandTotal, 'form-base-price-input');
+    bindEventOnce(document.getElementById('form-plan-price'), 'input', handlePlanPriceInputChange, 'form-plan-price-input');
+    bindEventOnce(document.getElementById('form-plan-cost'), 'input', handlePlanCostInputChange, 'form-plan-cost-input');
+    bindEventOnce(document.getElementById('form-base-price'), 'input', handleBasePriceInputChange, 'form-base-price-input');
     bindEventOnce(document.getElementById('form-price-adjustment'), 'input', updateGrandTotal, 'form-price-adjustment-input');
     bindEventOnce(document.getElementById('form-revenue'), 'input', syncAdjustmentFromRevenueInput, 'form-revenue-input');
+    bindEventOnce(document.getElementById('form-expense'), 'input', handleExpenseInputChange, 'form-expense-input');
     bindEventOnce(document.getElementById('form-total-price'), 'input', syncAdjustmentFromTotalInput, 'form-total-price-input');
     bindEventOnce(document.getElementById('btn-add'), 'click', handleAddCustomerClick, 'add-customer-click');
+    bindEventOnce(document.getElementById('btn-add-fab'), 'click', handleAddCustomerClick, 'add-customer-fab-click');
     bindEventOnce(document.getElementById('btn-settings'), 'click', handleOpenSettingsClick, 'open-settings-click');
     bindEventOnce(document.getElementById('btn-sync-export'), 'click', handleSyncExportClick, 'sync-export-click');
     bindEventOnce(document.getElementById('btn-sync-import'), 'click', handleSyncImportClick, 'sync-import-click');
@@ -3309,11 +5792,11 @@
     bindEventOnce(document.getElementById('btn-export'), 'click', handleCsvExportClick, 'csv-export-click');
     bindEventOnce(document.getElementById('btn-ics-export'), 'click', handleIcsExportClick, 'ics-export-click');
     bindEventOnce(document.getElementById('btn-team-add'), 'click', handleTeamAddClick, 'team-add-click');
-    bindEventOnce(document.getElementById('btn-add-custom-field'), 'click', handleAddCustomFieldClick, 'add-custom-field-click');
-    bindEventOnce(document.getElementById('btn-add-extra-item'), 'click', () => addDynamicChargeItem(), 'add-extra-item-click');
+    bindEventOnce(document.getElementById('add-item-btn'), 'click', () => addDynamicChargeItem(), 'add-extra-item-click');
     bindEventOnce(document.getElementById('btn-google-login'), 'click', handleGoogleLoginClick, 'google-login-banner');
     bindEventOnce(document.getElementById('btn-google-login-screen'), 'click', handleGoogleLoginClick, 'google-login-screen');
     bindEventOnce(document.getElementById('btn-logout'), 'click', handleGoogleLogoutClick, 'google-logout');
+    bindEventOnce(document.getElementById('btn-header-logout'), 'click', handleGoogleLogoutClick, 'google-logout-header');
     bindSettingsTabListeners();
   }
 
@@ -3337,26 +5820,38 @@
     bindExpenseModalEvents();
   }
 
+  let uiInitialized = false;
+
+  function initializeUI() {
+    if (uiInitialized) return;
+    bindCoreUIEventListeners();
+    bindFeatureEventListeners();
+    setListColumnsMenuOpen(false);
+    hookPhotographerOther();
+    uiInitialized = true;
+  }
+
   // ===== Initialization =====
   function init() {
     if (appInitialized) return;
 
     // 1. Apply theme first (prevents flash)
-    applyTheme(currentTheme);
+    applyTheme(FORCE_DARK_MODE ? 'dark' : currentTheme);
 
     // 2. Set defaults
-    updateLanguage(currentLang || 'en');
+    updateLanguage(currentLang || 'ja');
     updateCurrency(currentCurrency);
-    setDashboardVisibility(dashboardVisible);
-    applyDashboardConfig();
+    if (ENABLE_STATS_FEATURES) {
+      applyHeroMetricsConfig();
+      setDashboardVisibility(dashboardVisible);
+      setGraphVisibility(false, false);
+      applyDashboardConfig();
+    } else {
+      applyMinimalSafeModeUI();
+    }
 
     // 3. Attach event listeners
-    bindCoreUIEventListeners();
-    bindFeatureEventListeners();
-    setListColumnsMenuOpen(false);
-
-    // Keep photographer "Other" behavior.
-    hookPhotographerOther();
+    initializeUI();
 
     if (dashboardMonthPicker) {
       syncDashboardMonthPicker();
@@ -3380,7 +5875,6 @@
     // Initial render
     renderTable();
     renderExpenses();
-    bindExpenseModalEvents();
 
     // Load saved view preference
     const savedView = getCloudValue('preferred_view', 'list');
@@ -3390,29 +5884,20 @@
   }
 
   function hydrateStateFromCloud() {
-    currentLang = getCloudValue(LANG_KEY, getLocalValue(LANG_KEY, 'en'));
-    if (!window.LOCALE || !window.LOCALE[currentLang]) currentLang = 'en';
-    currentTheme = getCloudValue(THEME_KEY, getLocalValue(THEME_KEY, 'dark'));
+    const hydratedLang = getCloudValue(LANG_KEY, getLocalValue(LANG_KEY, 'ja'));
+    currentLang = hydratedLang;
+    if (!window.LOCALE || !window.LOCALE[currentLang]) currentLang = 'ja';
+    currentTheme = FORCE_DARK_MODE ? 'dark' : getCloudValue(THEME_KEY, getLocalValue(THEME_KEY, 'dark'));
     currentCurrency = getCloudValue(CURRENCY_KEY, getLocalValue(CURRENCY_KEY, 'USD'));
     if (!CURRENCY_CONFIG[currentCurrency]) currentCurrency = 'USD';
-    customers = loadCustomers();
-    options = loadOptions();
-    dynamicItemNameSuggestions = loadDynamicItemNameSuggestions();
-    dynamicItemSuggestionMap = loadDynamicItemSuggestionMap();
-    planMaster = loadPlanMaster();
-    if (planMaster.length === 0 && Array.isArray(options.plan) && options.plan.length > 0) {
-      planMaster = options.plan
-        .filter((name) => typeof name === 'string' && name.trim())
-        .map((name) => normalizePlanMasterItem({ name }));
-      savePlanMaster(planMaster);
+    reloadRuntimeStateFromStorage();
+    if (ENABLE_STATS_FEATURES) {
+      applyHeroMetricsConfig();
+      applyDashboardConfig();
+      setDashboardVisibility(dashboardVisible);
+    } else {
+      applyMinimalSafeModeUI();
     }
-    calendarFilters = loadCalendarFilters();
-    dashboardVisible = getCloudValue(DASHBOARD_VISIBILITY_KEY, getLocalValue(DASHBOARD_VISIBILITY_KEY, true)) !== false;
-    dashboardConfig = loadDashboardConfig();
-    listColumnConfig = loadListColumnConfig();
-    contractTemplateText = loadContractTemplate();
-    applyDashboardConfig();
-    setDashboardVisibility(dashboardVisible);
     renderListColumnsMenu();
   }
 
@@ -3420,6 +5905,103 @@
   let isLoggedIn = false;
   let authWatcherDisabled = false;
   let authUnsubscribe = null;
+  let cloudSyncState = 'local';
+  let mergePromptedUid = null;
+
+  function getCloudSyncStatusLabel(state) {
+    if (state === 'syncing') return t('cloudSyncStatusSyncing');
+    if (state === 'ready') return t('cloudSyncStatusReady');
+    if (state === 'error') return t('cloudSyncStatusError');
+    return t('cloudSyncStatusLocal');
+  }
+
+  function setCloudSyncIndicator(state = 'local', customMessage = '') {
+    cloudSyncState = state;
+    if (cloudSyncIndicator) cloudSyncIndicator.dataset.state = state;
+    if (cloudSyncLabel) cloudSyncLabel.textContent = customMessage || getCloudSyncStatusLabel(state);
+  }
+
+  function getAuthDisplayName(user) {
+    return String(user?.displayName || user?.email || t('authLoggedInUserFallback'));
+  }
+
+  function updateHeaderAuthUi(user = null) {
+    const headerLogout = document.getElementById('btn-header-logout');
+    const isGuest = getLocalValue(LOCAL_GUEST_MODE_KEY, false) === true;
+    const hasUser = !!user;
+    if (headerUserBadge) headerUserBadge.style.display = hasUser ? 'inline-flex' : 'none';
+    if (headerUserName) {
+      const displayName = hasUser ? getAuthDisplayName(user) : (isGuest ? t('authLoggedInUserFallback') : '');
+      const uid = String(user?.uid || '').trim();
+      const uidShort = uid ? uid.slice(0, 8) : '';
+      headerUserName.textContent = uidShort ? `${displayName} (${uidShort})` : displayName;
+      headerUserName.title = uid ? `${displayName}\nUID: ${uid}` : displayName;
+    }
+    if (headerUserAvatar) {
+      if (hasUser && user?.photoURL) {
+        headerUserAvatar.src = user.photoURL;
+      } else {
+        headerUserAvatar.src = 'iconpholio.png';
+      }
+      headerUserAvatar.alt = hasUser ? getAuthDisplayName(user) : '';
+      headerUserAvatar.style.visibility = hasUser ? 'visible' : 'hidden';
+    }
+    if (headerLogout) {
+      headerLogout.style.display = hasUser && !isGuest ? '' : 'none';
+    }
+  }
+
+  function hasGuestLocalData() {
+    const localCustomers = getLocalValue(STORAGE_KEY, []);
+    const localExpenses = getLocalValue(EXPENSES_KEY, []);
+    const customerCount = Array.isArray(localCustomers) ? localCustomers.length : 0;
+    const expenseCount = Array.isArray(localExpenses) ? localExpenses.length : 0;
+    return customerCount > 0 || expenseCount > 0;
+  }
+
+  async function maybeMergeGuestDataToCloud(user) {
+    if (!user || !window.FirebaseService) return;
+    if (mergePromptedUid === user.uid) return;
+    mergePromptedUid = user.uid;
+
+    const localSummary = window.FirebaseService.getLocalDataSummary?.();
+    if (!localSummary?.hasLocalData) return;
+
+    let cloudSummary = { projects: 0, expenses: 0, hasCloudData: false };
+    try {
+      cloudSummary = await window.FirebaseService.getCloudDataSummary?.() || cloudSummary;
+    } catch (err) {
+      console.warn('Failed to fetch cloud summary before merge', err);
+    }
+
+    const shouldMerge = window.confirm(
+      t('cloudMergeConfirm', {
+        localCustomers: String(localSummary.customers || 0),
+        localExpenses: String(localSummary.expenses || 0),
+        cloudProjects: String(cloudSummary.projects || 0),
+        cloudExpenses: String(cloudSummary.expenses || 0),
+      })
+    );
+
+    if (!shouldMerge) {
+      showToast(t('cloudMergeSkipped'));
+      return;
+    }
+
+    setCloudSyncIndicator('syncing');
+    try {
+      const mergeResult = await window.FirebaseService.mergeLocalDataToCloud?.({ overwrite: false });
+      if (mergeResult?.merged) {
+        showToast(t('cloudMergeCompleted', {
+          customers: String(mergeResult.customerCount || 0),
+          expenses: String(mergeResult.expenseCount || 0),
+        }));
+      }
+    } catch (err) {
+      console.error('Local merge to cloud failed', err);
+      showToast(t('cloudMergeFailed'), 'error');
+    }
+  }
 
   function getAppContainerElement() {
     const byId = document.getElementById('app-container');
@@ -3440,19 +6022,21 @@
     const logoutBtn = document.getElementById('btn-logout');
 
     if (state === 'checking') {
-      if (authStatus) authStatus.textContent = '🔄 ログイン状態を確認中...';
+      if (authStatus) authStatus.textContent = t('authChecking');
       if (loginBtn) loginBtn.style.display = 'none';
       if (logoutBtn) logoutBtn.style.display = 'none';
       if (authScreen) authScreen.style.display = 'none';
       if (loginScreen) loginScreen.style.display = 'none';
       if (authBanner) authBanner.style.display = 'flex';
       if (appContainer) appContainer.style.display = 'none';
+      updateHeaderAuthUi(null);
+      setCloudSyncIndicator('syncing');
       return;
     }
 
     if (state === 'loggedOut') {
       isLoggedIn = false;
-      if (authStatus) authStatus.textContent = '🔐 Googleでログインしてクラウド同期を開始';
+      if (authStatus) authStatus.textContent = t('authLoggedOutPrompt');
       if (loginBtn) loginBtn.style.display = '';
       if (logoutBtn) logoutBtn.style.display = 'none';
       if (authScreenRoot) authScreenRoot.style.display = 'block';
@@ -3460,17 +6044,22 @@
       if (loginScreen) loginScreen.style.display = 'flex';
       if (authBanner) authBanner.style.display = 'none';
       if (appContainer) appContainer.style.display = 'none';
+      updateHeaderAuthUi(null);
+      setCloudSyncIndicator('local');
       return;
     }
 
     if (state === 'loggedIn') {
-      if (authStatus) authStatus.textContent = `✅ ${user?.displayName || user?.email || 'ログイン中'} でログイン中`;
+      const userName = getAuthDisplayName(user);
+      if (authStatus) authStatus.textContent = t('authLoggedInAs', { user: userName });
       if (loginBtn) loginBtn.style.display = 'none';
       if (logoutBtn) logoutBtn.style.display = '';
       if (authScreen) authScreen.style.display = 'none';
       if (loginScreen) loginScreen.style.display = 'none';
       if (authBanner) authBanner.style.display = 'flex';
       if (appContainer) appContainer.style.display = 'block';
+      updateHeaderAuthUi(user);
+      setCloudSyncIndicator('syncing', `${t('cloudSyncStatusSyncing')} (${userName})`);
     }
   }
 
@@ -3483,7 +6072,7 @@
       await window.FirebaseService.loadForUser(resolvedUser);
       hydrateStateFromCloud();
       applyTheme(currentTheme);
-      updateLanguage(currentLang || 'en');
+      updateLanguage(currentLang || 'ja');
       updateCurrency(currentCurrency);
       renderTable();
       renderExpenses();
@@ -3491,9 +6080,11 @@
       populateSelects();
       syncCalendarFilterControls();
       if (calendarView.classList.contains('active')) renderCalendar();
+      setCloudSyncIndicator('ready');
     } catch (err) {
       console.error('Cloud data load failed', err);
-      showToast('クラウドデータの読み込みに失敗しました。再度お試しください。');
+      showToast(t('cloudDataLoadFailed'));
+      setCloudSyncIndicator('error');
     } finally {
       const appContainer = document.getElementById('app-container');
       if (appContainer) appContainer.style.display = 'block';
@@ -3507,66 +6098,123 @@
     });
   }
 
-  // Ensure DOM is ready before initializing
-  document.addEventListener('DOMContentLoaded', async () => {
-    init();
-    setAuthScreenState('checking');
-    registerPwaServiceWorker();
-
-    if (window.location.protocol === 'file:') {
-      authWatcherDisabled = true;
-      if (typeof authUnsubscribe === 'function') {
-        authUnsubscribe();
-        authUnsubscribe = null;
-      }
-      isLoggedIn = true;
-      setAuthScreenState('loggedIn', { displayName: 'Guest (Local File Mode)' });
-      showToast('ローカルファイルモード: ゲストセッションで起動しました。');
-      return;
-    }
-
-    if (!window.FirebaseService) {
-      console.error('FirebaseService is not available.');
-      showToast('Firebase設定の読み込みに失敗しました。');
-      setAuthScreenState('loggedOut');
-      return;
-    }
-
+  async function initializeFirebaseAuthFlow() {
     try {
-      await window.FirebaseService.whenReady();
-    } catch (err) {
-      console.error('Firebase initialization failed', err);
-      showToast('Firebase初期化に失敗しました。');
-      setAuthScreenState('loggedOut');
-      return;
-    }
-
-    // onAuthChanged is registered only after Firebase initialization is complete.
-    authWatcherDisabled = false;
-    if (typeof authUnsubscribe === 'function') {
-      authUnsubscribe();
-      authUnsubscribe = null;
-    }
-    authUnsubscribe = window.FirebaseService.onAuthChanged((user) => {
-      if (authWatcherDisabled) return;
-
-      if (user) {
-        isLoggedIn = true;
-        setAuthScreenState('loggedIn', user);
-        handleAuthState(user).catch((err) => {
-          console.error('Auth update error:', err);
-        });
+      if (shouldStartInLocalGuestMode()) {
+        activateLocalGuestMode(
+          window.location.protocol === 'file:'
+            ? t('localGuestModeFile')
+            : t('localGuestModeDefault')
+        );
         return;
       }
 
-      if (!isLoggedIn) {
+      if (SAFE_MODE_MINIMAL_BOOT) {
+        authWatcherDisabled = true;
+        if (typeof authUnsubscribe === 'function') {
+          authUnsubscribe();
+          authUnsubscribe = null;
+        }
+        isLoggedIn = false;
+        safeRun('safeMode.theme', () => applyTheme('dark'));
+        safeRun('safeMode.language', () => updateLanguage(currentLang || 'ja'));
+        safeRun('safeMode.applyMinimalSafeModeUI', () => applyMinimalSafeModeUI());
         setAuthScreenState('loggedOut');
         return;
       }
 
-      isLoggedIn = false;
+      if (!window.FirebaseService) {
+        console.error('FirebaseService is not available.');
+        showToast(t('firebaseConfigLoadFailed'));
+        setAuthScreenState('loggedOut');
+        return;
+      }
+
+      await window.FirebaseService.whenReady();
+
+      // onAuthChanged is registered only after Firebase initialization is complete.
+      authWatcherDisabled = false;
+      if (typeof authUnsubscribe === 'function') {
+        authUnsubscribe();
+        authUnsubscribe = null;
+      }
+      const authWatcher = window.FirebaseService.onAuthChanged((user) => {
+        if (authWatcherDisabled) return;
+
+        if (user) {
+          isLoggedIn = true;
+          saveLocalValue(LOCAL_GUEST_MODE_KEY, false);
+          const userName = getAuthDisplayName(user);
+          setAuthScreenState('loggedIn', user);
+          setCloudSyncIndicator('syncing', `${t('cloudSyncStatusSyncing')} (${userName})`);
+          maybeMergeGuestDataToCloud(user)
+            .then(() => handleAuthState(user))
+            .then(() => setCloudSyncIndicator('ready'))
+            .catch((err) => {
+              console.error('Auth update error:', err);
+              setCloudSyncIndicator('error');
+            });
+          return;
+        }
+
+        if (!isLoggedIn) {
+          if (hasGuestLocalData()) {
+            activateLocalGuestMode(t('localGuestModeDefault'));
+            return;
+          }
+          setAuthScreenState('loggedOut');
+          return;
+        }
+
+        isLoggedIn = false;
+        if (hasGuestLocalData()) {
+          activateLocalGuestMode(t('localGuestModeDefault'));
+          return;
+        }
+        setAuthScreenState('loggedOut');
+      });
+      if (authWatcher && typeof authWatcher.then === 'function') {
+        authWatcher.then((unsubscribe) => {
+          if (typeof unsubscribe === 'function') authUnsubscribe = unsubscribe;
+        }).catch((err) => {
+          console.error('Auth watcher registration failed', err);
+        });
+      } else {
+        authUnsubscribe = authWatcher;
+      }
+    } catch (err) {
+      console.error('Firebase auth bootstrap failed', err);
       setAuthScreenState('loggedOut');
-    });
+      showToast(t('firebaseAuthInitFailed'));
+    }
+  }
+
+  async function bootstrapApp() {
+    initializeManifestSafely();
+
+    const restoredFromMirror = await restoreLocalStorageFromIndexedDBIfNeeded();
+    mirrorCurrentLocalStorageToIndexedDB();
+    if (restoredFromMirror) reloadRuntimeStateFromStorage();
+
+    init();
+    setAuthScreenState('checking');
+    registerPwaServiceWorker();
+    await initializeFirebaseAuthFlow();
+  }
+
+  // Ensure DOM is ready before initializing
+  document.addEventListener('DOMContentLoaded', async () => {
+    try {
+      await bootstrapApp();
+    } catch (err) {
+      console.error('App bootstrap failed', err);
+      try {
+        init();
+        setAuthScreenState('loggedOut');
+      } catch (fallbackErr) {
+        console.error('Bootstrap fallback failed', fallbackErr);
+      }
+    }
   });
 
 })();

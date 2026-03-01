@@ -1,11 +1,11 @@
 <!DOCTYPE html>
 <html lang="ja">
-<!-- PhotoCRM v2.2.3 - Fixed btoa encoding error - 2026-02-22 -->
+<!-- Pholio v2.2.3 - Fixed btoa encoding error - 2026-02-22 -->
 
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>PhotoCRM</title>
+  <title>Pholio - Professional Photography Management</title>
   <meta name="description"
     content="Customer management for photographers. Manage everything from inquiries to payments."
     data-i18n="metaDescription">
@@ -13,9 +13,9 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css">
-  <link rel="manifest" href="manifest.json">
-  <link rel="icon" href="icon.svg" type="image/svg+xml">
-  <link rel="apple-touch-icon" href="icon.svg">
+  <!-- <link rel="manifest" href="manifest.json"> -->
+  <link rel="icon" href="iconpholio.png" type="image/png">
+  <link rel="apple-touch-icon" href="iconpholio.png">
   <meta name="theme-color" content="#8b5cf6">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
@@ -26,7 +26,7 @@
   <div class="login-screen" id="login-screen" style="display:none;">
     <div class="login-card">
       <div class="login-logo">📷</div>
-      <h1>PhotoCRM</h1>
+      <h1>Pholio</h1>
       <p>クラウド同期を利用するにはGoogleログインが必要です。</p>
       <button class="btn btn-primary btn-lg" id="btn-google-login-screen">Googleでログイン</button>
     </div>
@@ -43,19 +43,16 @@
     <!-- ===== Header ===== -->
     <header class="app-header">
       <div class="logo">
-        <div class="logo-icon">📷</div>
-        <div class="logo-copy">
-          <div class="brand-title">PhotoCRM</div>
-          <button class="stats-toggle-btn" id="btn-toggle-dashboard" type="button"
-            title="統計を隠す" aria-expanded="true">📊 統計を隠す</button>
-          <div class="dashboard-quick-menu" id="dashboard-quick-menu" style="display:none;">
-            <div class="dashboard-quick-menu-content" id="dashboard-quick-menu-content"></div>
-          </div>
+        <div class="brand-unit">
+          <img src="iconpholio.png" alt="Pholio" class="brand-logo-image" />
+          <span class="brand-wordmark">Pholio</span>
         </div>
       </div>
+      <button class="mobile-header-menu-btn" id="btn-mobile-header-menu" type="button" aria-expanded="false"
+        data-i18n-title="mobileMenu" data-i18n-aria-label="mobileMenu">⚙️</button>
       <div class="header-actions">
         <!-- Language Switcher -->
-        <select id="lang-select" class="btn btn-secondary btn-sm">
+        <select id="languageSelect" class="btn btn-secondary btn-sm">
           <option value="en">🇺🇸 English</option>
           <option value="ja">🇯🇵 日本語</option>
           <option value="fr">🇫🇷 Français</option>
@@ -64,8 +61,17 @@
           <option value="ko">🇰🇷 한국어</option>
         </select>
 
+        <div class="cloud-sync-indicator" id="cloud-sync-indicator" data-state="local">
+          <span class="cloud-sync-dot" aria-hidden="true"></span>
+          <span class="cloud-sync-label" id="cloud-sync-label" data-i18n="cloudSyncStatusLocal">ローカル保存中</span>
+        </div>
+        <div class="header-user-badge" id="header-user-badge" style="display:none;">
+          <img class="header-user-avatar" id="header-user-avatar" alt="" />
+          <span class="header-user-name" id="header-user-name"></span>
+        </div>
         <button class="theme-toggle" id="btn-theme" title="Toggle Theme">🌙</button>
-        <button class="btn btn-secondary btn-sm" id="btn-settings" title="Settings" data-i18n="settings">⚙
+        <button class="btn btn-secondary btn-sm" id="btn-header-logout" style="display:none;" data-i18n="logout">ログアウト</button>
+        <button class="btn btn-secondary btn-sm" id="btn-settings" title="Settings" data-i18n="settingsHeader" data-i18n-title="settings">⚙
           Settings</button>
         <button class="btn btn-secondary btn-sm" id="btn-sync-export" title="バックアップ (JSON)" data-i18n="exportSync"
           data-i18n-title="exportSync">バックアップ (JSON)</button>
@@ -76,18 +82,38 @@
           data-i18n-title="exportIcs">カレンダー連携 (iCal)</button>
         <button class="btn btn-secondary btn-sm" id="btn-export" title="売上集計 (CSV)" data-i18n="exportCsv"
           data-i18n-title="exportCsv">売上集計 (CSV)</button>
-        <button class="btn btn-primary" id="btn-add" data-i18n="addCustomer">＋ Add New</button>
       </div>
     </header>
 
     <!-- ===== Dashboard ===== -->
-    <div class="dashboard-collapsible" id="dashboard-collapsible">
-      <div class="dashboard-period-controls" id="dashboard-period-controls">
-        <button class="btn-icon" id="dashboard-prev-month" title="Previous month">◀</button>
-        <input type="month" id="dashboard-month-picker" aria-label="Dashboard month" />
-        <button class="btn-icon" id="dashboard-next-month" title="Next month">▶</button>
+    <div class="dashboard-period-controls" id="dashboard-period-controls">
+      <button class="btn-icon" id="dashboard-prev-month" title="Previous month" data-i18n-title="dashboardPrevMonth">◀</button>
+      <input type="month" id="dashboard-month-picker" aria-label="Dashboard month" data-i18n-aria-label="dashboardMonthAria" />
+      <button class="btn-icon" id="dashboard-next-month" title="Next month" data-i18n-title="dashboardNextMonth">▶</button>
+      <button class="stats-toggle-btn stats-toggle-inline" id="btn-toggle-dashboard" type="button"
+        title="統計を隠す" aria-expanded="true">📊 統計 ON</button>
+      <button class="stats-toggle-btn graph-toggle-btn" id="btn-toggle-graph" type="button"
+        title="グラフを表示" aria-expanded="false">📈 グラフ OFF</button>
+      <div class="dashboard-quick-menu" id="dashboard-quick-menu" style="display:none;">
+        <div class="dashboard-quick-menu-content" id="dashboard-quick-menu-content"></div>
       </div>
+    </div>
 
+    <div class="dashboard-collapsible" id="dashboard-collapsible">
+      <div class="dashboard-hero-metrics is-hidden">
+        <div class="hero-metric-card" data-hero-metric-key="monthlyNetProfit">
+          <div class="hero-metric-label" id="stat-monthly-net-profit-label">今月の純利益</div>
+          <div class="hero-metric-value" id="stat-monthly-net-profit">¥0</div>
+        </div>
+        <div class="hero-metric-card" data-hero-metric-key="averageMargin">
+          <div class="hero-metric-label" id="stat-average-margin-label">平均利益率</div>
+          <div class="hero-metric-value" id="stat-average-margin">0%</div>
+        </div>
+        <div class="hero-metric-card" data-hero-metric-key="yearlyNetProfit">
+          <div class="hero-metric-label" id="stat-yearly-net-profit-label">今年の純利益</div>
+          <div class="hero-metric-value" id="stat-yearly-net-profit">¥0</div>
+        </div>
+      </div>
       <div class="dashboard stats-container" id="dashboard-cards-grid">
         <div class="stat-card" data-dashboard-key="totalCustomers">
           <div class="stat-icon">👤</div>
@@ -144,6 +170,26 @@
           <div class="stat-label" data-i18n="cardUnpaid">Unpaid</div>
         </div>
       </div>
+      <div class="dashboard-chart-card graph-container" id="graph-container">
+        <div class="dashboard-chart-grid">
+          <div class="dashboard-chart-block">
+            <div class="dashboard-chart-header">
+              <h3 class="dashboard-chart-title" data-i18n="dashboardChartTitle">月次 売上 / 利益</h3>
+            </div>
+            <div class="dashboard-chart-canvas-wrap">
+              <canvas id="revenueChart" aria-label="月次売上と月次利益グラフ" data-i18n-aria-label="dashboardChartAria" role="img"></canvas>
+            </div>
+          </div>
+          <div class="dashboard-chart-block">
+            <div class="dashboard-chart-header">
+              <h3 class="dashboard-chart-title" data-i18n="dashboardRequestChartTitle">月別依頼数（前年比）</h3>
+            </div>
+            <div class="dashboard-chart-canvas-wrap">
+              <canvas id="requestTrendChart" aria-label="前年比の月別依頼数グラフ" data-i18n-aria-label="dashboardRequestChartAria" role="img"></canvas>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
 
     <!-- Expense Tracking Section -->
@@ -184,6 +230,7 @@
     <!-- ===== List View ===== -->
     <div class="list-view active" id="list-view">
       <div class="toolbar">
+        <button class="btn btn-primary toolbar-add-btn" id="btn-add" data-i18n="addCustomer">＋ 新規登録</button>
         <div class="search-box">
           <span class="search-icon">🔍</span>
           <input type="text" id="search-input" placeholder="お客様名・連絡先で検索..." data-i18n-placeholder="searchPlaceholder" />
@@ -208,6 +255,8 @@
           </div>
         </div>
       </div>
+      <button class="mobile-fab-add" id="btn-add-fab" type="button" data-i18n-title="addCustomer" data-i18n-aria-label="addCustomer">＋</button>
+      <div class="workflow-status-legend" id="workflow-status-legend" aria-live="polite"></div>
 
       <div class="table-wrapper" id="table-wrapper">
         <div class="table-scroll">
@@ -221,6 +270,8 @@
                 <th data-sort="contractDate"><span data-i18n="thContractDate">成約日</span> <span
                     class="sort-arrow">▼</span></th>
                 <th data-sort="customerName"><span data-i18n="thCustomerName">お客様名</span> <span
+                    class="sort-arrow">▼</span></th>
+                <th data-sort="workflowStatus"><span data-i18n="thStatus">ステータス</span> <span
                     class="sort-arrow">▼</span></th>
                 <th data-sort="contact"><span data-i18n="thContact">連絡先</span> <span class="sort-arrow">▼</span></th>
                 <th data-sort="meetingDate"><span data-i18n="thMeetingDate">打ち合わせ日</span> <span
@@ -273,7 +324,7 @@
           </button>
           <button class="btn btn-secondary btn-sm" id="cal-today" data-i18n="calToday">今月</button>
         </div>
-        <div class="calendar-filters" aria-label="Calendar event filters">
+        <div class="calendar-filters" aria-label="Calendar event filters" data-i18n-aria-label="calendarFiltersAria">
           <label class="calendar-filter-item">
             <input type="checkbox" class="calendar-filter-input" value="inquiryDate" checked>
             <span data-i18n="calendarFilterInquiry">問い合わせ日</span>
@@ -332,11 +383,11 @@
           <input type="hidden" id="form-id" />
 
           <div class="form-section-title" data-i18n="secBasic">基本情報</div>
-          <div class="form-group">
+          <div class="form-group" data-input-key="inquiryDate">
             <label for="form-inquiryDate" data-i18n="labelInquiryDate">問い合わせ日</label>
             <input type="date" id="form-inquiryDate" />
           </div>
-          <div class="form-group">
+          <div class="form-group" data-input-key="contractDate">
             <label for="form-contractDate" data-i18n="labelContractDate">成約日</label>
             <input type="date" id="form-contractDate" />
           </div>
@@ -350,15 +401,16 @@
             <input type="text" id="form-contact" placeholder="例: @yamada_hanako"
               data-i18n-placeholder="placeholderContact" />
           </div>
-          <div class="form-group">
+          <div class="form-group" data-input-key="assignedTo">
             <label for="form-assignedTo" data-i18n="labelAssignedTo">担当カメラマン</label>
             <select id="form-assignedTo">
               <option value="" data-i18n="selectDefault">選択してください</option>
             </select>
           </div>
-          <div class="form-group">
+          <div class="form-group" data-input-key="location">
             <label for="form-location" data-i18n="labelLocation">Location</label>
-            <input type="text" id="form-location" placeholder="e.g., Central Park, Studio A">
+            <input type="text" id="form-location" placeholder="e.g., Central Park, Studio A"
+              data-i18n-placeholder="placeholderLocation">
           </div>
 
           <div class="form-section-title" data-i18n="secShooting">撮影情報</div>
@@ -366,9 +418,23 @@
             <label for="form-shootingDate" data-i18n="labelShootingDate">撮影日</label>
             <input type="date" id="form-shootingDate" />
           </div>
+          <div class="form-group" data-input-key="deliveryDate">
+            <label for="form-deliveryDate" data-i18n="labelDeliveryDate">納品日</label>
+            <input type="date" id="form-deliveryDate" />
+          </div>
           <div class="form-group">
             <label for="form-meetingDate" data-i18n="labelMeetingDate">打ち合わせ日</label>
             <input type="date" id="form-meetingDate" />
+          </div>
+          <div class="form-group">
+            <label for="form-workflowStatus">進行ステータス</label>
+            <select id="form-workflowStatus">
+              <option value="not_started" data-i18n="workflowNotStarted">未着手</option>
+              <option value="shot" data-i18n="workflowShot">セレクト待ち</option>
+              <option value="retouching" data-i18n="workflowRetouching">レタッチ中</option>
+              <option value="completed" data-i18n="workflowCompleted">完了</option>
+              <option value="cancelled" data-i18n="workflowCancelled">キャンセル</option>
+            </select>
           </div>
           <div class="form-group">
             <label for="form-plan" data-i18n="labelPlan">プラン</label>
@@ -376,19 +442,23 @@
               <option value="" data-i18n="selectDefault">選択してください</option>
             </select>
           </div>
+          <div class="form-group">
+            <label for="form-plan-price" data-i18n="labelPlanRevenue">プラン売上</label>
+            <input type="number" id="form-plan-price" min="0" step="1" placeholder="売上"
+              data-i18n-placeholder="placeholderRevenueShort" />
+          </div>
+          <div class="form-group">
+            <label for="form-plan-cost" data-i18n="labelPlanCost">プラン原価</label>
+            <input type="number" id="form-plan-cost" min="0" step="1" placeholder="原価"
+              data-i18n-placeholder="placeholderCostShort" />
+          </div>
           <div class="dynamic-items-header">
-            <div class="form-section-title">項目（プラン外）</div>
+            <div class="form-section-title" data-i18n="sectionDynamicItems">自由項目（オプション）</div>
           </div>
           <div id="dynamic-items-container" class="dynamic-items-container"></div>
           <div class="form-group full-width">
-            <button type="button" class="btn btn-secondary" id="btn-add-extra-item" style="width:100%;">
+            <button type="button" class="btn btn-secondary" id="add-item-btn" style="width:100%;" data-i18n="btnAddDynamicItem">
               ＋ 項目を追加
-            </button>
-          </div>
-          <div id="custom-fields-container" class="custom-fields-container"></div>
-          <div class="form-group full-width">
-            <button type="button" class="btn btn-secondary" id="btn-add-custom-field" style="width:100%;">
-              <span data-i18n="addCustomField">＋ Add Custom Field</span>
             </button>
           </div>
 
@@ -399,35 +469,47 @@
               data-i18n-placeholder="placeholderRevenue" />
           </div>
           <div class="form-group">
+            <label for="form-expense" data-i18n="labelExpenseYen">経費（円）</label>
+            <input type="number" id="form-expense" min="0" step="1" placeholder="例: 50000"
+              data-i18n-placeholder="placeholderExpense" />
+          </div>
+          <div class="form-group">
+            <label for="form-profit"><span data-i18n="profit">利益</span>（円）</label>
+            <input type="number" id="form-profit" min="-999999999" step="1" value="0" readonly class="profit-neutral" />
+          </div>
+          <div class="form-group">
             <label for="form-billingDate" data-i18n="labelBillingDate">請求日</label>
             <input type="date" id="form-billingDate" />
+          </div>
+          <div class="form-group" data-input-key="paymentConfirmDate">
+            <label for="form-paymentConfirmDate" data-i18n="labelPaymentConfirmDate">支払い確認日</label>
+            <input type="date" id="form-paymentConfirmDate" />
           </div>
           <div class="checkbox-wrapper">
             <input type="checkbox" id="form-paymentChecked" />
             <label for="form-paymentChecked" data-i18n="labelPaymentChecked">入金チェック済み</label>
           </div>
 
-          <div class="form-section-title">プラン詳細</div>
+          <div class="form-section-title" data-i18n="sectionPlanDetails">プラン詳細</div>
           <div class="form-group">
-            <label for="form-plan-name">撮影プラン名</label>
-            <input type="text" id="form-plan-name" placeholder="例: Standard" />
+            <label for="form-plan-name" data-i18n="labelPlanName">撮影プラン名</label>
+            <input type="text" id="form-plan-name" placeholder="例: Standard"
+              data-i18n-placeholder="placeholderPlanName" />
           </div>
           <div class="form-group">
-            <label for="form-base-price">基本料金</label>
-            <input type="number" id="form-base-price" min="0" step="1" placeholder="例: 120000" />
+            <label for="form-base-price" data-i18n="labelBasePrice">基本料金</label>
+            <input type="number" id="form-base-price" min="0" step="1" placeholder="例: 120000"
+              data-i18n-placeholder="placeholderBasePrice" />
           </div>
           <div class="form-group">
-            <label for="form-price-adjustment">手動調整額</label>
-            <input type="number" id="form-price-adjustment" step="1" placeholder="例: -5000 / +10000" />
-          </div>
-          <div class="form-group" style="grid-column: 1 / -1;">
-            <label for="form-plan-options">オプション項目</label>
-            <textarea id="form-plan-options"
-              placeholder="例: アルバム +20000&#10;レタッチ追加 +10000"></textarea>
+            <label for="form-price-adjustment" data-i18n="labelManualAdjustment">手動調整額</label>
+            <input type="number" id="form-price-adjustment" step="1" placeholder="例: -5000 / +10000"
+              data-i18n-placeholder="placeholderManualAdjustment" />
           </div>
           <div class="form-group">
-            <label for="form-total-price">合計金額</label>
-            <input type="number" id="form-total-price" min="0" step="1" placeholder="例: 150000" />
+            <label for="form-total-price" data-i18n="labelTotalPrice">合計金額</label>
+            <input type="number" id="form-total-price" min="0" step="1" placeholder="例: 150000"
+              data-i18n-placeholder="placeholderTotalPrice" />
           </div>
 
           <div class="form-section-title" data-i18n="secMemo">メモ</div>
@@ -482,6 +564,10 @@
             <p class="detail-value" id="detail-plan">—</p>
           </div>
           <div class="detail-item">
+            <label class="detail-label">進行ステータス</label>
+            <p class="detail-value" id="detail-workflow-status">—</p>
+          </div>
+          <div class="detail-item">
             <label class="detail-label" data-i18n="labelRevenue">Revenue</label>
             <p class="detail-value" id="detail-revenue">—</p>
           </div>
@@ -492,10 +578,6 @@
           <div class="detail-item">
             <label class="detail-label">基本料金</label>
             <p class="detail-value" id="detail-base-price">—</p>
-          </div>
-          <div class="detail-item" style="grid-column: 1 / -1;">
-            <label class="detail-label">オプション項目</label>
-            <p class="detail-value" id="detail-plan-options" style="white-space: pre-line;">—</p>
           </div>
           <div class="detail-item">
             <label class="detail-label">合計金額</label>
@@ -558,6 +640,10 @@
         <p style="font-size:0.85rem; color:var(--text-muted); margin-bottom:20px;" data-i18n="settingsDesc">
           各フィールドの選択肢をカスタマイズできます。追加した選択肢は登録フォームのドロップダウンに反映されます。
         </p>
+        <div class="data-protection-status-wrap">
+          <div class="data-protection-status" id="data-protection-status">ステータス：デバイス内に自動保護中（セーフティバックアップ有効）</div>
+          <p class="data-protection-note">クラウド同期: Googleログイン時に自動同期</p>
+        </div>
         <div class="settings-tabs">
           <button class="settings-tab-btn active" data-tab="menu" data-i18n="settings">General</button>
           <button class="settings-tab-btn" data-tab="invoice" data-i18n="invoiceSettings">Invoice & Tax</button>
@@ -592,7 +678,7 @@
                   <option value="Custom">Custom...</option>
                 </select>
                 <input type="text" id="tax-label-custom" style="display: none; margin-top: 5px;"
-                  placeholder="Custom tax label...">
+                  placeholder="Custom tax label..." data-i18n-placeholder="taxCustomLabelPlaceholder">
               </div>
               <div class="form-group-row" id="tax-included-group"
                 style="display: flex; align-items: center; gap: 10px;">
@@ -750,10 +836,10 @@
       <div class="modal-body">
         <div class="form-group">
           <label data-i18n="taskName">Task Name</label>
-          <input type="text" id="task-name" placeholder="e.g., Send contract">
+          <input type="text" id="task-name" placeholder="e.g., Send contract" data-i18n-placeholder="placeholderTaskName">
         </div>
         <div class="form-group">
-          <label data-i18n="dueDate">Due Date</label>
+          <label for="task-due-date" data-i18n="dueDate">Due Date</label>
           <input type="date" id="task-due-date">
         </div>
         <div class="form-group">
@@ -781,7 +867,7 @@
       </div>
       <form class="modal-body" id="expense-form">
         <div class="form-group">
-          <label data-i18n="dueDate">Date</label>
+          <label for="expense-date" data-i18n="dueDate">Date</label>
           <input type="date" id="expense-date">
         </div>
         <div class="form-group">
@@ -798,11 +884,11 @@
         </div>
         <div class="form-group">
           <label data-i18n="description">Description</label>
-          <input type="text" id="expense-item" placeholder="e.g., New Lens">
+          <input type="text" id="expense-item" placeholder="e.g., New Lens" data-i18n-placeholder="placeholderExpenseItem">
         </div>
         <div class="form-group">
           <label data-i18n="amount">Amount</label>
-          <input type="number" id="expense-amount" placeholder="0.00">
+          <input type="number" id="expense-amount" placeholder="0.00" data-i18n-placeholder="placeholderAmountZero">
         </div>
       </form>
       <div class="modal-footer">
@@ -826,20 +912,24 @@
         <div class="invoice-customer-meta" id="invoice-customer-meta"></div>
         <div class="form-grid" style="margin-bottom:14px;">
           <div class="form-group">
-            <label>Sender Name</label>
-            <input type="text" id="invoice-sender-name" placeholder="Your name or studio name">
+            <label data-i18n="invoiceSenderNameLabel">Sender Name</label>
+            <input type="text" id="invoice-sender-name" placeholder="Your name or studio name"
+              data-i18n-placeholder="invoiceSenderNamePlaceholder">
           </div>
           <div class="form-group">
-            <label>Recipient Name</label>
-            <input type="text" id="invoice-recipient-name" placeholder="Client name">
+            <label data-i18n="invoiceRecipientNameLabel">Recipient Name</label>
+            <input type="text" id="invoice-recipient-name" placeholder="Client name"
+              data-i18n-placeholder="invoiceRecipientNamePlaceholder">
           </div>
           <div class="form-group">
-            <label>Sender Contact (optional)</label>
-            <input type="text" id="invoice-sender-contact" placeholder="Email / Phone / Instagram">
+            <label data-i18n="invoiceSenderContactLabel">Sender Contact (optional)</label>
+            <input type="text" id="invoice-sender-contact" placeholder="Email / Phone / Instagram"
+              data-i18n-placeholder="invoiceSenderContactPlaceholder">
           </div>
           <div class="form-group">
-            <label>Recipient Contact (optional)</label>
-            <input type="text" id="invoice-recipient-contact" placeholder="Email / Phone / Instagram">
+            <label data-i18n="invoiceRecipientContactLabel">Recipient Contact (optional)</label>
+            <input type="text" id="invoice-recipient-contact" placeholder="Email / Phone / Instagram"
+              data-i18n-placeholder="invoiceRecipientContactPlaceholder">
           </div>
           <div class="form-group">
             <label data-i18n="labelBillingDate">Invoice Date</label>
@@ -851,43 +941,42 @@
           </div>
         </div>
         <div class="invoice-item-header">
-          <h4>Line Items</h4>
-          <button class="btn btn-secondary btn-sm" id="btn-add-invoice-item">＋ Add Item</button>
+          <h4 data-i18n="invoiceLineItems">Line Items</h4>
+          <button class="btn btn-secondary btn-sm" id="btn-add-invoice-item" data-i18n="invoiceAddLineItem">＋ Add Item</button>
         </div>
         <div class="invoice-item-table">
           <div class="invoice-item-table-head">
-            <span>Description</span>
-            <span>Qty</span>
-            <span>Unit Price</span>
-            <span>Amount</span>
+            <span data-i18n="description">Description</span>
+            <span data-i18n="invoicePdfQty">Qty</span>
+            <span data-i18n="invoicePdfUnitPrice">Unit Price</span>
+            <span data-i18n="amount">Amount</span>
             <span></span>
           </div>
           <div id="invoice-items-container"></div>
         </div>
         <div class="invoice-summary" id="invoice-builder-summary"></div>
         <div class="form-group" style="margin-top: 14px;">
-          <label for="invoice-message">備考・メッセージ</label>
-          <textarea id="invoice-message" placeholder="この度はありがとうございます。" style="min-height: 100px;"></textarea>
+          <label for="invoice-message" data-i18n="invoiceMessageLabel">備考・メッセージ</label>
+          <textarea id="invoice-message" placeholder="この度はありがとうございます。" data-i18n-placeholder="invoiceMessagePlaceholder"
+            style="min-height: 100px;"></textarea>
         </div>
       </div>
       <div class="modal-footer">
         <button class="btn btn-secondary" onclick="closeInvoiceBuilderModal()" data-i18n="cancel">Cancel</button>
-        <button class="btn btn-primary" id="btn-generate-custom-invoice">📄 Generate PDF</button>
+        <button class="btn btn-primary" id="btn-generate-custom-invoice" data-i18n="invoiceGeneratePdfButton">📄 Generate PDF</button>
       </div>
     </div>
   </div>
 
-  <!-- PhotoCRM Scripts v2.2.4-FIXED -->
+  <!-- Pholio Scripts v2.2.4-FIXED -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
-  <script src="firebase-service.js"></script>
+  <script type="module" src="firebase-service.js"></script>
   <script src="locales.js"></script>
   <script src="invoice-generator.js"></script>
   <script src="team-manager.js"></script>
   <script src="sync-manager.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <script src="app.js"></script>
 </body>
 
