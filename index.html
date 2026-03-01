@@ -5,7 +5,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>DEBUG_CHECK_123</title>
+  <title>PhotoCRM</title>
   <meta name="description"
     content="Customer management for photographers. Manage everything from inquiries to payments."
     data-i18n="metaDescription">
@@ -45,6 +45,7 @@
       <div class="logo">
         <div class="logo-icon">📷</div>
         <div class="logo-copy">
+          <div class="brand-title">PhotoCRM</div>
           <button class="stats-toggle-btn" id="btn-toggle-dashboard" type="button"
             title="統計を隠す" aria-expanded="true">📊 統計を隠す</button>
           <div class="dashboard-quick-menu" id="dashboard-quick-menu" style="display:none;">
@@ -54,7 +55,7 @@
       </div>
       <div class="header-actions">
         <!-- Language Switcher -->
-        <select id="lang-select" class="btn btn-secondary btn-sm" style="padding: 6px 8px; min-width:auto;">
+        <select id="lang-select" class="btn btn-secondary btn-sm">
           <option value="en">🇺🇸 English</option>
           <option value="ja">🇯🇵 日本語</option>
           <option value="fr">🇫🇷 Français</option>
@@ -375,25 +376,14 @@
               <option value="" data-i18n="selectDefault">選択してください</option>
             </select>
           </div>
-          <div class="form-group">
-            <label for="form-costume" data-i18n="labelCostume">衣装</label>
-            <select id="form-costume">
-              <option value="" data-i18n="selectDefault">選択してください</option>
-            </select>
+          <div class="dynamic-items-header">
+            <div class="form-section-title">項目（プラン外）</div>
           </div>
-          <div class="form-group">
-            <label for="form-hairMakeup" data-i18n="labelHairMakeup">ヘアメイク</label>
-            <select id="form-hairMakeup">
-              <option value="" data-i18n="selectDefault">選択してください</option>
-            </select>
-          </div>
-          <div class="form-group">
-            <label for="form-costume-price">衣装代</label>
-            <input type="number" id="form-costume-price" min="0" step="1" readonly />
-          </div>
-          <div class="form-group">
-            <label for="form-hairmakeup-price">ヘアメイク代</label>
-            <input type="number" id="form-hairmakeup-price" min="0" step="1" readonly />
+          <div id="dynamic-items-container" class="dynamic-items-container"></div>
+          <div class="form-group full-width">
+            <button type="button" class="btn btn-secondary" id="btn-add-dynamic-item" style="width:100%;">
+              ＋ 項目を追加
+            </button>
           </div>
           <div id="custom-fields-container" class="custom-fields-container"></div>
           <div class="form-group full-width">
@@ -898,7 +888,6 @@
   </div>
 
   <!-- PhotoCRM Scripts v2.2.4-FIXED -->
-  <script>console.log('📦 Loading PhotoCRM v2.2.4-FIXED...');</script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>

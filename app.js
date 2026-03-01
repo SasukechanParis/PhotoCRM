@@ -2,10 +2,6 @@
 
 (function () {
   'use strict';
-  console.log('Loading PhotoCRM v2.2.4-FIXED...');
-  console.error("CURRENT_FILE_PATH: " + window.location.href);
-  console.error("LAST_MODIFIED: " + document.lastModified);
-
   // ===== Storage Keys =====
   const STORAGE_KEY = 'photocrm_customers';
   const OPTIONS_KEY = 'photocrm_options';
@@ -22,6 +18,8 @@
   const DASHBOARD_CONFIG_KEY = 'photocrm_dashboard_config';
   const LIST_COLUMN_CONFIG_KEY = 'photocrm_list_column_config';
   const CONTRACT_TEMPLATE_KEY = 'photocrm_contract_template';
+  const DYNAMIC_ITEM_NAME_SUGGESTIONS_KEY = 'photocrm_dynamic_item_name_suggestions';
+  const DYNAMIC_ITEM_SUGGESTIONS_KEY = 'photocrm_dynamic_item_suggestions';
   const DEFAULT_INVOICE_MESSAGE = 'この度はありがとうございます。';
   const FREE_PLAN_LIMIT = 30;
 
@@ -171,22 +169,8 @@
   // ===== Default Custom Options =====
   const DEFAULT_OPTIONS = {
     plan: [],
-    costume: [
-      { name: 'ウェディングドレス', price: 0 },
-      { name: 'カラードレス', price: 0 },
-      { name: '和装', price: 0 },
-      { name: '私服', price: 0 },
-    ],
-    hairMakeup: [],
+    dynamicItemHints: ['衣装', 'ヘアメイク', 'ブーケ'],
   };
-
-  const OPTION_LABELS = {
-    plan: 'プラン',
-    costume: '衣装',
-    hairMakeup: 'ヘアメイク',
-  };
-
-  const PRICED_OPTION_KEYS = ['costume', 'hairMakeup'];
 
   // ===== Storage Helpers =====
   function loadCustomers() {
@@ -195,6 +179,7 @@
     return withCurrentUserId(records).map((record) => ({
       ...record,
       planDetails: normalizePlanDetails(record?.planDetails, record?.revenue),
+      extraChargeItems: normalizeExtraChargeItems(record?.extraChargeItems),
       costumePrice: toSafeNumber(record?.costumePrice, 0),
       hairMakeupPrice: toSafeNumber(record?.hairMakeupPrice, 0),
     }));
@@ -210,6 +195,7 @@
     const normalized = records.map((record) => ({
       ...(record || {}),
       planDetails: normalizePlanDetails(record?.planDetails, record?.revenue),
+      extraChargeItems: normalizeExtraChargeItems(record?.extraChargeItems),
       costumePrice: toSafeNumber(record?.costumePrice, 0),
       hairMakeupPrice: toSafeNumber(record?.hairMakeupPrice, 0),
     }));
@@ -218,45 +204,15 @@
 
   function loadOptions() {
     const raw = { ...DEFAULT_OPTIONS, ...(getCloudValue(OPTIONS_KEY, {}) || {}) };
-    PRICED_OPTION_KEYS.forEach((key) => {
-      const list = Array.isArray(raw[key]) ? raw[key] : [];
-      raw[key] = list
-        .map(normalizePricedOption)
-        .filter((item) => item.name);
-    });
     if (!Array.isArray(raw.plan)) raw.plan = [];
+    if (!Array.isArray(raw.dynamicItemHints)) raw.dynamicItemHints = [...DEFAULT_OPTIONS.dynamicItemHints];
     return raw;
   }
   function saveOptions(data) {
     const normalized = { ...(data || {}) };
-    PRICED_OPTION_KEYS.forEach((key) => {
-      const list = Array.isArray(normalized[key]) ? normalized[key] : [];
-      normalized[key] = list
-        .map(normalizePricedOption)
-        .filter((item) => item.name);
-    });
+    if (!Array.isArray(normalized.plan)) normalized.plan = [];
+    if (!Array.isArray(normalized.dynamicItemHints)) normalized.dynamicItemHints = [...DEFAULT_OPTIONS.dynamicItemHints];
     saveCloudValue(OPTIONS_KEY, normalized);
-  }
-
-  function normalizePricedOption(item) {
-    if (item && typeof item === 'object') {
-      const name = typeof item.name === 'string' ? item.name.trim() : '';
-      return { name, price: toSafeNumber(item.price, 0) };
-    }
-    if (typeof item === 'string') {
-      const name = item.trim();
-      return { name, price: 0 };
-    }
-    return { name: '', price: 0 };
-  }
-
-  function getPricedOptionPrice(key, name, fallback = 0) {
-    if (!name) return fallback;
-    const list = Array.isArray(options[key]) ? options[key] : [];
-    const found = list
-      .map(normalizePricedOption)
-      .find((item) => item.name === name);
-    return found ? toSafeNumber(found.price, 0) : fallback;
   }
 
   function getContractPresetTemplates() {
@@ -498,6 +454,8 @@
   // ===== State =====
   let customers = loadCustomers();
   let options = loadOptions();
+  let dynamicItemNameSuggestions = loadDynamicItemNameSuggestions();
+  let dynamicItemSuggestionMap = loadDynamicItemSuggestionMap();
   let planMaster = loadPlanMaster();
   if (planMaster.length === 0 && Array.isArray(options.plan) && options.plan.length > 0) {
     planMaster = options.plan
@@ -531,6 +489,7 @@
   let isDashboardQuickMenuOpen = false;
   let listColumnConfig = loadListColumnConfig();
   let isListColumnsMenuOpen = false;
+  let listColumnsHideTimer = null;
   let contractTemplateText = loadContractTemplate();
 
   // Init calendar to current month
@@ -589,8 +548,6 @@
     { key: 'contact', label: '連絡先', type: 'text' },
     { key: 'meetingDate', label: '打ち合わせ日', type: 'date' },
     { key: 'plan', label: 'プラン', type: 'select' },
-    { key: 'costume', label: '衣装', type: 'select' },
-    { key: 'hairMakeup', label: 'ヘアメイク', type: 'select' },
     { key: 'billingDate', label: '請求日', type: 'date' },
     { key: 'paymentChecked', label: '入金チェック', type: 'checkbox' },
     { key: 'details', label: '詳細', type: 'textarea' },
@@ -634,6 +591,118 @@
     return Number.isFinite(num) ? num : fallback;
   }
 
+  function normalizeExtraChargeItems(items) {
+    if (!Array.isArray(items)) return [];
+    return items
+      .map((item) => {
+        const rawName = typeof item?.name === 'string' ? item.name.trim() : '';
+        const rawDetail = typeof item?.detail === 'string' ? item.detail.trim() : '';
+        const name = rawName || '追加項目';
+        return {
+          name,
+          detail: rawDetail,
+          amount: toSafeNumber(item?.amount, 0),
+        };
+      })
+      .filter((item) => item.name || item.detail || item.amount !== 0);
+  }
+
+  function normalizeDynamicItemSuggestionMap(source) {
+    if (!source || typeof source !== 'object') return {};
+    const normalized = {};
+    Object.entries(source).forEach(([rawKey, values]) => {
+      const key = String(rawKey || '').trim().toLowerCase();
+      if (!key || !Array.isArray(values)) return;
+      const uniq = [];
+      values.forEach((value) => {
+        const next = String(value || '').trim();
+        if (!next || uniq.includes(next)) return;
+        uniq.push(next);
+      });
+      if (uniq.length > 0) normalized[key] = uniq.slice(0, 30);
+    });
+    return normalized;
+  }
+
+  function normalizeDynamicItemNameSuggestions(source) {
+    const list = Array.isArray(source) ? source : [];
+    const normalized = [];
+    const seen = new Set();
+    list.forEach((entry) => {
+      const value = String(entry || '').trim();
+      const key = value.toLowerCase();
+      if (!value || seen.has(key)) return;
+      seen.add(key);
+      normalized.push(value);
+    });
+    return normalized.slice(0, 40);
+  }
+
+  function loadDynamicItemNameSuggestions() {
+    const fallback = Array.isArray(options?.dynamicItemHints) && options.dynamicItemHints.length > 0
+      ? options.dynamicItemHints
+      : DEFAULT_OPTIONS.dynamicItemHints;
+    return normalizeDynamicItemNameSuggestions(getLocalValue(DYNAMIC_ITEM_NAME_SUGGESTIONS_KEY, fallback));
+  }
+
+  function saveDynamicItemNameSuggestions(nextList) {
+    dynamicItemNameSuggestions = normalizeDynamicItemNameSuggestions(nextList);
+    saveLocalValue(DYNAMIC_ITEM_NAME_SUGGESTIONS_KEY, dynamicItemNameSuggestions);
+  }
+
+  function getDynamicItemNameSuggestions() {
+    return normalizeDynamicItemNameSuggestions(dynamicItemNameSuggestions);
+  }
+
+  function loadDynamicItemSuggestionMap() {
+    return normalizeDynamicItemSuggestionMap(getLocalValue(DYNAMIC_ITEM_SUGGESTIONS_KEY, {}));
+  }
+
+  function saveDynamicItemSuggestionMap(nextMap) {
+    dynamicItemSuggestionMap = normalizeDynamicItemSuggestionMap(nextMap);
+    saveLocalValue(DYNAMIC_ITEM_SUGGESTIONS_KEY, dynamicItemSuggestionMap);
+  }
+
+  function getDynamicItemSuggestionKey(name) {
+    return String(name || '').trim().toLowerCase();
+  }
+
+  function getDynamicItemDetailSuggestions(name) {
+    const key = getDynamicItemSuggestionKey(name);
+    if (!key) return [];
+    return Array.isArray(dynamicItemSuggestionMap[key]) ? dynamicItemSuggestionMap[key] : [];
+  }
+
+  function rememberDynamicItemDetails(items = []) {
+    if (!Array.isArray(items) || items.length === 0) return;
+    const nextNameSuggestions = getDynamicItemNameSuggestions();
+    let nameUpdated = false;
+    const nextMap = normalizeDynamicItemSuggestionMap(dynamicItemSuggestionMap);
+    let updated = false;
+
+    items.forEach((item) => {
+      const itemName = String(item?.name || '').trim();
+      const key = getDynamicItemSuggestionKey(itemName);
+      const detail = String(item?.detail || '').trim();
+      if (itemName) {
+        const existingIdx = nextNameSuggestions.findIndex((name) => name.toLowerCase() === itemName.toLowerCase());
+        if (existingIdx === -1) {
+          nextNameSuggestions.unshift(itemName);
+          nameUpdated = true;
+        }
+      }
+      if (!key || !detail) return;
+      const bucket = Array.isArray(nextMap[key]) ? [...nextMap[key]] : [];
+      if (bucket.includes(detail)) return;
+      bucket.unshift(detail);
+      nextMap[key] = bucket.slice(0, 30);
+      updated = true;
+    });
+
+    if (nameUpdated) saveDynamicItemNameSuggestions(nextNameSuggestions);
+    if (updated) saveDynamicItemSuggestionMap(nextMap);
+  }
+
   function normalizePlanDetails(planDetails, fallbackRevenue = 0) {
     const safe = (planDetails && typeof planDetails === 'object') ? planDetails : {};
     const basePrice = toSafeNumber(safe.basePrice, 0);
@@ -653,17 +722,152 @@
     return match?.name || customer?.plan || '—';
   }
 
-  function getCurrentCostumePrice() {
-    return toSafeNumber($('#form-costume-price')?.value, 0);
+  let dynamicItemRowSeed = 0;
+
+  function renderDynamicItemNameDatalist(row) {
+    if (!row) return;
+    const datalist = row.querySelector('.dynamic-item-name-options');
+    if (!datalist) return;
+    const suggestions = getDynamicItemNameSuggestions();
+    datalist.innerHTML = suggestions
+      .map((value) => `<option value="${escapeHtml(value)}"></option>`)
+      .join('');
   }
 
-  function getCurrentHairMakeupPrice() {
-    return toSafeNumber($('#form-hairmakeup-price')?.value, 0);
+  function renderDynamicItemDetailDatalist(row) {
+    if (!row) return;
+    const nameInput = row.querySelector('.dynamic-item-name');
+    const datalist = row.querySelector('.dynamic-item-detail-options');
+    if (!datalist) return;
+    const suggestions = getDynamicItemDetailSuggestions(nameInput?.value || '');
+    datalist.innerHTML = suggestions
+      .map((value) => `<option value="${escapeHtml(value)}"></option>`)
+      .join('');
+  }
+
+  function getDynamicItemRows() {
+    return Array.from(document.querySelectorAll('#dynamic-items-container .dynamic-item-row'));
+  }
+
+  function getCurrentExtraChargeTotal() {
+    return getDynamicItemRows().reduce((sum, row) => {
+      const amountInput = row.querySelector('.dynamic-item-amount');
+      return sum + toSafeNumber(amountInput?.value, 0);
+    }, 0);
+  }
+
+  function collectDynamicChargeItems() {
+    return getDynamicItemRows()
+      .map((row) => {
+        const nameInput = row.querySelector('.dynamic-item-name');
+        const detailInput = row.querySelector('.dynamic-item-detail');
+        const amountInput = row.querySelector('.dynamic-item-amount');
+        return {
+          name: (nameInput?.value || '').trim(),
+          detail: (detailInput?.value || '').trim(),
+          amount: toSafeNumber(amountInput?.value, 0),
+        };
+      })
+      .filter((item) => item.name || item.detail || item.amount !== 0)
+      .map((item) => ({
+        name: item.name || '追加項目',
+        detail: item.detail,
+        amount: item.amount,
+      }));
+  }
+
+  function createDynamicItemRow(item = {}) {
+    dynamicItemRowSeed += 1;
+    const nameDatalistId = `dynamic-item-name-options-${Date.now()}-${dynamicItemRowSeed}`;
+    const datalistId = `dynamic-item-detail-options-${Date.now()}-${dynamicItemRowSeed}`;
+    const row = document.createElement('div');
+    row.className = 'dynamic-item-row';
+    if (item?.planLinked) row.dataset.planLinked = 'true';
+    row.innerHTML = `
+      <input type="text" class="dynamic-item-name" list="${nameDatalistId}" placeholder="項目名（例：ヘアメイク）" value="${escapeHtml(item.name || '')}" />
+      <datalist id="${nameDatalistId}" class="dynamic-item-name-options"></datalist>
+      <input type="text" class="dynamic-item-detail" list="${datalistId}" placeholder="内容（例：担当者名）" value="${escapeHtml(item.detail || '')}" />
+      <datalist id="${datalistId}" class="dynamic-item-detail-options"></datalist>
+      <input type="number" class="dynamic-item-amount" min="0" step="1" value="${toSafeNumber(item.amount, 0)}" />
+      <button type="button" class="btn btn-secondary dynamic-item-remove" aria-label="項目を削除" title="項目を削除">🗑</button>
+    `;
+
+    const nameInput = row.querySelector('.dynamic-item-name');
+    const detailInput = row.querySelector('.dynamic-item-detail');
+    const amountInput = row.querySelector('.dynamic-item-amount');
+    const removeButton = row.querySelector('.dynamic-item-remove');
+
+    bindEventOnce(nameInput, 'input', () => {
+      renderDynamicItemNameDatalist(row);
+      renderDynamicItemDetailDatalist(row);
+      updateGrandTotal();
+    }, `dynamic-item-name-${Date.now()}-${Math.random()}`);
+    bindEventOnce(detailInput, 'input', updateGrandTotal, `dynamic-item-detail-${Date.now()}-${Math.random()}`);
+    bindEventOnce(amountInput, 'input', updateGrandTotal, `dynamic-item-amount-${Date.now()}-${Math.random()}`);
+    bindEventOnce(removeButton, 'click', () => {
+      row.remove();
+      updateGrandTotal();
+    }, `dynamic-item-remove-${Date.now()}-${Math.random()}`);
+
+    renderDynamicItemNameDatalist(row);
+    renderDynamicItemDetailDatalist(row);
+    return row;
+  }
+
+  function renderDynamicChargeItems(items = []) {
+    const container = $('#dynamic-items-container');
+    if (!container) return;
+    container.innerHTML = '';
+
+    normalizeExtraChargeItems(items).forEach((item) => {
+      container.appendChild(createDynamicItemRow(item));
+    });
+
+    updateGrandTotal();
+  }
+
+  function addDynamicChargeItem(item = {}) {
+    const container = $('#dynamic-items-container');
+    if (!container) return;
+    container.appendChild(createDynamicItemRow(item));
+    updateGrandTotal();
+  }
+
+  function ensurePlanLinkedFirstDynamicItem(planName) {
+    const normalizedPlanName = String(planName || '').trim();
+    if (!normalizedPlanName) return;
+
+    const container = $('#dynamic-items-container');
+    if (!container) return;
+
+    const rows = getDynamicItemRows();
+    let planRow = rows.find((row) => row.dataset.planLinked === 'true');
+    if (!planRow) {
+      planRow = rows.find((row) => ((row.querySelector('.dynamic-item-name')?.value || '').trim() === 'プラン'));
+    }
+
+    if (!planRow) {
+      planRow = createDynamicItemRow({ name: 'プラン', detail: normalizedPlanName, amount: 0, planLinked: true });
+      container.prepend(planRow);
+    } else if (container.firstElementChild !== planRow) {
+      container.prepend(planRow);
+    }
+
+    planRow.dataset.planLinked = 'true';
+    const nameInput = planRow.querySelector('.dynamic-item-name');
+    const detailInput = planRow.querySelector('.dynamic-item-detail');
+    const amountInput = planRow.querySelector('.dynamic-item-amount');
+
+    if (nameInput) nameInput.value = 'プラン';
+    if (detailInput) detailInput.value = normalizedPlanName;
+    if (amountInput && !amountInput.value) amountInput.value = '0';
+    renderDynamicItemDetailDatalist(planRow);
+    updateGrandTotal();
   }
 
   function getCurrentPricingBaseTotal() {
     const basePrice = toSafeNumber($('#form-base-price')?.value, 0);
-    return basePrice + getCurrentCostumePrice() + getCurrentHairMakeupPrice();
+    return basePrice + getCurrentExtraChargeTotal();
   }
 
   function updateGrandTotal() {
@@ -671,28 +875,13 @@
     const revenueInput = $('#form-revenue');
     const adjustmentInput = $('#form-price-adjustment');
     const basePrice = toSafeNumber($('#form-base-price')?.value, 0);
-    const costumePrice = getCurrentCostumePrice();
-    const hairMakeupPrice = getCurrentHairMakeupPrice();
+    const extraChargeTotal = getCurrentExtraChargeTotal();
     const adjustment = toSafeNumber(adjustmentInput?.value, 0);
-    const grandTotal = basePrice + costumePrice + hairMakeupPrice + adjustment;
+    const grandTotal = basePrice + extraChargeTotal + adjustment;
 
     if (totalPriceInput) totalPriceInput.value = String(grandTotal);
     if (revenueInput) revenueInput.value = String(grandTotal);
     return grandTotal;
-  }
-
-  function updateCostumePriceFromSelection(event) {
-    const selectedValue = event?.target?.value || '';
-    const input = $('#form-costume-price');
-    if (input) input.value = String(getPricedOptionPrice('costume', selectedValue, 0));
-    updateGrandTotal();
-  }
-
-  function updateHairMakeupPriceFromSelection(event) {
-    const selectedValue = event?.target?.value || '';
-    const input = $('#form-hairmakeup-price');
-    if (input) input.value = String(getPricedOptionPrice('hairMakeup', selectedValue, 0));
-    updateGrandTotal();
   }
 
   function syncTotalsFromPlanPricing() {
@@ -726,7 +915,12 @@
   function handlePlanSelectChange(event) {
     const selectedValue = event?.target?.value || '';
     const selectedPlan = findPlanMasterByValue(selectedValue);
-    if (!selectedPlan) return;
+    if (!selectedPlan) {
+      const existingPlanRow = getDynamicItemRows().find((row) => row.dataset.planLinked === 'true');
+      if (existingPlanRow) existingPlanRow.remove();
+      updateGrandTotal();
+      return;
+    }
 
     const planNameInput = $('#form-plan-name');
     const basePriceInput = $('#form-base-price');
@@ -737,6 +931,7 @@
     if (basePriceInput) basePriceInput.value = String(toSafeNumber(selectedPlan.price, 0));
     if (optionsInput && !optionsInput.value.trim()) optionsInput.value = '';
     if (adjustmentInput) adjustmentInput.value = '0';
+    ensurePlanLinkedFirstDynamicItem(selectedPlan.name);
     updateGrandTotal();
   }
 
@@ -1097,16 +1292,63 @@
     });
   }
 
+  function ensureListColumnsMenuMountedToBody() {
+    if (!listColumnsMenu || !document.body) return;
+    if (listColumnsMenu.parentElement !== document.body) {
+      document.body.appendChild(listColumnsMenu);
+    }
+  }
+
+  function positionListColumnsMenu() {
+    if (!listColumnsMenu || !listColumnsButton) return;
+
+    const triggerRect = listColumnsButton.getBoundingClientRect();
+    const viewportPadding = 12;
+    const menuWidth = Math.min(340, window.innerWidth - (viewportPadding * 2));
+    listColumnsMenu.style.width = `${menuWidth}px`;
+
+    let left = triggerRect.right - menuWidth;
+    left = Math.max(viewportPadding, Math.min(left, window.innerWidth - menuWidth - viewportPadding));
+
+    let top = triggerRect.bottom + 8;
+    const menuHeight = listColumnsMenu.offsetHeight || 320;
+    if (top + menuHeight > window.innerHeight - viewportPadding) {
+      top = Math.max(viewportPadding, triggerRect.top - menuHeight - 8);
+    }
+
+    listColumnsMenu.style.left = `${Math.round(left)}px`;
+    listColumnsMenu.style.top = `${Math.round(top)}px`;
+  }
+
+  function handleListColumnsViewportChange() {
+    if (!isListColumnsMenuOpen) return;
+    positionListColumnsMenu();
+  }
+
   function setListColumnsMenuOpen(isOpen) {
     if (!listColumnsMenu || !listColumnsButton) return;
+    if (listColumnsHideTimer) {
+      clearTimeout(listColumnsHideTimer);
+      listColumnsHideTimer = null;
+    }
     isListColumnsMenuOpen = !!isOpen;
     if (isListColumnsMenuOpen) {
+      ensureListColumnsMenuMountedToBody();
       renderListColumnsMenu();
       listColumnsMenu.style.display = 'block';
-      listColumnsMenu.classList.add('active');
+      positionListColumnsMenu();
+      requestAnimationFrame(() => {
+        if (!isListColumnsMenuOpen) return;
+        listColumnsMenu.classList.add('active');
+      });
+      listColumnsButton.classList.add('active');
     } else {
       listColumnsMenu.classList.remove('active');
-      listColumnsMenu.style.display = 'none';
+      listColumnsButton.classList.remove('active');
+      listColumnsHideTimer = setTimeout(() => {
+        if (isListColumnsMenuOpen) return;
+        listColumnsMenu.style.display = 'none';
+      }, 180);
     }
     listColumnsButton.setAttribute('aria-expanded', isListColumnsMenuOpen ? 'true' : 'false');
   }
@@ -1167,29 +1409,6 @@
       }
     }
 
-    const keys = ['costume', 'hairMakeup'];
-    keys.forEach((key) => {
-      const sel = $(`#form-${key}`);
-      if (!sel) return;
-      const curVal = sel.value;
-      sel.innerHTML = `<option value="">${t('selectDefault')}</option>`;
-      const opts = options[key] || [];
-      opts.forEach((o) => {
-        const normalized = normalizePricedOption(o);
-        if (!normalized.name) return;
-        const opt = document.createElement('option');
-        opt.value = normalized.name;
-        opt.textContent = normalized.name;
-        sel.appendChild(opt);
-      });
-      const otherOpt = document.createElement('option');
-      otherOpt.value = '__other__';
-      otherOpt.textContent = t('selectOther');
-      sel.appendChild(otherOpt);
-
-      if (curVal) sel.value = curVal;
-    });
-
     // Populate Photographers
     const pSel = $('#form-assignedTo');
     const fSel = $('#filter-photographer');
@@ -1232,55 +1451,6 @@
             input.replaceWith(newSel);
             populateSelects();
             hookPhotographerOther();
-          }
-        });
-      }
-    });
-  }
-
-  function hookSelectOther(key) {
-    const sel = $(`#form-${key}`);
-    if (!sel || sel.tagName !== 'SELECT') return;
-    sel.addEventListener('change', () => {
-      if (sel.value === '__other__') {
-        if (key === 'costume') {
-          const costumePriceInput = $('#form-costume-price');
-          if (costumePriceInput) costumePriceInput.value = '0';
-          updateGrandTotal();
-        }
-        if (key === 'hairMakeup') {
-          const hairPriceInput = $('#form-hairmakeup-price');
-          if (hairPriceInput) hairPriceInput.value = '0';
-          updateGrandTotal();
-        }
-        const input = document.createElement('input');
-        input.type = 'text';
-        input.id = `form-${key}`;
-        input.placeholder = `${OPTION_LABELS[key]}を入力...`;
-        sel.replaceWith(input);
-        input.focus();
-        input.addEventListener('blur', () => {
-          if (!input.value.trim()) {
-            const newSel = document.createElement('select');
-            newSel.id = `form-${key}`;
-            input.replaceWith(newSel);
-            populateSelects();
-            if (key === 'costume') {
-              bindEventOnce(newSel, 'change', updateCostumePriceFromSelection, 'form-costume-select-change');
-            }
-            if (key === 'hairMakeup') {
-              bindEventOnce(newSel, 'change', updateHairMakeupPriceFromSelection, 'form-hairmakeup-select-change');
-            }
-            hookSelectOther(key);
-            if (key === 'costume') {
-              const costumePriceInput = $('#form-costume-price');
-              if (costumePriceInput) costumePriceInput.value = '0';
-            }
-            if (key === 'hairMakeup') {
-              const hairPriceInput = $('#form-hairmakeup-price');
-              if (hairPriceInput) hairPriceInput.value = '0';
-            }
-            updateGrandTotal();
           }
         });
       }
@@ -1860,19 +2030,7 @@
     form.reset();
     $('#form-id').value = '';
 
-    Object.keys(OPTION_LABELS).forEach(key => {
-      const el = $(`#form-${key}`);
-      if (el && el.tagName === 'INPUT' && el.dataset.wasSelect) {
-        const newSel = document.createElement('select');
-        newSel.id = `form-${key}`;
-        el.replaceWith(newSel);
-        hookSelectOther(key);
-      }
-    });
-
     populateSelects();
-    bindEventOnce(document.getElementById('form-costume'), 'change', updateCostumePriceFromSelection, 'form-costume-select-change');
-    bindEventOnce(document.getElementById('form-hairMakeup'), 'change', updateHairMakeupPriceFromSelection, 'form-hairmakeup-select-change');
 
     if (editingId) {
       const c = customers.find(x => x.id === editingId);
@@ -1907,21 +2065,29 @@
       const planDetails = normalizePlanDetails(c.planDetails, c.revenue);
       const planNameInput = $('#form-plan-name');
       const basePriceInput = $('#form-base-price');
-      const costumePriceInput = $('#form-costume-price');
-      const hairPriceInput = $('#form-hairmakeup-price');
       const adjustmentInput = $('#form-price-adjustment');
       const optionsInput = $('#form-plan-options');
       const totalPriceInput = $('#form-total-price');
-      const costumePrice = toSafeNumber(c.costumePrice, getPricedOptionPrice('costume', c.costume, 0));
-      const hairPrice = toSafeNumber(c.hairMakeupPrice, getPricedOptionPrice('hairMakeup', c.hairMakeup, 0));
-      const fixedTotal = planDetails.basePrice + costumePrice + hairPrice;
+      let extraChargeItems = normalizeExtraChargeItems(c.extraChargeItems);
+      if (extraChargeItems.length === 0) {
+        const legacyItems = [];
+        const costumePrice = toSafeNumber(c.costumePrice, 0);
+        const hairPrice = toSafeNumber(c.hairMakeupPrice, 0);
+        if ((c.costume || '').trim() || costumePrice > 0) {
+          legacyItems.push({ name: '衣装', detail: (c.costume || '').trim(), amount: costumePrice });
+        }
+        if ((c.hairMakeup || '').trim() || hairPrice > 0) {
+          legacyItems.push({ name: 'ヘアメイク', detail: (c.hairMakeup || '').trim(), amount: hairPrice });
+        }
+        extraChargeItems = normalizeExtraChargeItems(legacyItems);
+      }
+      const fixedTotal = planDetails.basePrice + extraChargeItems.reduce((sum, item) => sum + toSafeNumber(item.amount, 0), 0);
       if (planNameInput) planNameInput.value = planDetails.planName;
       if (basePriceInput) basePriceInput.value = String(planDetails.basePrice);
-      if (costumePriceInput) costumePriceInput.value = String(costumePrice);
-      if (hairPriceInput) hairPriceInput.value = String(hairPrice);
       if (adjustmentInput) adjustmentInput.value = String(planDetails.totalPrice - fixedTotal);
       if (optionsInput) optionsInput.value = planDetails.options;
       if (totalPriceInput) totalPriceInput.value = String(planDetails.totalPrice);
+      renderDynamicChargeItems(extraChargeItems);
       updateGrandTotal();
 
       renderCustomFields(c);
@@ -1929,18 +2095,15 @@
       $('#modal-title').textContent = t('modalAddTitle');
       const planNameInput = $('#form-plan-name');
       const basePriceInput = $('#form-base-price');
-      const costumePriceInput = $('#form-costume-price');
-      const hairPriceInput = $('#form-hairmakeup-price');
       const adjustmentInput = $('#form-price-adjustment');
       const optionsInput = $('#form-plan-options');
       const totalPriceInput = $('#form-total-price');
       if (planNameInput) planNameInput.value = '';
       if (basePriceInput) basePriceInput.value = '';
-      if (costumePriceInput) costumePriceInput.value = '0';
-      if (hairPriceInput) hairPriceInput.value = '0';
       if (adjustmentInput) adjustmentInput.value = '0';
       if (optionsInput) optionsInput.value = '';
       if (totalPriceInput) totalPriceInput.value = '';
+      renderDynamicChargeItems([]);
       updateGrandTotal();
       renderCustomFields();
     }
@@ -1987,23 +2150,25 @@
 
     const planNameInput = $('#form-plan-name');
     const basePriceInput = $('#form-base-price');
-    const costumePriceInput = $('#form-costume-price');
-    const hairPriceInput = $('#form-hairmakeup-price');
     const adjustmentInput = $('#form-price-adjustment');
     const optionsInput = $('#form-plan-options');
     const totalPriceInput = $('#form-total-price');
     const revenueInput = $('#form-revenue');
     const basePrice = toSafeNumber(basePriceInput?.value, 0);
-    const costumePrice = toSafeNumber(costumePriceInput?.value, 0);
-    const hairMakeupPrice = toSafeNumber(hairPriceInput?.value, 0);
+    const extraChargeItems = collectDynamicChargeItems();
+    rememberDynamicItemDetails(extraChargeItems);
+    const extraChargeTotal = extraChargeItems.reduce((sum, item) => sum + toSafeNumber(item.amount, 0), 0);
     const adjustment = toSafeNumber(adjustmentInput?.value, 0);
-    const totalFromAdjustment = basePrice + costumePrice + hairMakeupPrice + adjustment;
+    const totalFromAdjustment = basePrice + extraChargeTotal + adjustment;
     const finalRevenue = toSafeNumber(updateGrandTotal(), totalFromAdjustment);
     if (totalPriceInput) totalPriceInput.value = String(finalRevenue);
     if (revenueInput) revenueInput.value = String(finalRevenue);
     data.revenue = finalRevenue;
-    data.costumePrice = costumePrice;
-    data.hairMakeupPrice = hairMakeupPrice;
+    data.extraChargeItems = extraChargeItems;
+    data.costumePrice = 0;
+    data.hairMakeupPrice = 0;
+    data.costume = '';
+    data.hairMakeup = '';
 
     const rawPlanDetails = {
       planName: planNameInput?.value?.trim() || selectedPlan?.name || '',
@@ -2198,39 +2363,6 @@
 
     dashboardSection.appendChild(dashboardList);
     container.appendChild(dashboardSection);
-
-    const keys = ['costume', 'hairMakeup'];
-    keys.forEach(key => {
-      const section = document.createElement('div');
-      section.className = 'settings-section';
-      const label = t('label' + key.charAt(0).toUpperCase() + key.slice(1));
-      section.innerHTML = `<h3>${label}</h3>`;
-      const opts = options[key] || [];
-      const list = document.createElement('div');
-      list.className = 'settings-item-list';
-      opts.forEach((o, i) => {
-        const priced = normalizePricedOption(o);
-        if (!priced.name) return;
-        const item = document.createElement('div');
-        item.className = 'settings-item';
-        item.innerHTML = `
-          <span>${escapeHtml(priced.name)} <small style="color:var(--text-muted); margin-left:8px;">${formatCurrency(priced.price)}</small></span>
-          <button class="btn-icon-sm" onclick="removeOption('${key}', ${i})">✕</button>
-        `;
-        list.appendChild(item);
-      });
-      section.appendChild(list);
-
-      const addBox = document.createElement('div');
-      addBox.className = 'settings-add-box';
-      addBox.innerHTML = `
-        <input type="text" id="add-${key}-name" placeholder="${t('settingsAddPlaceholder', { label })}" />
-        <input type="number" id="add-${key}-price" min="0" step="1" placeholder="金額" />
-        <button class="btn btn-primary btn-sm" onclick="addOption('${key}')">${t('settingsAddBtn')}</button>
-      `;
-      section.appendChild(addBox);
-      container.appendChild(section);
-    });
   }
 
   window.resetPlanMasterForm = function () {
@@ -2294,46 +2426,6 @@
     planMaster.splice(index, 1);
     savePlanMaster(planMaster);
     window.resetPlanMasterForm();
-    renderSettings();
-    populateSelects();
-  };
-
-  window.addOption = function (key) {
-    if (PRICED_OPTION_KEYS.includes(key)) {
-      const nameInput = $(`#add-${key}-name`);
-      const priceInput = $(`#add-${key}-price`);
-      const name = nameInput?.value?.trim() || '';
-      if (!name) return;
-      const price = toSafeNumber(priceInput?.value, 0);
-      if (!options[key]) options[key] = [];
-      const list = (options[key] || []).map(normalizePricedOption).filter((item) => item.name);
-      const existingIdx = list.findIndex((item) => item.name.toLowerCase() === name.toLowerCase());
-      const next = { name, price };
-      if (existingIdx === -1) list.push(next);
-      else list[existingIdx] = next;
-      options[key] = list;
-      saveOptions(options);
-      if (nameInput) nameInput.value = '';
-      if (priceInput) priceInput.value = '';
-      renderSettings();
-      populateSelects();
-      return;
-    }
-
-    const input = $(`#add-${key}`);
-    const val = input?.value?.trim() || '';
-    if (!val) return;
-    if (!options[key]) options[key] = [];
-    options[key].push(val);
-    saveOptions(options);
-    if (input) input.value = '';
-    renderSettings();
-    populateSelects();
-  };
-
-  window.removeOption = function (key, idx) {
-    options[key].splice(idx, 1);
-    saveOptions(options);
     renderSettings();
     populateSelects();
   };
@@ -3194,9 +3286,9 @@
     bindEventOnce(document, 'click', handleListColumnsOutsideClick, 'list-columns-outside-click');
     bindEventOnce(document, 'keydown', handleDashboardQuickMenuEscape, 'dashboard-quick-menu-escape');
     bindEventOnce(document, 'keydown', handleListColumnsEscape, 'list-columns-escape');
+    bindEventOnce(window, 'resize', handleListColumnsViewportChange, 'list-columns-viewport-resize');
+    bindEventOnce(window, 'scroll', handleListColumnsViewportChange, 'list-columns-viewport-scroll', true);
     bindEventOnce(document.getElementById('form-plan'), 'change', handlePlanSelectChange, 'form-plan-select-change');
-    bindEventOnce(document.getElementById('form-costume'), 'change', updateCostumePriceFromSelection, 'form-costume-select-change');
-    bindEventOnce(document.getElementById('form-hairMakeup'), 'change', updateHairMakeupPriceFromSelection, 'form-hairmakeup-select-change');
     bindEventOnce(document.getElementById('form-base-price'), 'input', updateGrandTotal, 'form-base-price-input');
     bindEventOnce(document.getElementById('form-price-adjustment'), 'input', updateGrandTotal, 'form-price-adjustment-input');
     bindEventOnce(document.getElementById('form-revenue'), 'input', syncAdjustmentFromRevenueInput, 'form-revenue-input');
@@ -3210,6 +3302,7 @@
     bindEventOnce(document.getElementById('btn-ics-export'), 'click', handleIcsExportClick, 'ics-export-click');
     bindEventOnce(document.getElementById('btn-team-add'), 'click', handleTeamAddClick, 'team-add-click');
     bindEventOnce(document.getElementById('btn-add-custom-field'), 'click', handleAddCustomFieldClick, 'add-custom-field-click');
+    bindEventOnce(document.getElementById('btn-add-dynamic-item'), 'click', () => addDynamicChargeItem(), 'add-dynamic-item-click');
     bindEventOnce(document.getElementById('btn-google-login'), 'click', handleGoogleLoginClick, 'google-login-banner');
     bindEventOnce(document.getElementById('btn-google-login-screen'), 'click', handleGoogleLoginClick, 'google-login-screen');
     bindEventOnce(document.getElementById('btn-logout'), 'click', handleGoogleLogoutClick, 'google-logout');
@@ -3253,9 +3346,7 @@
     bindCoreUIEventListeners();
     bindFeatureEventListeners();
 
-    // Hook dynamic "Other" behavior after elements are present.
-    const keys_to_hook = ['costume', 'hairMakeup'];
-    keys_to_hook.forEach(k => hookSelectOther(k));
+    // Keep photographer "Other" behavior.
     hookPhotographerOther();
 
     if (dashboardMonthPicker) {
@@ -3297,6 +3388,8 @@
     if (!CURRENCY_CONFIG[currentCurrency]) currentCurrency = 'USD';
     customers = loadCustomers();
     options = loadOptions();
+    dynamicItemNameSuggestions = loadDynamicItemNameSuggestions();
+    dynamicItemSuggestionMap = loadDynamicItemSuggestionMap();
     planMaster = loadPlanMaster();
     if (planMaster.length === 0 && Array.isArray(options.plan) && options.plan.length > 0) {
       planMaster = options.plan
@@ -3411,6 +3504,18 @@
     setAuthScreenState('checking');
     registerPwaServiceWorker();
 
+    if (window.location.protocol === 'file:') {
+      authWatcherDisabled = true;
+      if (typeof authUnsubscribe === 'function') {
+        authUnsubscribe();
+        authUnsubscribe = null;
+      }
+      isLoggedIn = true;
+      setAuthScreenState('loggedIn', { displayName: 'Guest (Local File Mode)' });
+      showToast('ローカルファイルモード: ゲストセッションで起動しました。');
+      return;
+    }
+
     if (!window.FirebaseService) {
       console.error('FirebaseService is not available.');
       showToast('Firebase設定の読み込みに失敗しました。');
@@ -3435,7 +3540,6 @@
     }
     authUnsubscribe = window.FirebaseService.onAuthChanged((user) => {
       if (authWatcherDisabled) return;
-      console.log("🔔 Auth State Changed. User:", user ? user.email : "LoggedOut");
 
       if (user) {
         isLoggedIn = true;
