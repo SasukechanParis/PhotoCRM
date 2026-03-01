@@ -784,9 +784,9 @@
     row.className = 'dynamic-item-row';
     if (item?.planLinked) row.dataset.planLinked = 'true';
     row.innerHTML = `
-      <input type="text" class="dynamic-item-name" list="${nameDatalistId}" placeholder="項目名（例：ヘアメイク）" value="${escapeHtml(item.name || '')}" />
+      <input type="text" class="dynamic-item-name" list="${nameDatalistId}" placeholder="項目名（例：衣装）" value="${escapeHtml(item.name || '')}" />
       <datalist id="${nameDatalistId}" class="dynamic-item-name-options"></datalist>
-      <input type="text" class="dynamic-item-detail" list="${datalistId}" placeholder="内容（例：担当者名）" value="${escapeHtml(item.detail || '')}" />
+      <input type="text" class="dynamic-item-detail" list="${datalistId}" placeholder="内容（例：ブランド名など）" value="${escapeHtml(item.detail || '')}" />
       <datalist id="${datalistId}" class="dynamic-item-detail-options"></datalist>
       <input type="number" class="dynamic-item-amount" min="0" step="1" value="${toSafeNumber(item.amount, 0)}" />
       <button type="button" class="btn btn-secondary dynamic-item-remove" aria-label="項目を削除" title="項目を削除">🗑</button>
@@ -2283,98 +2283,17 @@
 
   // ===== Settings =====
   window.closeSettings = function () { settingsOverlay.classList.remove('active'); };
-  function renderSettings() {
-    const container = $('#settings-list');
-    container.innerHTML = '';
-    const currencySelect = $('#currency-select');
-    if (currencySelect) currencySelect.value = currentCurrency;
 
-    const planSection = document.createElement('div');
-    planSection.className = 'settings-section';
-    planSection.innerHTML = '<h3>プラン管理</h3>';
-    const planList = document.createElement('div');
-    planList.className = 'settings-item-list';
-    if (planMaster.length === 0) {
-      const empty = document.createElement('div');
-      empty.className = 'settings-item';
-      empty.innerHTML = '<span>登録済みプランはありません</span>';
-      planList.appendChild(empty);
-    } else {
-      planMaster.forEach((plan, index) => {
-        const item = document.createElement('div');
-        item.className = 'settings-item';
-        item.innerHTML = `
-          <div style="flex:1;">
-            <div style="font-weight:600;">${escapeHtml(plan.name)}</div>
-            <div style="font-size:0.85rem;color:var(--text-muted);">${formatCurrency(plan.price)}</div>
-          </div>
-          <div style="display:flex; gap:6px;">
-            <button class="btn-icon-sm" onclick="editPlanMaster(${index})">✏️</button>
-            <button class="btn-icon-sm" onclick="removePlanMaster(${index})">✕</button>
-          </div>
-        `;
-        planList.appendChild(item);
-      });
-    }
-    planSection.appendChild(planList);
-
-    const planAddBox = document.createElement('div');
-    planAddBox.className = 'settings-add-box';
-    planAddBox.style.display = 'grid';
-    planAddBox.style.gridTemplateColumns = '1fr';
-    planAddBox.style.gap = '8px';
-    planAddBox.innerHTML = `
-      <input type="hidden" id="edit-plan-index" value="" />
-      <input type="text" id="add-plan-name" placeholder="プラン名 (例: Standard)" />
-      <input type="number" id="add-plan-price" min="0" step="1" placeholder="金額 (例: 120000)" />
-      <div style="display:flex; gap:8px;">
-        <button class="btn btn-primary btn-sm" onclick="addPlanMaster()">${t('settingsAddBtn')}</button>
-        <button class="btn btn-secondary btn-sm" onclick="resetPlanMasterForm()">クリア</button>
-      </div>
-    `;
-    planSection.appendChild(planAddBox);
-    container.appendChild(planSection);
-
-    const dashboardSection = document.createElement('div');
-    dashboardSection.className = 'settings-section';
-    dashboardSection.innerHTML = '<h3>表示設定</h3>';
-    const dashboardList = document.createElement('div');
-    dashboardList.className = 'settings-item-list dashboard-config-list';
-
-    dashboardConfig.forEach((item, index) => {
-      const row = document.createElement('div');
-      row.className = 'settings-item dashboard-config-row';
-      const label = getDashboardCardLabel(item.key);
-      const checked = item.visible ? 'checked' : '';
-      const disableUp = index === 0 ? 'disabled' : '';
-      const disableDown = index === dashboardConfig.length - 1 ? 'disabled' : '';
-      row.innerHTML = `
-        <label class="dashboard-config-label">
-          <input type="checkbox" ${checked} onchange="toggleDashboardCardVisibility('${item.key}', this.checked)">
-          <span>${escapeHtml(label)}</span>
-        </label>
-        <div class="dashboard-config-order">
-          <button class="btn-icon-sm" ${disableUp} title="上へ" onclick="moveDashboardCard('${item.key}', -1)">↑</button>
-          <button class="btn-icon-sm" ${disableDown} title="下へ" onclick="moveDashboardCard('${item.key}', 1)">↓</button>
-        </div>
-      `;
-      dashboardList.appendChild(row);
-    });
-
-    dashboardSection.appendChild(dashboardList);
-    container.appendChild(dashboardSection);
-  }
-
-  window.resetPlanMasterForm = function () {
+  function resetPlanMasterFormInputs() {
     const editInput = $('#edit-plan-index');
     const nameInput = $('#add-plan-name');
     const priceInput = $('#add-plan-price');
     if (editInput) editInput.value = '';
     if (nameInput) nameInput.value = '';
     if (priceInput) priceInput.value = '';
-  };
+  }
 
-  window.editPlanMaster = function (index) {
+  function setPlanMasterFormByIndex(index) {
     const plan = planMaster[index];
     if (!plan) return;
     const editInput = $('#edit-plan-index');
@@ -2383,9 +2302,9 @@
     if (editInput) editInput.value = String(index);
     if (nameInput) nameInput.value = plan.name;
     if (priceInput) priceInput.value = String(plan.price);
-  };
+  }
 
-  window.addPlanMaster = function () {
+  function savePlanMasterFromForm() {
     const editInput = $('#edit-plan-index');
     const nameInput = $('#add-plan-name');
     const priceInput = $('#add-plan-price');
@@ -2414,20 +2333,110 @@
     } else {
       planMaster.push(nextPlan);
     }
+
     savePlanMaster(planMaster);
-    window.resetPlanMasterForm();
+    resetPlanMasterFormInputs();
     renderSettings();
     populateSelects();
-  };
+  }
 
-  window.removePlanMaster = function (index) {
+  function removePlanMasterByIndex(index) {
     if (!planMaster[index]) return;
     if (!confirm(t('confirmDeleteMessage') || 'Are you sure?')) return;
     planMaster.splice(index, 1);
     savePlanMaster(planMaster);
-    window.resetPlanMasterForm();
+    resetPlanMasterFormInputs();
     renderSettings();
     populateSelects();
+  }
+
+  function renderSettings() {
+    const container = $('#settings-list');
+    if (!container) return;
+    container.innerHTML = '';
+
+    const planRows = planMaster.length === 0
+      ? `<div class="settings-item"><span>登録済みプランはありません</span></div>`
+      : planMaster.map((plan, index) => `
+        <div class="settings-item">
+          <div style="flex:1;">
+            <div style="font-weight:600;">${escapeHtml(plan.name)}</div>
+            <div style="font-size:0.85rem;color:var(--text-muted);">${formatCurrency(plan.price)}</div>
+          </div>
+          <div style="display:flex; gap:6px;">
+            <button type="button" class="btn-icon-sm" data-plan-edit="${index}" title="編集">✏️</button>
+            <button type="button" class="btn-icon-sm" data-plan-remove="${index}" title="削除">✕</button>
+          </div>
+        </div>
+      `).join('');
+
+    const dashboardRows = dashboardConfig.map((item, index) => {
+      const label = getDashboardCardLabel(item.key);
+      const disableUp = index === 0 ? 'disabled' : '';
+      const disableDown = index === dashboardConfig.length - 1 ? 'disabled' : '';
+      const checked = item.visible ? 'checked' : '';
+      return `
+        <div class="settings-item dashboard-config-row">
+          <label class="dashboard-config-label">
+            <input type="checkbox" data-dashboard-visible="${item.key}" ${checked}>
+            <span>${escapeHtml(label)}</span>
+          </label>
+          <div class="dashboard-config-order">
+            <button type="button" class="btn-icon-sm" data-dashboard-move-key="${item.key}" data-dashboard-move-dir="-1" ${disableUp} title="上へ">↑</button>
+            <button type="button" class="btn-icon-sm" data-dashboard-move-key="${item.key}" data-dashboard-move-dir="1" ${disableDown} title="下へ">↓</button>
+          </div>
+        </div>
+      `;
+    }).join('');
+
+    container.innerHTML = `
+      <div class="settings-section">
+        <h3>プラン管理</h3>
+        <div class="settings-item-list">${planRows}</div>
+        <div class="settings-add-box" style="display:grid; grid-template-columns:1fr; gap:8px;">
+          <input type="hidden" id="edit-plan-index" value="">
+          <input type="text" id="add-plan-name" placeholder="プラン名 (例: Standard)">
+          <input type="number" id="add-plan-price" min="0" step="1" placeholder="金額 (例: 120000)">
+          <div style="display:flex; gap:8px;">
+            <button type="button" class="btn btn-primary btn-sm" id="btn-plan-save">${t('settingsAddBtn')}</button>
+            <button type="button" class="btn btn-secondary btn-sm" id="btn-plan-reset">クリア</button>
+          </div>
+        </div>
+      </div>
+      <div class="settings-section">
+        <h3>表示設定</h3>
+        <div class="settings-item-list dashboard-config-list">${dashboardRows}</div>
+      </div>
+    `;
+
+    bindEventOnce(container.querySelector('#btn-plan-save'), 'click', savePlanMasterFromForm, 'plan-master-save');
+    bindEventOnce(container.querySelector('#btn-plan-reset'), 'click', resetPlanMasterFormInputs, 'plan-master-reset');
+
+    container.querySelectorAll('button[data-plan-edit]').forEach((button) => {
+      const index = Number(button.dataset.planEdit);
+      bindEventOnce(button, 'click', () => setPlanMasterFormByIndex(index), `plan-master-edit-${index}`);
+    });
+
+    container.querySelectorAll('button[data-plan-remove]').forEach((button) => {
+      const index = Number(button.dataset.planRemove);
+      bindEventOnce(button, 'click', () => removePlanMasterByIndex(index), `plan-master-remove-${index}`);
+    });
+
+    container.querySelectorAll('input[data-dashboard-visible]').forEach((input) => {
+      const key = input.dataset.dashboardVisible || '';
+      bindEventOnce(input, 'change', (e) => {
+        updateDashboardCardVisibility(key, !!e.target.checked);
+      }, `settings-dashboard-visible-${key}`);
+    });
+
+    container.querySelectorAll('button[data-dashboard-move-key]').forEach((button) => {
+      const key = button.dataset.dashboardMoveKey || '';
+      const direction = Number(button.dataset.dashboardMoveDir || '0');
+      bindEventOnce(button, 'click', () => {
+        if (!Number.isFinite(direction) || direction === 0) return;
+        moveDashboardCard(key, direction);
+      }, `settings-dashboard-move-${key}-${direction}`);
+    });
   };
 
   // ===== Toast =====
@@ -3278,7 +3287,6 @@
 
   function bindCoreUIEventListeners() {
     bindEventOnce(document.getElementById('lang-select'), 'change', handleLanguageSelectChange, 'lang-select-change');
-    bindEventOnce(document.getElementById('currency-select'), 'change', handleCurrencySelectChange, 'currency-select-change');
     bindEventOnce(document.getElementById('btn-theme'), 'click', toggleTheme, 'theme-toggle-click');
     bindEventOnce(document.getElementById('btn-toggle-dashboard'), 'click', handleDashboardToggleButtonClick, 'dashboard-visibility-toggle');
     bindEventOnce(document.getElementById('btn-list-columns'), 'click', handleListColumnsToggleButtonClick, 'list-columns-toggle');
@@ -3302,7 +3310,7 @@
     bindEventOnce(document.getElementById('btn-ics-export'), 'click', handleIcsExportClick, 'ics-export-click');
     bindEventOnce(document.getElementById('btn-team-add'), 'click', handleTeamAddClick, 'team-add-click');
     bindEventOnce(document.getElementById('btn-add-custom-field'), 'click', handleAddCustomFieldClick, 'add-custom-field-click');
-    bindEventOnce(document.getElementById('btn-add-dynamic-item'), 'click', () => addDynamicChargeItem(), 'add-dynamic-item-click');
+    bindEventOnce(document.getElementById('btn-add-extra-item'), 'click', () => addDynamicChargeItem(), 'add-extra-item-click');
     bindEventOnce(document.getElementById('btn-google-login'), 'click', handleGoogleLoginClick, 'google-login-banner');
     bindEventOnce(document.getElementById('btn-google-login-screen'), 'click', handleGoogleLoginClick, 'google-login-screen');
     bindEventOnce(document.getElementById('btn-logout'), 'click', handleGoogleLogoutClick, 'google-logout');
@@ -3345,6 +3353,7 @@
     // 3. Attach event listeners
     bindCoreUIEventListeners();
     bindFeatureEventListeners();
+    setListColumnsMenuOpen(false);
 
     // Keep photographer "Other" behavior.
     hookPhotographerOther();

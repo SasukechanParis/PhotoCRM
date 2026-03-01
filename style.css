@@ -1872,7 +1872,7 @@ tbody tr:hover {
   grid-column: auto;
 }
 
-#btn-add-dynamic-item {
+#btn-add-extra-item {
   min-height: 40px;
   padding: 0 14px;
 }
@@ -1947,7 +1947,7 @@ tbody tr:hover {
     display: block;
   }
 
-  #btn-add-dynamic-item {
+  #btn-add-extra-item {
     width: 100%;
   }
 
