@@ -1,30 +1,25 @@
 {
-  "hosting": [
-    {
-      "target": "pholio",
-      "public": ".",
-      "ignore": [
-        "firebase.json",
-        ".firebaserc",
-        "firestore.rules",
-        ".github/**",
-        "**/.*",
-        "**/node_modules/**",
-        "**/*.bak",
-        "customers*.csv",
-        "photocrm_backup_*.json",
-        "Pholio_AutoBackup_*.json",
-        "**/*firebase-adminsdk*.json",
-        "README.md",
-        "HANDOFF_DOCUMENT.md",
-        "PHASE*.md"
-      ],
-      "rewrites": [
-        {
-          "source": "**",
-          "destination": "/index.html"
-        }
-      ]
-    }
-  ]
+  "hosting": {
+    "site": "pholio-app",
+    "public": ".",
+    "ignore": [
+      "firebase.json",
+      "**/.*",
+      "**/node_modules/**",
+      "**/*.bak",
+      "customers*.csv",
+      "photocrm_backup_*.json",
+      "Pholio_AutoBackup_*.json",
+      "**/firebase-adminsdk*.json",
+      "README.md",
+      "HANDOFF_DOCUMENT.md",
+      "PHASE*.md"
+    ],
+    "rewrites": [
+      {
+        "source": "**",
+        "destination": "/index.html"
+      }
+    ]
+  }
 }
