@@ -1,4 +1,4 @@
-# PhotoCRM Phase 3 - カスタムフィールド機能
+# Pholio Phase 3 - カスタムフィールド機能
 
 ## 📋 要件
 

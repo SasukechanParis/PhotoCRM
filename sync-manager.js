@@ -1,5 +1,5 @@
 /**
- * Sync Management for PhotoCRM
+ * Sync Management for Pholio
  * Handles data export/import and merge against Firebase-backed cache.
  */
 window.SyncManager = {

@@ -1,4 +1,4 @@
-# PhotoCRM - AI引き継ぎドキュメント
+# Pholio - AI引き継ぎドキュメント
 
 **作成日:** 2026年2月22日  
 **現在バージョン:** v2.2.3  
@@ -25,7 +25,7 @@
 ## プロジェクト概要
 
 ### プロダクト名
-**PhotoCRM** - フォトグラファー向け顧客管理アプリケーション
+**Pholio** - フォトグラファー向け顧客管理アプリケーション
 
 ### ターゲットユーザー
 - 個人フォトグラファー（主に日本市場）
@@ -1201,8 +1201,8 @@ A:
 
 **Q: バージョン番号の更新方法**
 A: 以下の4ファイルを更新
-1. app.js: `console.log('🚀 PhotoCRM v2.X.X ...')`
-2. index.html: `<!-- PhotoCRM v2.X.X ... -->`
+1. app.js: `console.log('🚀 Pholio v2.X.X ...')`
+2. index.html: `<!-- Pholio v2.X.X ... -->`
 3. sw.js: `const CACHE_NAME = 'photocrm-vX';`
 4. manifest.json: `"version": "2.X.X",`
 

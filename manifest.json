@@ -1,6 +1,6 @@
 {
-  "name": "PhotoCRM Cloud",
-  "short_name": "PhotoCRM",
+  "name": "Pholio",
+  "short_name": "Pholio",
   "description": "フォトグラファー向けクラウドCRM",
   "lang": "ja",
   "start_url": "./index.html",

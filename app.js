@@ -1,4 +1,4 @@
-// ===== PhotoCRM - Application Logic =====
+// ===== Pholio - Application Logic =====
 
 (function () {
   'use strict';
@@ -27,6 +27,12 @@
   const FORM_FIELD_VISIBILITY_KEY = 'photocrm_form_field_visibility';
   const GOOGLE_CALENDAR_AUTO_SYNC_KEY = 'photocrm_google_calendar_auto_sync';
   const GOOGLE_CALENDAR_SELECTED_ID_KEY = 'photocrm_google_calendar_selected_id';
+  const USER_PLAN_KEY = 'photocrm_user_plan';
+  const USER_BILLING_PROFILE_KEY = 'photocrm_user_billing_profile';
+  const STUDIO_NAME_KEY = 'photocrm_studio_name';
+  const ENTERPRISE_CONTACT_REQUESTS_KEY = 'photocrm_enterprise_contact_requests';
+  const SUPPORT_REPLY_NOTICE_SEEN_KEY = 'photocrm_support_reply_notice_seen';
+  const ADMIN_MANAGEMENT_EMAILS = new Set(['sasuke.photographe@gmail.com']);
   const GOOGLE_CALENDAR_DEFAULT_ID = 'sasuke.photographe@gmail.com';
   const LOCAL_GUEST_MODE_KEY = 'photocrm_local_guest_mode';
   const IDB_MIRROR_DB_NAME = 'PholioDB';
@@ -36,7 +42,42 @@
   const FORCE_DARK_MODE = false;
   const ENABLE_STATS_FEATURES = true;
   const DEFAULT_INVOICE_MESSAGE_KEY = 'invoiceDefaultMessage';
-  const FREE_PLAN_LIMIT = 30;
+  const FREE_PLAN_LIMIT = 20;
+  const ADMIN_SECURE_SESSION_KEY = 'photocrm_admin_secure_session';
+  const ADMIN_SESSION_TIMEOUT_MS = 60 * 60 * 1000;
+  const ADMIN_SESSION_TOUCH_INTERVAL_MS = 5 * 60 * 1000;
+  const PLAN_CONFIG = Object.freeze({
+    free: {
+      basePrice: 0,
+      includedMembers: 1,
+      extraMemberPrice: 0,
+      maxMembers: null,
+    },
+    individual: {
+      basePrice: 9,
+      includedMembers: 1,
+      extraMemberPrice: 0,
+      maxMembers: null,
+    },
+    small_team: {
+      basePrice: 19,
+      includedMembers: 5,
+      extraMemberPrice: 5,
+      maxMembers: null,
+    },
+    medium_team: {
+      basePrice: 39,
+      includedMembers: 15,
+      extraMemberPrice: 0,
+      maxMembers: 15,
+    },
+    enterprise: {
+      basePrice: 0,
+      includedMembers: Number.POSITIVE_INFINITY,
+      extraMemberPrice: 0,
+      maxMembers: null,
+    },
+  });
 
   const DASHBOARD_CARD_DEFINITIONS = [
     { key: 'totalCustomers', labelKey: 'cardTotalCustomers', fallbackLabel: 'Total Customers' },
@@ -68,6 +109,16 @@
     { key: 'revenue', labelKey: 'thRevenue', fallbackLabel: 'Revenue', sortKey: 'revenue' },
     { key: 'paymentChecked', labelKey: 'thPayment', fallbackLabel: 'Payment', sortKey: 'paymentChecked' },
     { key: 'assignedTo', labelKey: 'thPhotographer', fallbackLabel: 'Staff', sortKey: 'assignedTo' },
+  ];
+  const MOBILE_SORT_OPTIONS = [
+    { key: 'shootingDate', labelKey: 'thShootingDate', fallbackLabel: 'Shooting Date' },
+    { key: 'inquiryDate', labelKey: 'thInquiryDate', fallbackLabel: 'Inquiry Date' },
+    { key: 'contractDate', labelKey: 'thContractDate', fallbackLabel: 'Contract Date' },
+    { key: 'meetingDate', labelKey: 'thMeetingDate', fallbackLabel: 'Meeting Date' },
+    { key: 'customerName', labelKey: 'thCustomerName', fallbackLabel: 'Customer' },
+    { key: 'revenue', labelKey: 'thRevenue', fallbackLabel: 'Revenue' },
+    { key: 'paymentChecked', labelKey: 'thPayment', fallbackLabel: 'Payment' },
+    { key: 'assignedTo', labelKey: 'thPhotographer', fallbackLabel: 'Staff' },
   ];
 
   const FORM_FIELD_VISIBILITY_DEFINITIONS = [
@@ -203,6 +254,10 @@
       FORM_FIELD_VISIBILITY_KEY,
       GOOGLE_CALENDAR_AUTO_SYNC_KEY,
       GOOGLE_CALENDAR_SELECTED_ID_KEY,
+      USER_PLAN_KEY,
+      USER_BILLING_PROFILE_KEY,
+      STUDIO_NAME_KEY,
+      ENTERPRISE_CONTACT_REQUESTS_KEY,
     ];
   }
 
@@ -288,7 +343,8 @@
     mirrorToIndexedDB(`local:${key}`, value);
   }
 
-  function saveCloudValue(key, value) {
+  function saveCloudValue(key, value, options = {}) {
+    const propagateError = !!options?.propagateError;
     State.setJSON(key, value);
     mirrorToIndexedDB(`local:${key}`, value);
     mirrorToIndexedDB(`cloud:${key}`, value);
@@ -298,26 +354,116 @@
     try {
       const maybePromise = window.FirebaseService?.saveKey?.(key, value);
       if (maybePromise && typeof maybePromise.then === 'function') {
-        maybePromise.then(() => {
+        return maybePromise.then(() => {
           if (window.FirebaseService?.getCurrentUser?.()) setCloudSyncIndicator('ready');
           else setCloudSyncIndicator('local');
+          return true;
         }).catch((err) => {
           console.error(`Failed to save ${key}`, err);
           setCloudSyncIndicator('error');
+          if (propagateError) throw err;
+          return false;
         });
       }
+      return Promise.resolve(true);
     } catch (err) {
       console.error(`Failed to save ${key}`, err);
       setCloudSyncIndicator('error');
+      if (propagateError) return Promise.reject(err);
+      return Promise.resolve(false);
     }
   }
 
   // ===== Language Management =====
   let currentLang = getCloudValue(LANG_KEY, getLocalValue(LANG_KEY, 'ja'));
   if (!window.LOCALE || !window.LOCALE[currentLang]) currentLang = 'ja';
+  let currentUserPlan = normalizeUserPlan(
+    getCloudValue(USER_PLAN_KEY, getCloudValue('plan', getLocalValue(USER_PLAN_KEY, 'free')))
+  );
+  let currentStudioName = normalizeStudioName(
+    getCloudValue(STUDIO_NAME_KEY, getLocalValue(STUDIO_NAME_KEY, ''))
+  );
+
+  function getLanguageSelectElements() {
+    const elements = [
+      document.getElementById('languageSelect'),
+      document.getElementById('languageSelect-mobile'),
+      document.getElementById('lang-select'),
+    ].filter(Boolean);
+    return Array.from(new Set(elements));
+  }
 
   function getLanguageSelectElement() {
-    return document.getElementById('languageSelect') || document.getElementById('lang-select');
+    return getLanguageSelectElements()[0] || null;
+  }
+
+  function normalizeStudioName(value) {
+    return String(value || '').trim().slice(0, 80);
+  }
+
+  function getStudioDisplayName() {
+    const billingProfileName = normalizeStudioName(getBillingProfile()?.fullName || '');
+    return billingProfileName || currentStudioName || 'Pholio';
+  }
+
+  function updateHeaderBrandWordmark() {
+    const brandWordmark = document.getElementById('brand-wordmark') || document.querySelector('.brand-wordmark');
+    if (!brandWordmark) return;
+    brandWordmark.textContent = getStudioDisplayName();
+  }
+
+  function setStudioName(name, options = {}) {
+    const { persistCloud = true } = options;
+    currentStudioName = normalizeStudioName(name);
+    if (persistCloud) saveCloudValue(STUDIO_NAME_KEY, currentStudioName);
+    else saveLocalValue(STUDIO_NAME_KEY, currentStudioName);
+    updateHeaderBrandWordmark();
+  }
+
+  function canAccessTeamManagement(plan = currentUserPlan) {
+    const normalized = normalizeUserPlan(plan);
+    return normalized === 'small_team' || normalized === 'medium_team' || normalized === 'enterprise';
+  }
+
+  function updateTeamManagementTabAvailability() {
+    const teamTabButton = settingsOverlay?.querySelector?.('.settings-tab-btn[data-tab="team"]')
+      || document.querySelector('.settings-tab-btn[data-tab="team"]');
+    const teamTabContent = document.getElementById('settings-content-team');
+    if (!teamTabButton || !teamTabContent) return;
+
+    const allowed = canAccessTeamManagement(currentUserPlan);
+    teamTabButton.style.display = allowed ? '' : 'none';
+    teamTabButton.disabled = !allowed;
+    teamTabButton.setAttribute('aria-disabled', String(!allowed));
+
+    if (!allowed && teamTabButton.classList.contains('active')) {
+      teamTabButton.classList.remove('active');
+      teamTabContent.classList.remove('active');
+      const menuTab = settingsOverlay?.querySelector?.('.settings-tab-btn[data-tab="menu"]');
+      const menuContent = document.getElementById('settings-content-menu');
+      if (menuTab) menuTab.classList.add('active');
+      if (menuContent) menuContent.classList.add('active');
+    }
+    if (!allowed) teamTabContent.classList.remove('active');
+  }
+
+  function getHeaderCurrencySelectElements() {
+    const elements = [
+      document.getElementById('currency-select'),
+      document.getElementById('currency-select-mobile'),
+    ].filter(Boolean);
+    return Array.from(new Set(elements));
+  }
+
+  function getLanguageOptionDefinitions() {
+    return [
+      { code: 'ja', label: '🇯🇵 日本語' },
+      { code: 'en', label: '🇺🇸 English' },
+      { code: 'fr', label: '🇫🇷 Français' },
+      { code: 'zh-CN', label: '🇨🇳 简体中文' },
+      { code: 'zh-TW', label: '🇹🇼 繁體中文' },
+      { code: 'ko', label: '🇰🇷 한국어' },
+    ];
   }
 
   function getHeroMetricLabelByLang(key) {
@@ -412,7 +558,6 @@
     setText('#btn-google-login-screen', 'googleLogin');
     setText('#btn-google-login', 'googleLogin');
     setText('#btn-logout', 'logout');
-    setText('#btn-header-logout', 'logout');
     setText('.login-card p', 'loginScreenDescription');
     setText('#settings-content-contract .help-text', 'contractTemplateHelp');
     setTitle('#dashboard-month-picker', 'dashboardMonthHint');
@@ -444,6 +589,19 @@
     const detailTotalPriceLabel = document.getElementById('detail-total-price')?.closest('.detail-item')?.querySelector('.detail-label');
     if (detailTotalPriceLabel) detailTotalPriceLabel.textContent = t('labelTotalPrice');
     setCloudSyncIndicator(cloudSyncState);
+    updateAdminTotpControlsVisibility();
+    if (isCurrentUserAdmin() && !canAccessAdminPanel()) {
+      const normalizedReason = String(adminSecurityContext.reason || '').trim().toLowerCase();
+      if (normalizedReason === 'admin_security_init_failed') {
+        setAdminDeviceWarning('');
+        setAdminSecurityStatusMini('error');
+      } else {
+        const warningMessage = getAdminSecurityWarningMessage(adminSecurityContext.reason);
+        if (warningMessage) setAdminDeviceWarning(warningMessage, 'error');
+      }
+    } else {
+      setAdminSecurityStatusMini('online');
+    }
   }
 
   function t(key, params = {}) {
@@ -468,6 +626,322 @@
     return t(DEFAULT_INVOICE_MESSAGE_KEY);
   }
 
+  function getInvoiceCountryProfiles() {
+    const profiles = window.INVOICE_COUNTRY_PROFILES;
+    if (!profiles || typeof profiles !== 'object') return {};
+    return profiles;
+  }
+
+  function getInvoiceCountryProfile(lang = currentLang) {
+    const profiles = getInvoiceCountryProfiles();
+    return profiles[lang] || profiles.en || {
+      code: 'US',
+      currency: 'USD',
+      defaultTaxRate: 10,
+      taxLabel: 'Tax',
+      legalSectionTitle: 'Legal Information',
+      legalSectionHint: '',
+      legalFields: [],
+    };
+  }
+
+  function normalizeUserPlan(plan) {
+    const normalized = String(plan || '').trim().toLowerCase();
+    if (normalized === 'small_team' || normalized === 'team' || normalized === 'small-team' || normalized === 'smallteam') return 'small_team';
+    if (normalized === 'medium_team' || normalized === 'medium-team' || normalized === 'mediumteam') return 'medium_team';
+    if (normalized === 'individual' || normalized === 'pro') return 'individual';
+    if (normalized === 'enterprise' || normalized === 'ent') return 'enterprise';
+    return 'free';
+  }
+
+  function hasPaidPlanAccess(plan = currentUserPlan) {
+    return normalizeUserPlan(plan) !== 'free';
+  }
+
+  function getCustomerLimitByPlan(plan = currentUserPlan) {
+    return normalizeUserPlan(plan) === 'free' ? FREE_PLAN_LIMIT : Number.POSITIVE_INFINITY;
+  }
+
+  function canUseLanguageByPlan(lang, plan = currentUserPlan) {
+    const normalizedLang = String(lang || '').trim();
+    if (normalizedLang === 'ja' || normalizedLang === 'en') return true;
+    return hasPaidPlanAccess(plan);
+  }
+
+  function getPlanBadgeText(plan = currentUserPlan) {
+    const normalized = normalizeUserPlan(plan);
+    if (normalized === 'small_team') return 'TEAM S';
+    if (normalized === 'medium_team') return 'TEAM M';
+    if (normalized === 'enterprise') return 'ENTERPRISE';
+    if (normalized === 'individual') return 'PRO';
+    return 'FREE';
+  }
+
+  function getPlanTier(plan = currentUserPlan) {
+    const normalized = normalizeUserPlan(plan);
+    if (normalized === 'enterprise') return 4;
+    if (normalized === 'medium_team') return 3;
+    if (normalized === 'small_team') return 2;
+    if (normalized === 'individual') return 1;
+    return 0;
+  }
+
+  function getSubscriptionActionLabel(targetPlan, currentPlan = currentUserPlan) {
+    const targetTier = getPlanTier(targetPlan);
+    const currentTier = getPlanTier(currentPlan);
+    if (targetTier > currentTier) return t('settingsSubscriptionUpgradeButton');
+    return t('settingsSubscriptionSelectButton');
+  }
+
+  function getSubscriptionPlanEntries() {
+    const perMonthSuffix = t('settingsSubscriptionPerMonthSuffix') || '/mo';
+    const formatPlanPrice = (planKey) => `${formatCurrency(getPlanConfig(planKey).basePrice)}${perMonthSuffix}`;
+    return [
+      {
+        key: 'free',
+        name: t('settingsSubscriptionFreeName'),
+        price: formatPlanPrice('free'),
+        summary: t('settingsSubscriptionFreeSummary', { limit: String(FREE_PLAN_LIMIT) }),
+      },
+      {
+        key: 'individual',
+        name: t('settingsSubscriptionIndividualName'),
+        price: formatPlanPrice('individual'),
+        summary: t('settingsSubscriptionIndividualSummary'),
+      },
+      {
+        key: 'small_team',
+        name: t('settingsSubscriptionSmallTeamName'),
+        price: formatPlanPrice('small_team'),
+        summary: t('settingsSubscriptionSmallTeamSummary'),
+      },
+      {
+        key: 'medium_team',
+        name: t('settingsSubscriptionMediumTeamName'),
+        price: formatPlanPrice('medium_team'),
+        summary: t('settingsSubscriptionMediumTeamSummary'),
+      },
+      {
+        key: 'enterprise',
+        name: t('settingsSubscriptionEnterpriseName'),
+        price: t('settingsSubscriptionEnterprisePrice'),
+        summary: t('settingsSubscriptionEnterpriseSummary'),
+      },
+    ];
+  }
+
+  function renderSubscriptionPlanSectionHtml(sectionId = 'settings-subscription-plan-section') {
+    const normalizedCurrentPlan = normalizeUserPlan(currentUserPlan);
+    const currentPlanBadgeText = getPlanBadgeText(normalizedCurrentPlan);
+    const currentTeamMemberCount = getCurrentTeamMemberCount();
+    const currentPlanEstimate = calculatePlanEstimate(normalizedCurrentPlan, currentTeamMemberCount);
+    const estimateSummaryText = getPlanEstimateSummaryText(normalizedCurrentPlan, currentTeamMemberCount);
+    const estimateExtraText = currentPlanEstimate.extraMembers > 0
+      ? t('settingsSubscriptionExtraMembers', { count: String(currentPlanEstimate.extraMembers) })
+      : '';
+    const estimateEnterpriseNoticeText = currentPlanEstimate.requiresEnterprise
+      ? t('settingsSubscriptionEnterpriseLimitNotice', { limit: String(currentPlanEstimate.maxMembers || 15) })
+      : '';
+    const estimateAddonPolicyText = normalizedCurrentPlan === 'small_team'
+      ? t('settingsSubscriptionAddonPerMember', { price: formatPlanMonthlyPrice(getPlanConfig('small_team').extraMemberPrice) })
+      : '';
+
+    const subscriptionPlanRows = getSubscriptionPlanEntries().map((planEntry) => {
+      const isCurrent = normalizedCurrentPlan === planEntry.key;
+      const isEnterpriseContact = planEntry.key === 'enterprise' && !isCurrent;
+      const actionLabel = isCurrent
+        ? t('settingsSubscriptionCurrentButton')
+        : (isEnterpriseContact ? t('settingsSubscriptionContactButton') : getSubscriptionActionLabel(planEntry.key, normalizedCurrentPlan));
+      return `
+        <div class="subscription-plan-card ${isCurrent ? 'is-current' : ''}">
+          <div class="subscription-plan-meta">
+            <div class="subscription-plan-name">${escapeHtml(planEntry.name || planEntry.key)}</div>
+            <div class="subscription-plan-price">${escapeHtml(planEntry.price || '')}</div>
+            <div class="subscription-plan-summary">${escapeHtml(planEntry.summary || '')}</div>
+          </div>
+          <button
+            type="button"
+            class="btn btn-secondary btn-sm subscription-plan-action-btn"
+            ${isEnterpriseContact
+              ? `data-subscription-contact="${escapeHtml(planEntry.key)}"`
+              : `data-subscription-plan-target="${escapeHtml(planEntry.key)}"`}
+            ${isCurrent ? 'disabled' : ''}
+          >${escapeHtml(actionLabel)}</button>
+        </div>
+      `;
+    }).join('');
+
+    return `
+      <div class="settings-section" id="${escapeHtml(sectionId)}">
+        <h3>${escapeHtml(t('settingsSubscriptionSection'))}</h3>
+        <p class="settings-detail-empty">${escapeHtml(t('settingsSubscriptionDescription'))}</p>
+        <p class="settings-detail-empty subscription-beta-note">${escapeHtml(t('settingsSubscriptionBetaNote'))}</p>
+        <div class="settings-item subscription-current-row">
+          <span>${escapeHtml(t('settingsSubscriptionCurrentPlanLabel'))}</span>
+          <span class="header-plan-badge" data-plan="${escapeHtml(normalizedCurrentPlan)}">${escapeHtml(currentPlanBadgeText)}</span>
+        </div>
+        <div class="settings-detail-empty">${escapeHtml(t('settingsSubscriptionRegisteredMembers', { count: String(currentTeamMemberCount) }))}</div>
+        <div class="settings-detail-empty">${escapeHtml(estimateSummaryText)}</div>
+        ${estimateExtraText ? `<div class="settings-detail-empty">${escapeHtml(estimateExtraText)}</div>` : ''}
+        ${estimateAddonPolicyText ? `<div class="settings-detail-empty">${escapeHtml(estimateAddonPolicyText)}</div>` : ''}
+        ${estimateEnterpriseNoticeText ? `<div class="settings-detail-empty">${escapeHtml(estimateEnterpriseNoticeText)}</div>` : ''}
+        <div class="subscription-plan-list">${subscriptionPlanRows}</div>
+        <div class="subscription-plan-footer">
+          <button type="button" class="btn btn-secondary btn-sm" id="btn-subscription-plan-details">${escapeHtml(t('settingsSubscriptionDetailsLink'))}</button>
+        </div>
+      </div>
+    `;
+  }
+
+  function bindSubscriptionPlanSectionEvents(container, prefix = 'subscription-plan') {
+    if (!container) return;
+    container.querySelectorAll('button[data-subscription-plan-target]').forEach((button) => {
+      const targetPlan = String(button.dataset.subscriptionPlanTarget || '').trim();
+      bindEventOnce(button, 'click', () => {
+        if (!targetPlan) return;
+        handleSubscriptionPlanSelect(targetPlan);
+      }, `${prefix}-select-${targetPlan}`);
+    });
+    container.querySelectorAll('button[data-subscription-contact]').forEach((button) => {
+      const target = String(button.dataset.subscriptionContact || '').trim() || 'enterprise';
+      bindEventOnce(button, 'click', () => {
+        handleSubscriptionPlanContactClick(target);
+      }, `${prefix}-contact-${target}`);
+    });
+    bindEventOnce(container.querySelector('#btn-subscription-plan-details'), 'click', handleSubscriptionPlanDetailsClick, `${prefix}-details-open`);
+  }
+
+  function getPlanConfig(plan = currentUserPlan) {
+    const normalized = normalizeUserPlan(plan);
+    return PLAN_CONFIG[normalized] || PLAN_CONFIG.free;
+  }
+
+  function getCurrentTeamMemberCount() {
+    const members = window.TeamManager?.loadPhotographers?.();
+    return Array.isArray(members) ? members.length : 0;
+  }
+
+  function formatPlanMonthlyPrice(amount) {
+    return formatCurrency(Math.max(0, Math.round(toSafeNumber(amount, 0))));
+  }
+
+  function calculatePlanEstimate(plan = currentUserPlan, memberCount = getCurrentTeamMemberCount()) {
+    const normalized = normalizeUserPlan(plan);
+    const config = getPlanConfig(normalized);
+    const safeMemberCount = Math.max(0, Math.floor(toSafeNumber(memberCount, 0)));
+    const basePrice = Math.max(0, toSafeNumber(config.basePrice, 0));
+    const includedMembers = Math.max(0, Math.floor(toSafeNumber(config.includedMembers, 0)));
+    const extraMemberPrice = Math.max(0, toSafeNumber(config.extraMemberPrice, 0));
+    const extraMembers = Math.max(0, safeMemberCount - includedMembers);
+    const extraCost = extraMembers * extraMemberPrice;
+    const totalPrice = basePrice + extraCost;
+    const maxMembers = config.maxMembers == null ? null : Math.max(0, Math.floor(toSafeNumber(config.maxMembers, 0)));
+    const requiresEnterprise = maxMembers != null && safeMemberCount > maxMembers;
+
+    return {
+      plan: normalized,
+      memberCount: safeMemberCount,
+      basePrice,
+      includedMembers,
+      extraMemberPrice,
+      extraMembers,
+      extraCost,
+      totalPrice,
+      maxMembers,
+      requiresEnterprise,
+    };
+  }
+
+  function getPlanEstimateSummaryText(plan = currentUserPlan, memberCount = getCurrentTeamMemberCount()) {
+    const estimate = calculatePlanEstimate(plan, memberCount);
+    if (estimate.plan === 'enterprise') {
+      return t('settingsSubscriptionCurrentEstimated', {
+        amount: t('settingsSubscriptionEnterprisePrice'),
+      });
+    }
+    if (estimate.extraCost > 0 && estimate.extraMembers > 0) {
+      return t('settingsSubscriptionCurrentEstimatedWithExtra', {
+        amount: formatPlanMonthlyPrice(estimate.totalPrice),
+        base: formatPlanMonthlyPrice(estimate.basePrice),
+        extra: formatPlanMonthlyPrice(estimate.extraCost),
+        extraMembers: String(estimate.extraMembers),
+      });
+    }
+    return t('settingsSubscriptionCurrentEstimated', {
+      amount: formatPlanMonthlyPrice(estimate.totalPrice),
+    });
+  }
+
+  function updateHeaderPlanBadge() {
+    const badge = document.getElementById('header-plan-badge');
+    const usageBadge = document.getElementById('header-plan-usage');
+    const profileBadge = document.getElementById('profile-plan-badge');
+    const profileLabel = document.getElementById('profile-plan-label');
+    const plan = normalizeUserPlan(currentUserPlan);
+    const planText = getPlanBadgeText(plan);
+    if (badge) {
+      badge.textContent = planText;
+      badge.dataset.plan = plan;
+      badge.title = `Plan: ${planText}`;
+    }
+    if (profileBadge) {
+      profileBadge.textContent = planText;
+      profileBadge.dataset.plan = plan;
+    }
+    if (profileLabel) profileLabel.textContent = planText;
+    if (usageBadge) {
+      if (plan === 'free') {
+        const limit = getCustomerLimitByPlan(plan);
+        const used = Array.isArray(customers) ? customers.length : 0;
+        const remaining = Math.max(0, (Number.isFinite(limit) ? limit : 0) - used);
+        usageBadge.textContent = t('planRemainingCount', { count: String(remaining) });
+        usageBadge.style.display = 'inline-flex';
+      } else {
+        usageBadge.style.display = 'none';
+        usageBadge.textContent = '';
+      }
+    }
+  }
+
+  function syncPlanFromStorage() {
+    const candidate = getCloudValue(USER_PLAN_KEY, getCloudValue('plan', getLocalValue(USER_PLAN_KEY, 'free')));
+    setCurrentUserPlan(candidate, { persistCloud: false });
+  }
+
+  function setCurrentUserPlan(plan, options = {}) {
+    const { persistCloud = false } = options;
+    currentUserPlan = normalizeUserPlan(plan);
+    saveLocalValue(USER_PLAN_KEY, currentUserPlan);
+    // Future Stripe integration can call this function with persistCloud=true
+    // after a successful checkout/webhook verification.
+    if (persistCloud && window.FirebaseService?.setUserPlan) {
+      window.FirebaseService.setUserPlan(currentUserPlan).catch((err) => {
+        console.warn('Failed to persist user plan', err);
+      });
+    }
+    updateHeaderPlanBadge();
+    updateTeamManagementTabAvailability();
+    refreshLanguageOptionAvailability();
+    if (!canUseLanguageByPlan(currentLang, currentUserPlan)) {
+      updateLanguage('ja');
+    }
+  }
+
+  function refreshLanguageOptionAvailability() {
+    const languageSelects = getLanguageSelectElements();
+    if (languageSelects.length === 0) return;
+    languageSelects.forEach((languageSelect) => {
+      Array.from(languageSelect.options).forEach((option) => {
+        const allowed = canUseLanguageByPlan(option.value, currentUserPlan);
+        option.disabled = !allowed;
+        option.dataset.planLocked = allowed ? 'false' : 'true';
+      });
+      languageSelect.title = hasPaidPlanAccess(currentUserPlan)
+        ? ''
+        : (t('planFeatureLanguageLocked') || '');
+    });
+  }
+
   function refreshUiAfterLanguageChange() {
     renderTable();
     renderWorkflowStatusLegend();
@@ -480,10 +954,14 @@
     updateGraphToggleButtonLabel();
     updateHeroStatsToggleButtonLabel();
     renderSettings();
+    updateTeamManagementTabAvailability();
     syncDynamicItemRowsWithSettings();
   }
 
   function updateLanguage(lang) {
+    if (!canUseLanguageByPlan(lang, currentUserPlan)) {
+      lang = canUseLanguageByPlan(currentLang, currentUserPlan) ? currentLang : 'ja';
+    }
     if (!window.LOCALE || !window.LOCALE[lang]) {
       console.warn(`Unsupported language "${lang}". Falling back to Japanese.`);
       lang = 'ja';
@@ -530,13 +1008,20 @@
       }
     });
 
+    // Update alt attributes
+    document.querySelectorAll('[data-i18n-alt]').forEach(el => {
+      const key = el.getAttribute('data-i18n-alt');
+      if (key) {
+        el.setAttribute('alt', t(key));
+      }
+    });
+
     // Update language selector
-    const langSelect = getLanguageSelectElement();
-    if (langSelect) {
+    getLanguageSelectElements().forEach((langSelect) => {
       langSelect.value = lang;
       langSelect.disabled = false;
       langSelect.title = '';
-    }
+    });
     const themeBtn = document.getElementById('btn-theme');
     if (themeBtn) {
       const themeTitle = currentTheme === 'dark' ? t('themeSwitchToLight') : t('themeSwitchToDark');
@@ -551,7 +1036,12 @@
     if (customerTable) customerTable.style.tableLayout = 'auto';
     const customerTableWrapper = document.getElementById('table-wrapper');
     if (customerTableWrapper) customerTableWrapper.style.overflowX = 'auto';
+    if (legalModalOverlay?.classList.contains('active')) {
+      setLegalRegion(getDefaultLegalRegionForLanguage(currentLang), { rerender: false });
+      renderLegalModal(activeLegalDocType);
+    }
 
+    refreshLanguageOptionAvailability();
     refreshUiAfterLanguageChange();
   }
   window.updateLanguage = updateLanguage;
@@ -568,13 +1058,23 @@
     if (State.getRaw(EXPENSES_KEY, null) === null) State.setJSON(EXPENSES_KEY, []);
     if (State.getRaw(PLAN_MASTER_KEY, null) === null) State.setJSON(PLAN_MASTER_KEY, []);
     if (State.getRaw(OPTIONS_KEY, null) === null) State.setJSON(OPTIONS_KEY, DEFAULT_OPTIONS);
+    if (State.getRaw(USER_PLAN_KEY, null) === null) State.setJSON(USER_PLAN_KEY, 'free');
+    if (State.getRaw(USER_BILLING_PROFILE_KEY, null) === null) State.setJSON(USER_BILLING_PROFILE_KEY, {});
+    if (State.getRaw(STUDIO_NAME_KEY, null) === null) State.setJSON(STUDIO_NAME_KEY, '');
   }
 
   // ===== Storage Helpers =====
   function loadCustomers() {
     const loaded = getCloudValue(STORAGE_KEY, []);
     const records = Array.isArray(loaded) ? loaded : [];
-    return withCurrentUserId(records).map((record) => {
+    const currentUid = String(window.FirebaseService?.getCurrentUser?.()?.uid || '').trim();
+    const scopedRecords = currentUid
+      ? records.filter((record) => {
+        const ownerUid = String(record?.userId || '').trim();
+        return !ownerUid || ownerUid === currentUid;
+      })
+      : records;
+    return withCurrentUserId(scopedRecords).map((record) => {
       const normalizedExtraChargeItems = normalizeExtraChargeItems(record?.extraChargeItems);
       const fallbackExpense = toSafeNumber(record?.planCost, toSafeNumber(record?.planDetails?.planCost, 0))
         + normalizedExtraChargeItems.reduce((sum, item) => sum + toSafeNumber(item?.cost, 0), 0);
@@ -595,7 +1095,7 @@
     return records.map((record) => ({ ...record, userId: uid }));
   }
 
-  function saveCustomers(data) {
+  function saveCustomers(data, options = {}) {
     const records = Array.isArray(data) ? data : [];
     const normalized = records.map((record) => {
       const normalizedExtraChargeItems = normalizeExtraChargeItems(record?.extraChargeItems);
@@ -611,7 +1111,7 @@
         hairMakeupPrice: toSafeNumber(record?.hairMakeupPrice, 0),
       };
     });
-    saveCloudValue(STORAGE_KEY, withCurrentUserId(normalized));
+    return saveCloudValue(STORAGE_KEY, withCurrentUserId(normalized), options);
   }
 
   function loadOptions() {
@@ -963,6 +1463,9 @@
     formFieldVisibilityConfig = loadFormFieldVisibilityConfig();
     googleCalendarAutoSyncEnabled = loadGoogleCalendarAutoSyncEnabled();
     googleCalendarSelectedId = loadGoogleCalendarSelectedId();
+    currentStudioName = normalizeStudioName(getCloudValue(STUDIO_NAME_KEY, getLocalValue(STUDIO_NAME_KEY, '')));
+    syncPlanFromStorage();
+    updateHeaderBrandWordmark();
   }
 
   // ===== DOM =====
@@ -971,7 +1474,16 @@
   const tbody = $('#customer-tbody');
   const searchInput = $('#search-input');
   const filterPayment = $('#filter-payment');
+  const filterPhotographer = $('#filter-photographer');
   const filterMonth = $('#filter-month');
+  const mobileFilterToggleButton = $('#btn-mobile-filters');
+  const mobileFilterSheetOverlay = $('#mobile-filter-sheet-overlay');
+  const mobileFilterSheet = $('#mobile-filter-sheet');
+  const mobileFilterPayment = $('#mobile-filter-payment');
+  const mobileFilterPhotographer = $('#mobile-filter-photographer');
+  const mobileFilterMonth = $('#mobile-filter-month');
+  const mobileSortQuickList = $('#mobile-sort-quick-list');
+  const mobileFilterCloseButton = $('#btn-mobile-filter-close');
   const dashboardMonthPicker = $('#dashboard-month-picker');
   const dashboardPrevMonth = $('#dashboard-prev-month');
   const dashboardNextMonth = $('#dashboard-next-month');
@@ -990,13 +1502,27 @@
   const mobileHeaderMenuButton = document.getElementById('btn-mobile-header-menu');
   const cloudSyncIndicator = document.getElementById('cloud-sync-indicator');
   const cloudSyncLabel = document.getElementById('cloud-sync-label');
-  const headerUserBadge = document.getElementById('header-user-badge');
-  const headerUserAvatar = document.getElementById('header-user-avatar');
-  const headerUserName = document.getElementById('header-user-name');
+  const tomorrowReminderCard = document.getElementById('tomorrow-reminder-card');
+  const tomorrowReminderTitle = document.getElementById('tomorrow-reminder-title');
+  const tomorrowReminderList = document.getElementById('tomorrow-reminder-list');
+  const legalModalOverlay = document.getElementById('legal-modal-overlay');
+  const legalModalTitle = document.getElementById('legal-modal-title');
+  const legalModalContent = document.getElementById('legal-modal-content');
+  const legalModalCloseButton = document.getElementById('btn-legal-modal-close');
+  const legalModalCloseFooterButton = document.getElementById('btn-legal-modal-close-footer');
+  const contactModalOverlay = document.getElementById('contact-modal-overlay');
+  const contactModalCloseButton = document.getElementById('btn-contact-modal-close');
+  const contactModalCloseFooterButton = document.getElementById('btn-contact-modal-close-footer');
+  const contactModalSubmitButton = document.getElementById('btn-contact-submit');
+  const legalRegionTabs = Array.from(document.querySelectorAll('[data-legal-region]'));
+  const legalRegionGlobalTab = document.getElementById('legal-region-tab-global');
+  const legalRegionJapanTab = document.getElementById('legal-region-tab-japan');
+  const legalRegionEuTab = document.getElementById('legal-region-tab-eu');
   const listView = $('#list-view');
   const calendarView = $('#calendar-view');
   const calendarFilterInputs = $$('.calendar-filter-input');
   const eventBindingRegistry = new WeakMap();
+  let isMobileFilterSheetOpen = false;
 
   function bindEventOnce(element, eventName, handler, bindingKey = null, options = undefined) {
     if (!element || typeof handler !== 'function') return;
@@ -1022,6 +1548,262 @@
       return fallback;
     }
   }
+
+  let activeLegalDocType = 'terms';
+  let activeLegalRegion = 'global';
+
+  function normalizeLegalDocType(type) {
+    return String(type || '').trim().toLowerCase() === 'privacy' ? 'privacy' : 'terms';
+  }
+
+  function normalizeLegalRegion(region) {
+    const value = String(region || '').trim().toLowerCase();
+    if (value === 'japan') return 'japan';
+    if (value === 'eu') return 'eu';
+    return 'global';
+  }
+
+  function getDefaultLegalRegionForLanguage(lang = currentLang) {
+    const normalizedLang = String(lang || '').trim().toLowerCase();
+    if (normalizedLang === 'ja') return 'japan';
+    if (normalizedLang === 'fr') return 'eu';
+    return 'global';
+  }
+
+  function getLegalDocTranslationKeys(type, region) {
+    const normalizedType = normalizeLegalDocType(type);
+    const normalizedRegion = normalizeLegalRegion(region);
+    const suffixMap = {
+      global: 'Global',
+      japan: 'Japan',
+      eu: 'Eu',
+    };
+    const suffix = suffixMap[normalizedRegion] || suffixMap.global;
+    if (normalizedType === 'privacy') {
+      return { titleKey: 'privacyModalTitle', contentKey: `privacyLegal${suffix}Content` };
+    }
+    return { titleKey: 'termsModalTitle', contentKey: `termsLegal${suffix}Content` };
+  }
+
+  function getLegalLocaleTextOrFallback(key, fallback = '') {
+    const currentLocale = window.LOCALE?.[currentLang];
+    if (currentLocale && typeof currentLocale[key] === 'string' && currentLocale[key]) return currentLocale[key];
+    const englishLocale = window.LOCALE?.en;
+    if (englishLocale && typeof englishLocale[key] === 'string' && englishLocale[key]) return englishLocale[key];
+    const japaneseLocale = window.LOCALE?.ja;
+    if (japaneseLocale && typeof japaneseLocale[key] === 'string' && japaneseLocale[key]) return japaneseLocale[key];
+    return fallback;
+  }
+
+  function interpolateLegalTemplate(template, params = {}) {
+    let resolved = String(template || '');
+    Object.entries(params).forEach(([key, value]) => {
+      resolved = resolved.split(`{${key}}`).join(String(value ?? ''));
+    });
+    return resolved;
+  }
+
+  function updateLegalRegionSwitchLabels() {
+    if (legalRegionGlobalTab) legalRegionGlobalTab.textContent = getLegalLocaleTextOrFallback('legalRegionGlobalLabel', 'Global');
+    if (legalRegionJapanTab) legalRegionJapanTab.textContent = getLegalLocaleTextOrFallback('legalRegionJapanLabel', 'Japan');
+    if (legalRegionEuTab) legalRegionEuTab.textContent = getLegalLocaleTextOrFallback('legalRegionEuLabel', 'EU');
+  }
+
+  function updateLegalRegionTabsState(region = activeLegalRegion) {
+    const normalizedRegion = normalizeLegalRegion(region);
+    legalRegionTabs.forEach((button) => {
+      const isActive = normalizeLegalRegion(button?.dataset?.legalRegion) === normalizedRegion;
+      button.classList.toggle('active', isActive);
+      button.setAttribute('aria-selected', isActive ? 'true' : 'false');
+    });
+    activeLegalRegion = normalizedRegion;
+  }
+
+  function buildLegalModalBodyHtml(contentText) {
+    const lines = String(contentText || '').split(/\r?\n/);
+    const html = [];
+    let listItems = [];
+
+    const flushList = () => {
+      if (!listItems.length) return;
+      html.push(`<ul>${listItems.join('')}</ul>`);
+      listItems = [];
+    };
+
+    lines.forEach((rawLine) => {
+      const line = String(rawLine || '').trim();
+      if (!line) {
+        flushList();
+        return;
+      }
+      if (line.startsWith('## ')) {
+        flushList();
+        html.push(`<h4 class="legal-doc-heading">${escapeHtml(line.slice(3).trim())}</h4>`);
+        return;
+      }
+      if (line.startsWith('- ')) {
+        listItems.push(`<li>${escapeHtml(line.slice(2).trim())}</li>`);
+        return;
+      }
+      flushList();
+      html.push(`<p>${escapeHtml(line).replace(/\n/g, '<br>')}</p>`);
+    });
+
+    flushList();
+    return html.join('');
+  }
+
+  function setLegalRegion(region = 'global', options = {}) {
+    const { rerender = true } = options;
+    updateLegalRegionTabsState(region);
+    if (rerender && legalModalOverlay?.classList.contains('active')) {
+      renderLegalModal(activeLegalDocType);
+    }
+  }
+
+  function renderLegalModal(type = activeLegalDocType) {
+    if (!legalModalTitle || !legalModalContent) return;
+    const normalizedType = normalizeLegalDocType(type);
+    const normalizedRegion = normalizeLegalRegion(activeLegalRegion);
+    activeLegalDocType = normalizedType;
+    const { titleKey, contentKey } = getLegalDocTranslationKeys(normalizedType, normalizedRegion);
+    const legalContactEmail = getLegalLocaleTextOrFallback('legalContactEmail', '')
+      || window.LOCALE?.ja?.legalContactEmail
+      || '';
+    const legalServiceName = getLegalLocaleTextOrFallback('legalServiceName', '本サービス');
+    const defaultTitle = normalizedType === 'privacy' ? 'Privacy Policy' : 'Terms of Service';
+    const fallbackContentKey = normalizedType === 'privacy' ? 'privacyModalContent' : 'termsModalContent';
+    const rawContent = getLegalLocaleTextOrFallback(contentKey, getLegalLocaleTextOrFallback(fallbackContentKey, ''));
+
+    updateLegalRegionSwitchLabels();
+    updateLegalRegionTabsState(normalizedRegion);
+    legalModalTitle.textContent = getLegalLocaleTextOrFallback(titleKey, defaultTitle);
+    legalModalContent.innerHTML = buildLegalModalBodyHtml(
+      interpolateLegalTemplate(rawContent, {
+        contactEmail: legalContactEmail,
+        brandName: legalServiceName,
+      })
+    );
+  }
+
+  function openLegalModal(type = 'terms') {
+    if (!legalModalOverlay) return;
+    setLegalRegion(getDefaultLegalRegionForLanguage(currentLang), { rerender: false });
+    renderLegalModal(type);
+    legalModalOverlay.style.display = 'flex';
+    window.requestAnimationFrame(() => {
+      legalModalOverlay.classList.add('active');
+    });
+  }
+
+  function closeLegalModal() {
+    if (!legalModalOverlay) return;
+    legalModalOverlay.classList.remove('active');
+    window.setTimeout(() => {
+      if (!legalModalOverlay.classList.contains('active')) {
+        legalModalOverlay.style.display = 'none';
+      }
+    }, 220);
+  }
+
+  function handleLegalDocLinkClick(event) {
+    event.preventDefault();
+    const docType = event?.currentTarget?.dataset?.legalDoc || 'terms';
+    openLegalModal(docType);
+  }
+
+  function handleLegalRegionTabClick(event) {
+    event.preventDefault();
+    const region = event?.currentTarget?.dataset?.legalRegion || 'global';
+    setLegalRegion(region);
+  }
+
+  function resetContactModalForm() {
+    const nameInput = document.getElementById('contact-form-name');
+    const emailInput = document.getElementById('contact-form-email');
+    const messageInput = document.getElementById('contact-form-message');
+    if (nameInput) nameInput.value = '';
+    if (emailInput) emailInput.value = '';
+    if (messageInput) messageInput.value = '';
+  }
+
+  function openContactModal() {
+    if (!contactModalOverlay) return;
+    contactModalOverlay.style.display = 'flex';
+    window.requestAnimationFrame(() => {
+      contactModalOverlay.classList.add('active');
+    });
+  }
+
+  function closeContactModal() {
+    if (!contactModalOverlay) return;
+    contactModalOverlay.classList.remove('active');
+    window.setTimeout(() => {
+      if (!contactModalOverlay.classList.contains('active')) {
+        contactModalOverlay.style.display = 'none';
+      }
+    }, 220);
+  }
+
+  async function handleContactSubmit(event) {
+    event?.preventDefault?.();
+    const name = String(document.getElementById('contact-form-name')?.value || '').trim();
+    const email = String(document.getElementById('contact-form-email')?.value || '').trim();
+    const message = String(document.getElementById('contact-form-message')?.value || '').trim();
+
+    if (!message) {
+      showToast(t('contactValidation'), 'error');
+      return;
+    }
+
+    const user = window.FirebaseService?.getCurrentUser?.();
+    if (!user || typeof window.FirebaseService?.saveSupportTicket !== 'function') {
+      showToast(t('contactLoginRequired'), 'error');
+      return;
+    }
+
+    const supportSubject = getLocaleTextOrFallback('contactSubjectDefault', 'General Inquiry');
+    const messageBody = [
+      name ? `${t('contactNameLabel')}: ${name}` : '',
+      email ? `${t('contactEmailLabel')}: ${email}` : '',
+      '',
+      message,
+    ].filter(Boolean).join('\n');
+
+    setActionButtonLoadingState(
+      contactModalSubmitButton,
+      true,
+      getLocaleTextOrFallback('btnSaving', '保存中...')
+    );
+    try {
+      await window.FirebaseService.saveSupportTicket({
+        subject: supportSubject,
+        category: 'question',
+        message: messageBody,
+        notifyTo: getLegalLocaleTextOrFallback('legalContactEmail', 'pholio.support@icloud.com'),
+        language: currentLang,
+        currency: currentCurrency,
+        osInfo: getClientOsInfo(),
+        status: 'pending',
+        ai_draft_reply: '',
+      });
+      resetContactModalForm();
+      closeContactModal();
+      showToast(t('contactSubmitSuccess'));
+    } catch (err) {
+      console.error('Contact ticket submit failed', err);
+      showToast(t('contactSubmitFailed'), 'error');
+    } finally {
+      setActionButtonLoadingState(
+        contactModalSubmitButton,
+        false,
+        getLocaleTextOrFallback('btnSaving', '保存中...')
+      );
+    }
+  }
+
+  window.closeLegalModal = closeLegalModal;
+  window.closeContactModal = closeContactModal;
 
   function applyMinimalSafeModeUI() {
     if (!SAFE_MODE_MINIMAL_BOOT) return;
@@ -1063,7 +1845,10 @@
 
   function activateLocalGuestMode(message = '') {
     isLoggedIn = true;
+    currentAuthUserEmail = '';
+    clearAdminSecurityState('not_admin');
     saveLocalValue(LOCAL_GUEST_MODE_KEY, true);
+    setCurrentUserPlan('free', { persistCloud: false });
     safeRun('localMode.theme', () => applyTheme('dark'));
     safeRun('localMode.language', () => updateLanguage(currentLang || 'ja'));
     safeRun('localMode.renderTable', () => renderTable());
@@ -1074,9 +1859,11 @@
     setAuthScreenState('loggedIn', { displayName: 'Guest (Local Mode)' });
     const authStatus = document.getElementById('auth-status');
     const loginBtn = document.getElementById('btn-google-login');
+    const loginScreenBtn = document.getElementById('btn-google-login-screen');
     const logoutBtn = document.getElementById('btn-logout');
     if (authStatus) authStatus.textContent = message || t('localGuestModeDefault');
     if (loginBtn) loginBtn.style.display = '';
+    if (loginScreenBtn) loginScreenBtn.style.display = '';
     if (logoutBtn) logoutBtn.style.display = 'none';
     setCloudSyncIndicator('local');
     updateHeaderAuthUi({ displayName: 'Guest (Local Mode)' });
@@ -1091,6 +1878,7 @@
     { key: 'shootingDate', labelKey: 'thShootingDate', type: 'date' },
     { key: 'customerName', labelKey: 'thCustomerName', type: 'text' },
     { key: 'contact', labelKey: 'thContact', type: 'text' },
+    { key: 'leadSource', labelKey: 'labelLeadSource', type: 'select' },
     { key: 'meetingDate', labelKey: 'thMeetingDate', type: 'date' },
     { key: 'workflowStatus', labelKey: 'labelWorkflowStatus', type: 'select' },
     { key: 'plan', labelKey: 'thPlan', type: 'select' },
@@ -1358,10 +2146,20 @@
     const d = new Date(val);
     return `${d.getFullYear()}/${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')}`;
   }
+
+  function formatDateTime(val) {
+    if (!val) return '—';
+    const d = new Date(val);
+    if (Number.isNaN(d.getTime())) return '—';
+    return `${d.getFullYear()}/${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+  }
   const CURRENCY_CONFIG = {
     USD: { symbol: '$', locale: 'en-US' },
     JPY: { symbol: '¥', locale: 'ja-JP' },
-    EUR: { symbol: '€', locale: 'de-DE' },
+    EUR: { symbol: '€', locale: 'fr-FR' },
+    KRW: { symbol: '₩', locale: 'ko-KR' },
+    CNY: { symbol: '¥', locale: 'zh-CN' },
+    TWD: { symbol: 'NT$', locale: 'zh-TW' },
   };
 
   let currentCurrency = getCloudValue(CURRENCY_KEY, getLocalValue(CURRENCY_KEY, 'USD'));
@@ -2258,12 +3056,17 @@
     currentCurrency = currency;
     saveLocalValue(CURRENCY_KEY, currency);
     saveCloudValue(CURRENCY_KEY, currency);
-    const sel = document.getElementById('currency-select');
-    if (sel) sel.value = currency;
+    getHeaderCurrencySelectElements().forEach((sel) => {
+      sel.value = currency;
+    });
 
     renderTable();
     updateDashboard();
     renderExpenses();
+    if (settingsOverlay?.classList.contains('active')) {
+      renderSettings();
+      renderPlanManagementSection();
+    }
     if (editingId) openDetail(editingId);
   }
 
@@ -2279,7 +3082,7 @@
   // ===== Financial Helpers =====
   function getTaxSettings() {
     const defaults = {
-      enabled: false,
+      enabled: true,
       rate: 10,
       label: 'Tax',
       included: false,
@@ -2290,6 +3093,10 @@
       bank: '',
       invoiceTemplate: 'modern',
       invoiceFooterMessage: getDefaultInvoiceMessage(),
+      invoiceLogoDataUrl: '',
+      invoiceStampDataUrl: '',
+      invoiceRegionCode: '',
+      legalFieldValues: {},
     };
 
     return { ...defaults, ...(getCloudValue(TAX_SETTINGS_KEY, {}) || {}) };
@@ -2314,6 +3121,38 @@
     });
   }
 
+  function getBillingProfileDefaults() {
+    return {
+      fullName: '',
+      address: '',
+      siretNumber: '',
+      invoiceRegistrationNumber: '',
+      email: '',
+    };
+  }
+
+  function getBillingProfile() {
+    const defaults = getBillingProfileDefaults();
+    const saved = getCloudValue(USER_BILLING_PROFILE_KEY, {});
+    if (!saved || typeof saved !== 'object') return defaults;
+    return { ...defaults, ...saved };
+  }
+
+  function saveBillingProfile(profile) {
+    const defaults = getBillingProfileDefaults();
+    const sanitized = {
+      ...defaults,
+      ...(profile && typeof profile === 'object' ? profile : {}),
+    };
+    saveCloudValue(USER_BILLING_PROFILE_KEY, {
+      fullName: String(sanitized.fullName || '').trim(),
+      address: String(sanitized.address || '').trim(),
+      siretNumber: String(sanitized.siretNumber || '').trim(),
+      invoiceRegistrationNumber: String(sanitized.invoiceRegistrationNumber || '').trim(),
+      email: String(sanitized.email || '').trim(),
+    });
+  }
+
   function buildExportSnapshot(backupType = 'manual') {
     return {
       customers,
@@ -2332,6 +3171,8 @@
       expenses: getExpenses(),
       taxSettings: getTaxSettings(),
       invoiceSenderProfile: getInvoiceSenderProfile(),
+      billingProfile: getBillingProfile(),
+      studioName: currentStudioName,
       theme: currentTheme,
       language: currentLang,
       currency: currentCurrency,
@@ -2877,6 +3718,153 @@
     return window.matchMedia('(max-width: 768px)').matches;
   }
 
+  function copySelectOptions(sourceSelect, targetSelect) {
+    if (!sourceSelect || !targetSelect) return;
+    const previousValue = targetSelect.value;
+    targetSelect.innerHTML = '';
+    Array.from(sourceSelect.options || []).forEach((option) => {
+      const next = document.createElement('option');
+      next.value = option.value;
+      next.textContent = option.textContent;
+      targetSelect.appendChild(next);
+    });
+    if (Array.from(targetSelect.options).some((option) => option.value === previousValue)) {
+      targetSelect.value = previousValue;
+    } else if (Array.from(targetSelect.options).some((option) => option.value === sourceSelect.value)) {
+      targetSelect.value = sourceSelect.value;
+    }
+  }
+
+  function syncMobileFilterSheetFromToolbar() {
+    copySelectOptions(filterPayment, mobileFilterPayment);
+    copySelectOptions(filterPhotographer, mobileFilterPhotographer);
+    copySelectOptions(filterMonth, mobileFilterMonth);
+    if (!MOBILE_SORT_OPTIONS.some((option) => option.key === currentSort.key)) {
+      currentSort = { key: 'shootingDate', dir: 'desc' };
+    }
+    if (currentSort.dir !== 'asc' && currentSort.dir !== 'desc') {
+      currentSort.dir = 'desc';
+    }
+    renderMobileSortQuickList();
+  }
+
+  function applyMobileFilterSheetSelection() {
+    if (filterPayment && mobileFilterPayment) {
+      filterPayment.value = mobileFilterPayment.value;
+    }
+    if (filterPhotographer && mobileFilterPhotographer) {
+      filterPhotographer.value = mobileFilterPhotographer.value;
+    }
+    if (filterMonth && mobileFilterMonth) {
+      filterMonth.value = mobileFilterMonth.value;
+    }
+    renderTable();
+  }
+
+  function getMobileSortOptionLabel(option) {
+    if (!option) return '';
+    const translated = t(option.labelKey);
+    return translated && translated !== option.labelKey ? translated : option.fallbackLabel;
+  }
+
+  function renderMobileSortQuickList() {
+    if (!mobileSortQuickList) return;
+    const ascLabel = t('mobileSortAsc');
+    const descLabel = t('mobileSortDesc');
+    const rows = MOBILE_SORT_OPTIONS.map((option) => {
+      const label = escapeHtml(getMobileSortOptionLabel(option));
+      const ascActive = currentSort.key === option.key && currentSort.dir === 'asc';
+      const descActive = currentSort.key === option.key && currentSort.dir === 'desc';
+      return `
+        <div class="mobile-sort-row">
+          <span class="mobile-sort-row-label" title="${label}">${label}</span>
+          <div class="mobile-sort-arrows" role="group" aria-label="${label}">
+            <button type="button" class="mobile-sort-arrow-btn ${ascActive ? 'active' : ''}"
+              data-mobile-sort-key="${option.key}" data-mobile-sort-dir="asc"
+              title="${escapeHtml(ascLabel)}" aria-label="${escapeHtml(ascLabel)}">▲</button>
+            <button type="button" class="mobile-sort-arrow-btn ${descActive ? 'active' : ''}"
+              data-mobile-sort-key="${option.key}" data-mobile-sort-dir="desc"
+              title="${escapeHtml(descLabel)}" aria-label="${escapeHtml(descLabel)}">▼</button>
+          </div>
+        </div>
+      `;
+    }).join('');
+    mobileSortQuickList.innerHTML = rows;
+  }
+
+  function setMobileFilterSheetOpen(isOpen) {
+    if (!mobileFilterSheetOverlay || !mobileFilterSheet || !mobileFilterToggleButton) return;
+
+    if (!isMobileViewport()) {
+      isMobileFilterSheetOpen = false;
+      mobileFilterSheetOverlay.classList.remove('active');
+      mobileFilterSheetOverlay.style.display = 'none';
+      mobileFilterSheetOverlay.setAttribute('aria-hidden', 'true');
+      mobileFilterToggleButton.setAttribute('aria-expanded', 'false');
+      return;
+    }
+
+    isMobileFilterSheetOpen = !!isOpen;
+    if (isMobileFilterSheetOpen) {
+      syncMobileFilterSheetFromToolbar();
+      setMobileHeaderMenuOpen(false);
+      mobileFilterSheetOverlay.style.display = 'flex';
+      requestAnimationFrame(() => {
+        mobileFilterSheetOverlay.classList.add('active');
+      });
+      mobileFilterSheetOverlay.setAttribute('aria-hidden', 'false');
+      mobileFilterToggleButton.setAttribute('aria-expanded', 'true');
+      return;
+    }
+
+    mobileFilterSheetOverlay.classList.remove('active');
+    mobileFilterSheetOverlay.setAttribute('aria-hidden', 'true');
+    mobileFilterToggleButton.setAttribute('aria-expanded', 'false');
+    window.setTimeout(() => {
+      if (!isMobileFilterSheetOpen) mobileFilterSheetOverlay.style.display = 'none';
+    }, 220);
+  }
+
+  function handleMobileFilterToggleClick(event) {
+    if (!isMobileViewport()) return;
+    event?.preventDefault?.();
+    event?.stopPropagation?.();
+    setMobileFilterSheetOpen(!isMobileFilterSheetOpen);
+  }
+
+  function handleMobileFilterSheetOverlayClick(event) {
+    if (!isMobileFilterSheetOpen) return;
+    if (event.target === mobileFilterSheetOverlay) {
+      setMobileFilterSheetOpen(false);
+    }
+  }
+
+  function handleMobileFilterSheetEscape(event) {
+    if (event.key === 'Escape' && isMobileFilterSheetOpen) {
+      setMobileFilterSheetOpen(false);
+    }
+  }
+
+  function handleMobileFilterSheetControlChange() {
+    applyMobileFilterSheetSelection();
+  }
+
+  function handleMobileSortQuickClick(event) {
+    const trigger = event?.target?.closest?.('button[data-mobile-sort-key][data-mobile-sort-dir]');
+    if (!trigger) return;
+    const sortKey = trigger.dataset.mobileSortKey || 'shootingDate';
+    const sortDir = trigger.dataset.mobileSortDir === 'asc' ? 'asc' : 'desc';
+    currentSort = { key: sortKey, dir: sortDir };
+    renderMobileSortQuickList();
+    renderTable();
+  }
+
+  function handleMobileFilterSheetViewportChange() {
+    if (!isMobileViewport()) {
+      setMobileFilterSheetOpen(false);
+    }
+  }
+
   function setMobileHeaderMenuOpen(isOpen) {
     if (!appHeader || !mobileHeaderMenuButton || !headerActions) return;
     if (!isMobileViewport()) {
@@ -2894,6 +3882,7 @@
     if (!isMobileViewport()) return;
     event?.preventDefault?.();
     event?.stopPropagation?.();
+    setMobileFilterSheetOpen(false);
     setMobileHeaderMenuOpen(!isMobileHeaderMenuOpen);
   }
 
@@ -2921,6 +3910,7 @@
     if (!isMobileViewport()) {
       setMobileHeaderMenuOpen(false);
     }
+    handleMobileFilterSheetViewportChange();
   }
 
   window.toggleDashboardCardVisibility = updateDashboardCardVisibility;
@@ -2961,7 +3951,7 @@
 
     // Populate Photographers
     const pSel = $('#form-assignedTo');
-    const fSel = $('#filter-photographer');
+    const fSel = filterPhotographer;
     if (pSel && fSel) {
       const curP = pSel.value;
       const curF = fSel.value;
@@ -2971,6 +3961,10 @@
       fSel.innerHTML = `<option value="all">${t('filterPhotographer')}</option>` + options;
       pSel.value = curP;
       fSel.value = curF;
+    }
+
+    if (isMobileFilterSheetOpen) {
+      syncMobileFilterSheetFromToolbar();
     }
   }
 
@@ -3440,6 +4434,9 @@
       filterMonth.appendChild(opt);
     });
     if (sorted.includes(current)) filterMonth.value = current;
+    if (isMobileFilterSheetOpen) {
+      syncMobileFilterSheetFromToolbar();
+    }
   }
 
   // ===== Filter & Sort =====
@@ -3458,7 +4455,7 @@
     const mf = filterMonth?.value || 'all';
     if (mf !== 'all') list = list.filter(c => c.shootingDate && c.shootingDate.startsWith(mf));
 
-    const pf_staff = $('#filter-photographer')?.value || 'all';
+    const pf_staff = filterPhotographer?.value || 'all';
     if (pf_staff !== 'all') list = list.filter(c => c.assignedTo === pf_staff);
 
     const { key, dir } = currentSort;
@@ -3558,6 +4555,7 @@
       if (workflowLegend) workflowLegend.style.display = 'none';
       emptyState.style.display = 'block';
       $('.toolbar').style.display = 'none';
+      setMobileFilterSheetOpen(false);
     } else {
       tableWrapper.style.display = '';
       if (customerCardGrid) customerCardGrid.style.display = '';
@@ -3695,7 +4693,10 @@
     });
 
     updateDashboard();
+    renderTomorrowReminderCard();
     updateMonthFilter();
+    updateHeaderPlanBadge();
+    if (isMobileFilterSheetOpen) renderMobileSortQuickList();
   }
 
   function bindSortEventListeners() {
@@ -3872,7 +4873,7 @@
     bindEventOnce(searchInput, 'input', renderTable, 'toolbar-search-input');
     bindEventOnce(filterPayment, 'change', renderTable, 'toolbar-filter-payment');
     bindEventOnce(filterMonth, 'change', renderTable, 'toolbar-filter-month');
-    bindEventOnce($('#filter-photographer'), 'change', renderTable, 'toolbar-filter-photographer');
+    bindEventOnce(filterPhotographer, 'change', renderTable, 'toolbar-filter-photographer');
   }
 
   function shouldSyncGoogleCalendarEvent(previousCustomer, nextCustomer) {
@@ -3916,6 +4917,82 @@
     if (Number.isNaN(startDate.getTime())) return null;
     const endDate = new Date(startDate.getTime() + (60 * 60 * 1000));
     return { startDate, endDate };
+  }
+
+  function parseBookingSlot(rawDateTimeValue) {
+    const range = resolveShootingEventDateRange(rawDateTimeValue);
+    if (!range) return null;
+
+    const dateKey = `${range.startDate.getFullYear()}-${String(range.startDate.getMonth() + 1).padStart(2, '0')}-${String(range.startDate.getDate()).padStart(2, '0')}`;
+    const startMinutes = (range.startDate.getHours() * 60) + range.startDate.getMinutes();
+    const endMinutes = (range.endDate.getHours() * 60) + range.endDate.getMinutes();
+    const startLabel = `${String(range.startDate.getHours()).padStart(2, '0')}:${String(range.startDate.getMinutes()).padStart(2, '0')}`;
+    const endLabel = `${String(range.endDate.getHours()).padStart(2, '0')}:${String(range.endDate.getMinutes()).padStart(2, '0')}`;
+
+    return {
+      dateKey,
+      startMinutes,
+      endMinutes,
+      startLabel,
+      endLabel,
+    };
+  }
+
+  function isBookingSlotOverlapped(sourceSlot, targetSlot) {
+    if (!sourceSlot || !targetSlot) return false;
+    if (sourceSlot.dateKey !== targetSlot.dateKey) return false;
+    return sourceSlot.startMinutes < targetSlot.endMinutes
+      && targetSlot.startMinutes < sourceSlot.endMinutes;
+  }
+
+  function findDoubleBookingConflict(candidateShootingDate, ignoreCustomerId = '') {
+    const candidateSlot = parseBookingSlot(candidateShootingDate);
+    if (!candidateSlot) return null;
+
+    for (const customer of customers) {
+      if (!customer) continue;
+      if (ignoreCustomerId && customer.id === ignoreCustomerId) continue;
+      const targetSlot = parseBookingSlot(customer.shootingDate);
+      if (!targetSlot) continue;
+      if (isBookingSlotOverlapped(candidateSlot, targetSlot)) {
+        return { customer, slot: targetSlot };
+      }
+    }
+    return null;
+  }
+
+  function getTomorrowDateKey() {
+    const date = new Date();
+    date.setDate(date.getDate() + 1);
+    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+  }
+
+  function renderTomorrowReminderCard() {
+    if (!tomorrowReminderCard || !tomorrowReminderTitle || !tomorrowReminderList) return;
+
+    const tomorrowKey = getTomorrowDateKey();
+    const tomorrowBookings = customers
+      .map((customer) => ({ customer, slot: parseBookingSlot(customer?.shootingDate) }))
+      .filter((entry) => entry.slot && entry.slot.dateKey === tomorrowKey)
+      .sort((a, b) => a.slot.startMinutes - b.slot.startMinutes);
+
+    if (tomorrowBookings.length === 0) {
+      tomorrowReminderCard.style.display = 'none';
+      tomorrowReminderTitle.textContent = '';
+      tomorrowReminderList.innerHTML = '';
+      return;
+    }
+
+    tomorrowReminderTitle.textContent = t('reminderTomorrowTitle', { count: String(tomorrowBookings.length) });
+    tomorrowReminderList.innerHTML = tomorrowBookings.map(({ customer, slot }) => {
+      const text = t('reminderTomorrowItem', {
+        customer: String(customer?.customerName || '—'),
+        time: `${slot.startLabel}〜${slot.endLabel}`,
+        location: String(customer?.location || t('icsUnset')),
+      });
+      return `<li>${escapeHtml(text)}</li>`;
+    }).join('');
+    tomorrowReminderCard.style.display = 'block';
   }
 
   function buildGoogleCalendarEventPayload(customer) {
@@ -4125,108 +5202,231 @@
     }, 300);
   };
 
-  window.saveCustomer = function () {
+  function hasCloudAuthenticatedUser() {
+    return !!window.FirebaseService?.getCurrentUser?.()?.uid && getLocalValue(LOCAL_GUEST_MODE_KEY, false) !== true;
+  }
+
+  function cloneCustomerSnapshot(records = customers) {
+    try {
+      if (typeof structuredClone === 'function') return structuredClone(records);
+      return JSON.parse(JSON.stringify(records));
+    } catch {
+      return Array.isArray(records) ? records.map((record) => ({ ...(record || {}) })) : [];
+    }
+  }
+
+  function normalizeOperationErrorCode(err) {
+    return String(err?.code || err?.name || '').trim().toLowerCase();
+  }
+
+  function buildCustomerOperationErrorMessage(operationType, err) {
+    const code = normalizeOperationErrorCode(err);
+    if (code.includes('permission-denied') || code.includes('forbidden')) {
+      return getLocaleTextOrFallback('msgErrorPermissionDenied', '権限がありません。アクセス権をご確認ください。');
+    }
+    if (code.includes('unauthenticated') || code.includes('requires-auth') || code.includes('auth/')) {
+      return getLocaleTextOrFallback('msgErrorAuthRequired', 'ログイン状態を確認してください。再ログイン後にお試しください。');
+    }
+    if (
+      code.includes('network')
+      || code.includes('unavailable')
+      || code.includes('timeout')
+      || code.includes('deadline-exceeded')
+    ) {
+      return getLocaleTextOrFallback('msgErrorNetwork', '通信に失敗しました。ネットワーク接続を確認して再度お試しください。');
+    }
+    if (operationType === 'delete') {
+      return getLocaleTextOrFallback('msgCustomerDeleteFailed', '顧客データの削除に失敗しました。');
+    }
+    return getLocaleTextOrFallback('msgCustomerSaveFailed', '顧客データの保存に失敗しました。');
+  }
+
+  function setActionButtonLoadingState(button, isLoading, loadingText = '') {
+    if (!button) return;
+    if (isLoading) {
+      if (!button.dataset.originalText) {
+        button.dataset.originalText = button.textContent || '';
+      }
+      button.disabled = true;
+      button.classList.add('is-loading');
+      if (loadingText) button.textContent = loadingText;
+      return;
+    }
+    button.disabled = false;
+    button.classList.remove('is-loading');
+    if (button.dataset.originalText) {
+      button.textContent = button.dataset.originalText;
+    }
+  }
+
+  function assertCustomerWriteAccess(record = null) {
+    const currentUid = String(window.FirebaseService?.getCurrentUser?.()?.uid || '').trim();
+    if (!currentUid || !record || typeof record !== 'object') return;
+    const ownerUid = String(record.userId || '').trim();
+    if (ownerUid && ownerUid !== currentUid) {
+      const err = new Error('Cross-user write operation blocked.');
+      err.code = 'permission-denied';
+      throw err;
+    }
+  }
+
+  window.saveCustomer = async function () {
+    const saveButton = document.getElementById('btn-save');
+    if (saveButton?.disabled) return;
     const name = $('#form-customerName').value.trim();
     if (!name) { showToast(t('msgEnterName'), 'error'); return; }
+    const operationType = editingId ? 'update' : 'create';
     const previousCustomer = editingId
       ? (customers.find((entry) => entry.id === editingId) || null)
       : null;
+    const customersSnapshot = cloneCustomerSnapshot(customers);
 
-    const data = {};
-    fields.forEach(f => {
-      const el = $(`#form-${f.key}`);
-      if (!el) return;
-      if (f.type === 'checkbox') data[f.key] = el.checked;
-      else if (f.type === 'number') data[f.key] = el.value ? Number(el.value) : null;
-      else data[f.key] = el.value || '';
-    });
-    if (!isFormFieldVisible('assignedTo') && !String(data.assignedTo || '').trim()) {
-      data.assignedTo = resolveDefaultAssignedToValue();
+    if (editingId) assertCustomerWriteAccess(previousCustomer);
+    setActionButtonLoadingState(
+      saveButton,
+      true,
+      getLocaleTextOrFallback('btnSaving', '保存中...')
+    );
+
+    try {
+      const data = {};
+      fields.forEach(f => {
+        const el = $(`#form-${f.key}`);
+        if (!el) return;
+        if (f.type === 'checkbox') data[f.key] = el.checked;
+        else if (f.type === 'number') data[f.key] = el.value ? Number(el.value) : null;
+        else data[f.key] = el.value || '';
+      });
+      if (!isFormFieldVisible('assignedTo') && !String(data.assignedTo || '').trim()) {
+        data.assignedTo = resolveDefaultAssignedToValue();
+      }
+      data.workflowStatus = normalizeWorkflowStatus(data.workflowStatus);
+
+      const customFields = {};
+      loadCustomFieldDefinitions().forEach(field => {
+        const el = $(`#custom-field-${field.id}`);
+        if (el && el.value.trim()) customFields[field.id] = el.value.trim();
+      });
+      data.customFields = customFields;
+
+      const bookingConflict = findDoubleBookingConflict(data.shootingDate, editingId || '');
+      if (bookingConflict) {
+        const conflictCustomerName = String(bookingConflict.customer?.customerName || '—');
+        const conflictLocation = String(bookingConflict.customer?.location || t('icsUnset'));
+        const conflictTime = `${bookingConflict.slot.startLabel}〜${bookingConflict.slot.endLabel}`;
+        const proceed = window.confirm(t('doubleBookingConfirm', {
+          customer: conflictCustomerName,
+          date: bookingConflict.slot.dateKey,
+          time: conflictTime,
+          location: conflictLocation,
+        }));
+        if (!proceed) return;
+      }
+
+      const planSelect = $('#form-plan');
+      const selectedPlan = findPlanMasterByValue(planSelect?.value || '');
+      if (selectedPlan) {
+        data.planMasterId = selectedPlan.name;
+        data.plan = selectedPlan.name;
+      } else {
+        data.planMasterId = data.plan || '';
+      }
+
+      const planNameInput = $('#form-plan-name');
+      const adjustmentInput = $('#form-price-adjustment');
+      const totalPriceInput = $('#form-total-price');
+      const revenueInput = $('#form-revenue');
+      const expenseInput = $('#form-expense');
+      const planRevenue = getPlanBasePriceValue();
+      const planCost = toSafeNumber(getPlanBaseCostValue(), toSafeNumber(selectedPlan?.cost, 0));
+      const extraChargeItems = collectDynamicChargeItems();
+      rememberDynamicItemDetails(extraChargeItems);
+      const extraChargeBreakdown = extraChargeItems.reduce((sum, item) => {
+        sum.revenue += toSafeNumber(item.revenue, 0);
+        sum.cost += toSafeNumber(item.cost, 0);
+        return sum;
+      }, { revenue: 0, cost: 0 });
+      if (adjustmentInput) adjustmentInput.value = '0';
+      const totalFromBreakdown = planRevenue + extraChargeBreakdown.revenue;
+      const finalRevenue = toSafeNumber(updateGrandTotal(), totalFromBreakdown);
+      const fallbackExpense = planCost + extraChargeBreakdown.cost;
+      const finalExpense = toSafeNumber(expenseInput?.value, fallbackExpense);
+      if (expenseInput) expenseInput.value = String(finalExpense);
+      const finalProfit = finalRevenue - finalExpense;
+      if (totalPriceInput) totalPriceInput.value = String(finalRevenue);
+      if (revenueInput) revenueInput.value = String(finalRevenue);
+      updateProfitDisplay(finalProfit);
+      data.revenue = finalRevenue;
+      data.expense = finalExpense;
+      data.profit = finalProfit;
+      data.planCost = planCost;
+      data.extraChargeItems = extraChargeItems;
+      data.costumePrice = 0;
+      data.hairMakeupPrice = 0;
+      data.costume = '';
+      data.hairMakeup = '';
+
+      const rawPlanDetails = {
+        planName: planNameInput?.value?.trim() || selectedPlan?.name || '',
+        basePrice: planRevenue,
+        planCost,
+        options: '',
+        totalPrice: finalRevenue,
+      };
+      data.planDetails = normalizePlanDetails(rawPlanDetails, data.revenue);
+
+      if (editingId) {
+        const idx = customers.findIndex(c => c.id === editingId);
+        if (idx === -1) {
+          const notFoundError = new Error('Customer not found');
+          notFoundError.code = 'not-found';
+          throw notFoundError;
+        }
+        assertCustomerWriteAccess(customers[idx]);
+        customers[idx] = { ...customers[idx], ...data, updatedAt: new Date().toISOString() };
+      } else {
+        data.id = generateId();
+        data.createdAt = new Date().toISOString();
+        data.updatedAt = data.createdAt;
+        customers.push(data);
+      }
+
+      await saveCustomers(customers, { propagateError: hasCloudAuthenticatedUser() });
+
+      showToast(editingId ? t('msgUpdated') : t('msgCreated'));
+      const savedCustomerId = data.id || editingId;
+      runGoogleCalendarAutoSync(
+        savedCustomerId,
+        previousCustomer ? { ...previousCustomer } : null
+      ).catch((error) => {
+        console.error('Google Calendar sync scheduling failed', error);
+      });
+      closeModal();
+      renderTable();
+      if (calendarView.classList.contains('active')) renderCalendar();
+    } catch (err) {
+      customers = customersSnapshot;
+      saveCustomers(customers).catch(() => {});
+      const normalizedCode = normalizeOperationErrorCode(err);
+      console.error('[Customer Save] failed', {
+        operationType,
+        editingId,
+        code: normalizedCode || 'unknown',
+        message: err?.message || '',
+        error: err,
+      });
+      const userMessage = buildCustomerOperationErrorMessage(operationType, err);
+      showToast(
+        normalizedCode ? `${userMessage} (${normalizedCode})` : userMessage,
+        'error'
+      );
+    } finally {
+      setActionButtonLoadingState(
+        saveButton,
+        false,
+        getLocaleTextOrFallback('btnSaving', '保存中...')
+      );
     }
-    data.workflowStatus = normalizeWorkflowStatus(data.workflowStatus);
-
-    const customFields = {};
-    loadCustomFieldDefinitions().forEach(field => {
-      const el = $(`#custom-field-${field.id}`);
-      if (el && el.value.trim()) customFields[field.id] = el.value.trim();
-    });
-    data.customFields = customFields;
-
-    const planSelect = $('#form-plan');
-    const selectedPlan = findPlanMasterByValue(planSelect?.value || '');
-    if (selectedPlan) {
-      data.planMasterId = selectedPlan.name;
-      data.plan = selectedPlan.name;
-    } else {
-      data.planMasterId = data.plan || '';
-    }
-
-    const planNameInput = $('#form-plan-name');
-    const adjustmentInput = $('#form-price-adjustment');
-    const totalPriceInput = $('#form-total-price');
-    const revenueInput = $('#form-revenue');
-    const expenseInput = $('#form-expense');
-    const planRevenue = getPlanBasePriceValue();
-    const planCost = toSafeNumber(getPlanBaseCostValue(), toSafeNumber(selectedPlan?.cost, 0));
-    const extraChargeItems = collectDynamicChargeItems();
-    rememberDynamicItemDetails(extraChargeItems);
-    const extraChargeBreakdown = extraChargeItems.reduce((sum, item) => {
-      sum.revenue += toSafeNumber(item.revenue, 0);
-      sum.cost += toSafeNumber(item.cost, 0);
-      return sum;
-    }, { revenue: 0, cost: 0 });
-    if (adjustmentInput) adjustmentInput.value = '0';
-    const totalFromBreakdown = planRevenue + extraChargeBreakdown.revenue;
-    const finalRevenue = toSafeNumber(updateGrandTotal(), totalFromBreakdown);
-    const fallbackExpense = planCost + extraChargeBreakdown.cost;
-    const finalExpense = toSafeNumber(expenseInput?.value, fallbackExpense);
-    if (expenseInput) expenseInput.value = String(finalExpense);
-    const finalProfit = finalRevenue - finalExpense;
-    if (totalPriceInput) totalPriceInput.value = String(finalRevenue);
-    if (revenueInput) revenueInput.value = String(finalRevenue);
-    updateProfitDisplay(finalProfit);
-    data.revenue = finalRevenue;
-    data.expense = finalExpense;
-    data.profit = finalProfit;
-    data.planCost = planCost;
-    data.extraChargeItems = extraChargeItems;
-    data.costumePrice = 0;
-    data.hairMakeupPrice = 0;
-    data.costume = '';
-    data.hairMakeup = '';
-
-    const rawPlanDetails = {
-      planName: planNameInput?.value?.trim() || selectedPlan?.name || '',
-      basePrice: planRevenue,
-      planCost,
-      options: '',
-      totalPrice: finalRevenue,
-    };
-    data.planDetails = normalizePlanDetails(rawPlanDetails, data.revenue);
-
-    if (editingId) {
-      const idx = customers.findIndex(c => c.id === editingId);
-      if (idx !== -1) customers[idx] = { ...customers[idx], ...data, updatedAt: new Date().toISOString() };
-      showToast(t('msgUpdated'));
-    } else {
-      data.id = generateId();
-      data.createdAt = new Date().toISOString();
-      data.updatedAt = data.createdAt;
-      customers.push(data);
-      showToast(t('msgCreated'));
-    }
-
-    saveCustomers(customers);
-    const savedCustomerId = data.id || editingId;
-    runGoogleCalendarAutoSync(
-      savedCustomerId,
-      previousCustomer ? { ...previousCustomer } : null
-    ).catch((error) => {
-      console.error('Google Calendar sync scheduling failed', error);
-    });
-    closeModal();
-    renderTable();
-    if (calendarView.classList.contains('active')) renderCalendar();
   };
 
   // ===== Detail Panel =====
@@ -4303,14 +5503,52 @@
   };
   window.closeConfirm = window.closeConfirmModal;
 
-  function handleConfirmDeleteClick() {
+  async function handleConfirmDeleteClick() {
     if (deletingId) {
-      customers = customers.filter(c => c.id !== deletingId);
-      saveCustomers(customers);
-      showToast(t('msgDeleted'));
-      closeConfirmModal();
-      renderTable();
-      if (calendarView.classList.contains('active')) renderCalendar();
+      const deleteButton = document.getElementById('btn-confirm-delete');
+      if (deleteButton?.disabled) return;
+      const customersSnapshot = cloneCustomerSnapshot(customers);
+      setActionButtonLoadingState(
+        deleteButton,
+        true,
+        getLocaleTextOrFallback('btnDeleting', '削除中...')
+      );
+      try {
+        const target = customers.find(c => c.id === deletingId);
+        if (!target) {
+          const notFoundError = new Error('Customer not found');
+          notFoundError.code = 'not-found';
+          throw notFoundError;
+        }
+        assertCustomerWriteAccess(target);
+        customers = customers.filter(c => c.id !== deletingId);
+        await saveCustomers(customers, { propagateError: hasCloudAuthenticatedUser() });
+        showToast(t('msgDeleted'));
+        closeConfirmModal();
+        renderTable();
+        if (calendarView.classList.contains('active')) renderCalendar();
+      } catch (err) {
+        customers = customersSnapshot;
+        saveCustomers(customers).catch(() => {});
+        const normalizedCode = normalizeOperationErrorCode(err);
+        console.error('[Customer Delete] failed', {
+          deletingId,
+          code: normalizedCode || 'unknown',
+          message: err?.message || '',
+          error: err,
+        });
+        const userMessage = buildCustomerOperationErrorMessage('delete', err);
+        showToast(
+          normalizedCode ? `${userMessage} (${normalizedCode})` : userMessage,
+          'error'
+        );
+      } finally {
+        setActionButtonLoadingState(
+          deleteButton,
+          false,
+          getLocaleTextOrFallback('btnDeleting', '削除中...')
+        );
+      }
     }
   }
 
@@ -4592,6 +5830,17 @@
     const container = $('#settings-list');
     if (!container) return;
     container.innerHTML = '';
+    const languageOptionRows = getLanguageOptionDefinitions().map(({ code, label }) => {
+      const allowed = canUseLanguageByPlan(code, currentUserPlan);
+      return `
+      <option value="${escapeHtml(code)}" ${currentLang === code ? 'selected' : ''} ${allowed ? '' : 'disabled'}>
+        ${escapeHtml(label)}
+      </option>
+    `;
+    }).join('');
+    const currencyOptionRows = Object.entries(CURRENCY_CONFIG).map(([code, config]) => `
+      <option value="${escapeHtml(code)}" ${currentCurrency === code ? 'selected' : ''}>${escapeHtml(`${code} (${config.symbol})`)}</option>
+    `).join('');
 
     const planRows = planMaster.length === 0
       ? `<div class="settings-item"><span>${escapeHtml(t('settingsPlanEmpty'))}</span></div>`
@@ -4726,6 +5975,39 @@
 
     container.innerHTML = `
       <div class="settings-section">
+        <h3>${escapeHtml(t('settingsStudioSection'))}</h3>
+        <div class="settings-item dashboard-config-row">
+          <label class="dashboard-config-label" for="settings-studio-name">${escapeHtml(t('settingsStudioNameLabel'))}</label>
+          <input
+            type="text"
+            id="settings-studio-name"
+            class="ui-button-standard"
+            style="min-width: 180px;"
+            value="${escapeHtml(currentStudioName)}"
+            placeholder="${escapeHtml(t('settingsStudioNamePlaceholder'))}"
+          >
+        </div>
+        <div style="display:flex; justify-content:flex-end;">
+          <button type="button" class="btn btn-primary btn-sm" id="btn-save-studio-name">${escapeHtml(t('settingsStudioNameSave'))}</button>
+        </div>
+      </div>
+      <div class="settings-section">
+        <h3>${escapeHtml(t('settingsLanguageSection'))}</h3>
+        <div class="settings-item dashboard-config-row">
+          <label class="dashboard-config-label" for="settings-language-select">${escapeHtml(t('settingsLanguageLabel'))}</label>
+          <select id="settings-language-select" class="ui-button-standard" style="min-width: 180px;">${languageOptionRows}</select>
+        </div>
+        <div class="settings-detail-empty">${escapeHtml(t('settingsLanguageHelp'))}</div>
+      </div>
+      <div class="settings-section">
+        <h3>${escapeHtml(t('settingsCurrencySection'))}</h3>
+        <div class="settings-item dashboard-config-row">
+          <label class="dashboard-config-label" for="settings-currency-select">${escapeHtml(t('currency'))}</label>
+          <select id="settings-currency-select" class="ui-button-standard" style="min-width: 180px;">${currencyOptionRows}</select>
+        </div>
+        <div class="settings-detail-empty">${escapeHtml(t('settingsCurrencyHelp'))}</div>
+      </div>
+      <div class="settings-section">
         <h3>${escapeHtml(t('settingsPlanSection'))}</h3>
         <div class="settings-item-list">${planRows}</div>
         <div class="settings-add-box" style="display:grid; grid-template-columns:1fr; gap:8px;">
@@ -4778,6 +6060,42 @@
     bindEventOnce(container.querySelector('#btn-plan-save'), 'click', savePlanMasterFromForm, 'plan-master-save');
     bindEventOnce(container.querySelector('#btn-plan-reset'), 'click', resetPlanMasterFormInputs, 'plan-master-reset');
     bindEventOnce(container.querySelector('#btn-dynamic-item-add'), 'click', addDynamicItemHintFromSettings, 'dynamic-item-add');
+    bindEventOnce(container.querySelector('#btn-save-studio-name'), 'click', () => {
+      const nameInput = container.querySelector('#settings-studio-name');
+      setStudioName(nameInput?.value || '');
+      if (nameInput) nameInput.value = currentStudioName;
+      showToast(t('settingsSaved'));
+    }, 'settings-studio-name-save');
+    bindEventOnce(container.querySelector('#settings-studio-name'), 'keydown', (event) => {
+      if (event.key !== 'Enter') return;
+      event.preventDefault();
+      const nameInput = container.querySelector('#settings-studio-name');
+      setStudioName(nameInput?.value || '');
+      if (nameInput) nameInput.value = currentStudioName;
+      showToast(t('settingsSaved'));
+    }, 'settings-studio-name-enter');
+    bindEventOnce(container.querySelector('#settings-language-select'), 'change', (event) => {
+      const nextLang = String(event?.target?.value || '').trim();
+      if (!nextLang) return;
+      if (!canUseLanguageByPlan(nextLang, currentUserPlan)) {
+        showToast(t('planFeatureLanguageLocked') || 'Upgrade required to use this language.', 'error');
+        const select = container.querySelector('#settings-language-select');
+        if (select) select.value = currentLang;
+        return;
+      }
+      applyInvoiceLocaleDefaults(nextLang, { force: true });
+      updateUITS(nextLang);
+      if (settingsOverlay?.classList.contains('active')) {
+        renderSettings();
+        renderPlanManagementSection();
+        loadInvoiceSettings();
+      }
+    }, 'settings-language-select-change');
+    bindEventOnce(container.querySelector('#settings-currency-select'), 'change', (event) => {
+      const nextCurrency = String(event?.target?.value || '').trim();
+      if (!nextCurrency) return;
+      updateCurrency(nextCurrency);
+    }, 'settings-currency-select-change');
 
     container.querySelectorAll('button[data-plan-edit]').forEach((button) => {
       const index = Number(button.dataset.planEdit);
@@ -4937,6 +6255,8 @@
         if (typeof data.heroMetricsVisible === 'boolean') setHeroMetricsVisibility(data.heroMetricsVisible);
         if (typeof data.googleCalendarAutoSyncEnabled === 'boolean') setGoogleCalendarAutoSyncEnabled(data.googleCalendarAutoSyncEnabled);
         if (typeof data.googleCalendarSelectedId === 'string') setGoogleCalendarSelectedId(data.googleCalendarSelectedId);
+        if (data.billingProfile && typeof data.billingProfile === 'object') saveBillingProfile(data.billingProfile);
+        if (typeof data.studioName === 'string') setStudioName(data.studioName);
         if (typeof data.contractTemplateText === 'string') saveContractTemplate(data.contractTemplateText);
         reloadRuntimeStateFromStorage();
         applyHeroMetricsConfig();
@@ -4977,6 +6297,8 @@
       item.querySelector('.btn-del-member').onclick = () => {
         window.TeamManager.removePhotographer(p.id);
         renderTeamList();
+        renderSettings();
+        renderPlanManagementSection();
         populateSelects();
         renderTable();
       };
@@ -5209,6 +6531,7 @@
 
   // ===== Invoice Builder =====
   let invoiceBuilderCustomerId = null;
+  let invoicePreviewDraftData = null;
 
   function getDefaultInvoiceItems(customer) {
     return [{
@@ -5226,6 +6549,46 @@
     })).filter(item => item.description && item.quantity > 0);
   }
 
+  function calculateInvoiceTotalsForBuilder(subtotalRaw) {
+    const subtotal = Math.max(0, Number(subtotalRaw) || 0);
+    const settings = getTaxSettings();
+    const isTaxEnabled = settings.enabled !== false;
+    const taxRate = Math.max(0, Number(settings.rate) || 0);
+    const isTaxIncluded = settings.included === true;
+    const taxLabel = settings.label || getInvoiceCountryProfile(currentLang).taxLabel || 'Tax';
+
+    if (!isTaxEnabled || taxRate <= 0) {
+      return {
+        subtotal,
+        tax: 0,
+        total: subtotal,
+        taxRate,
+        taxLabel,
+      };
+    }
+
+    if (isTaxIncluded) {
+      const preTax = subtotal / (1 + taxRate / 100);
+      const tax = subtotal - preTax;
+      return {
+        subtotal: preTax,
+        tax,
+        total: subtotal,
+        taxRate,
+        taxLabel,
+      };
+    }
+
+    const tax = subtotal * (taxRate / 100);
+    return {
+      subtotal,
+      tax,
+      total: subtotal + tax,
+      taxRate,
+      taxLabel,
+    };
+  }
+
   function updateInvoiceBuilderSummary() {
     const customer = customers.find(x => x.id === invoiceBuilderCustomerId);
     if (!customer) return;
@@ -5238,15 +6601,14 @@
     })));
 
     const subtotal = items.reduce((sum, item) => sum + (item.quantity * item.unitPrice), 0);
-    const amounts = calculateTax(subtotal);
-    const settings = getTaxSettings();
+    const amounts = calculateInvoiceTotalsForBuilder(subtotal);
 
     const summary = document.getElementById('invoice-builder-summary');
     if (!summary) return;
 
     summary.innerHTML = `
       <div class="invoice-summary-row"><span>${t('invoicePdfSubtotal')}</span><strong>${formatCurrency(amounts.subtotal)}</strong></div>
-      <div class="invoice-summary-row"><span>${settings.label || 'Tax'}</span><strong>${formatCurrency(amounts.tax)}</strong></div>
+      <div class="invoice-summary-row"><span>${escapeHtml(amounts.taxLabel)} (${amounts.taxRate}%)</span><strong>${formatCurrency(amounts.tax)}</strong></div>
       <div class="invoice-summary-row invoice-summary-total"><span>${t('invoicePdfTotal')}</span><strong>${formatCurrency(amounts.total)}</strong></div>
     `;
   }
@@ -5340,6 +6702,129 @@
     setTimeout(() => { modal.style.display = 'none'; }, 300);
   };
 
+  function handleInvoiceDuePlus14Click() {
+    const issueDateInput = document.getElementById('invoice-issue-date');
+    const dueDateInput = document.getElementById('invoice-due-date');
+    if (!dueDateInput) return;
+    const baseDate = issueDateInput?.value ? new Date(issueDateInput.value) : new Date();
+    if (Number.isNaN(baseDate.getTime())) return;
+    baseDate.setDate(baseDate.getDate() + 14);
+    dueDateInput.value = baseDate.toISOString().slice(0, 10);
+  }
+
+  function collectInvoiceBuilderDraftData() {
+    const customer = customers.find(c => c.id === invoiceBuilderCustomerId);
+    if (!customer) return null;
+
+    const rows = Array.from(document.querySelectorAll('.invoice-item-row'));
+    const items = normalizeInvoiceItems(rows.map(row => ({
+      description: row.querySelector('.invoice-item-desc').value,
+      quantity: row.querySelector('.invoice-item-qty').value,
+      unitPrice: row.querySelector('.invoice-item-unit').value,
+    })));
+
+    if (!items.length) {
+      showToast(t('invoiceLineItemRequired'), 'error');
+      return null;
+    }
+
+    return {
+      customer,
+      items,
+      issueDate: document.getElementById('invoice-issue-date')?.value || '',
+      dueDate: document.getElementById('invoice-due-date')?.value || '',
+      senderName: document.getElementById('invoice-sender-name')?.value?.trim() || '',
+      recipientName: document.getElementById('invoice-recipient-name')?.value?.trim() || '',
+      senderContact: document.getElementById('invoice-sender-contact')?.value?.trim() || '',
+      recipientContact: document.getElementById('invoice-recipient-contact')?.value?.trim() || '',
+      message: document.getElementById('invoice-message')?.value?.trim() || getDefaultInvoiceMessage(),
+    };
+  }
+
+  function persistInvoiceDraftToCustomer(draft) {
+    const customer = draft.customer;
+    customer.invoiceItems = draft.items;
+    customer.invoiceIssueDate = draft.issueDate;
+    customer.invoiceDueDate = draft.dueDate;
+    customer.invoiceSenderName = draft.senderName;
+    customer.invoiceRecipientName = draft.recipientName;
+    customer.invoiceSenderContact = draft.senderContact;
+    customer.invoiceRecipientContact = draft.recipientContact;
+    customer.invoiceMessage = draft.message;
+
+    const settings = getTaxSettings();
+    saveTaxSettings({
+      ...settings,
+      invoiceFooterMessage: draft.message,
+    });
+    saveInvoiceSenderProfile({
+      name: draft.senderName,
+      contact: draft.senderContact,
+    });
+    customer.updatedAt = new Date().toISOString();
+    saveCustomers(customers);
+  }
+
+  function openInvoicePreviewModal() {
+    const draft = collectInvoiceBuilderDraftData();
+    if (!draft) return;
+    if (typeof window.buildInvoicePreviewMarkup !== 'function') {
+      showToast('印刷プレビューの生成に失敗しました。', 'error');
+      return;
+    }
+    invoicePreviewDraftData = draft;
+    const frame = document.getElementById('invoice-preview-frame');
+    const modal = document.getElementById('invoice-preview-modal');
+    if (!frame || !modal) return;
+
+    const markup = window.buildInvoicePreviewMarkup(draft.customer, 'invoice', {
+      items: draft.items,
+      issueDate: draft.issueDate,
+      dueDate: draft.dueDate,
+      senderName: draft.senderName,
+      recipientName: draft.recipientName,
+      senderContact: draft.senderContact,
+      recipientContact: draft.recipientContact,
+      message: draft.message,
+    });
+    frame.srcdoc = `<!doctype html><html lang="${escapeHtml(currentLang || 'en')}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head><body style="margin:0;background:#f3f4f6;">${markup}</body></html>`;
+    modal.style.display = 'flex';
+    setTimeout(() => modal.classList.add('active'), 10);
+  }
+
+  window.closeInvoicePreviewModal = function () {
+    const modal = document.getElementById('invoice-preview-modal');
+    if (!modal) return;
+    modal.classList.remove('active');
+    setTimeout(() => { modal.style.display = 'none'; }, 250);
+  };
+
+  function handleInvoicePreviewPrintClick() {
+    const frame = document.getElementById('invoice-preview-frame');
+    if (!frame?.contentWindow) return;
+    frame.contentWindow.focus();
+    frame.contentWindow.print();
+  }
+
+  function handleInvoicePreviewPdfDownloadClick() {
+    if (!invoicePreviewDraftData || typeof window.generateInvoicePDF !== 'function') {
+      showToast('PDFの出力データが見つかりません。', 'error');
+      return;
+    }
+    const draft = invoicePreviewDraftData;
+    persistInvoiceDraftToCustomer(draft);
+    window.generateInvoicePDF(draft.customer, 'invoice', {
+      items: draft.items,
+      issueDate: draft.issueDate,
+      dueDate: draft.dueDate,
+      senderName: draft.senderName,
+      recipientName: draft.recipientName,
+      senderContact: draft.senderContact,
+      recipientContact: draft.recipientContact,
+      message: draft.message,
+    });
+  }
+
   function handleAddInvoiceItemClick() {
     const container = document.getElementById('invoice-items-container');
     if (!container) return;
@@ -5353,50 +6838,20 @@
   }
 
   function handleGenerateCustomInvoiceClick() {
-    const customer = customers.find(c => c.id === invoiceBuilderCustomerId);
-    if (!customer || !window.generateInvoicePDF) return;
+    if (typeof window.generateInvoicePDF !== 'function') return;
+    const draft = collectInvoiceBuilderDraftData();
+    if (!draft) return;
+    persistInvoiceDraftToCustomer(draft);
 
-    const rows = Array.from(document.querySelectorAll('.invoice-item-row'));
-    const items = normalizeInvoiceItems(rows.map(row => ({
-      description: row.querySelector('.invoice-item-desc').value,
-      quantity: row.querySelector('.invoice-item-qty').value,
-      unitPrice: row.querySelector('.invoice-item-unit').value,
-    })));
-
-    if (!items.length) {
-      showToast(t('invoiceLineItemRequired'), 'error');
-      return;
-    }
-
-    customer.invoiceItems = items;
-    customer.invoiceIssueDate = document.getElementById('invoice-issue-date')?.value || '';
-    customer.invoiceDueDate = document.getElementById('invoice-due-date')?.value || '';
-    customer.invoiceSenderName = document.getElementById('invoice-sender-name')?.value?.trim() || '';
-    customer.invoiceRecipientName = document.getElementById('invoice-recipient-name')?.value?.trim() || '';
-    customer.invoiceSenderContact = document.getElementById('invoice-sender-contact')?.value?.trim() || '';
-    customer.invoiceRecipientContact = document.getElementById('invoice-recipient-contact')?.value?.trim() || '';
-    customer.invoiceMessage = document.getElementById('invoice-message')?.value?.trim() || getDefaultInvoiceMessage();
-    const settings = getTaxSettings();
-    saveTaxSettings({
-      ...settings,
-      invoiceFooterMessage: customer.invoiceMessage,
-    });
-    saveInvoiceSenderProfile({
-      name: customer.invoiceSenderName,
-      contact: customer.invoiceSenderContact,
-    });
-    customer.updatedAt = new Date().toISOString();
-    saveCustomers(customers);
-
-    window.generateInvoicePDF(customer, 'invoice', {
-      items,
-      issueDate: customer.invoiceIssueDate,
-      dueDate: customer.invoiceDueDate,
-      senderName: customer.invoiceSenderName,
-      recipientName: customer.invoiceRecipientName,
-      senderContact: customer.invoiceSenderContact,
-      recipientContact: customer.invoiceRecipientContact,
-      message: customer.invoiceMessage,
+    window.generateInvoicePDF(draft.customer, 'invoice', {
+      items: draft.items,
+      issueDate: draft.issueDate,
+      dueDate: draft.dueDate,
+      senderName: draft.senderName,
+      recipientName: draft.recipientName,
+      senderContact: draft.senderContact,
+      recipientContact: draft.recipientContact,
+      message: draft.message,
     });
     closeInvoiceBuilderModal();
   }
@@ -5523,25 +6978,708 @@
 
   // ===== Free Tier Limit Logic =====
   function checkCustomerLimit() {
-    if (customers.length >= FREE_PLAN_LIMIT) {
-      showUpgradeModal();
+    const limit = getCustomerLimitByPlan(currentUserPlan);
+    if (Number.isFinite(limit) && customers.length >= limit) {
+      showUpgradeModal(limit);
       return false;
     }
     return true;
   }
 
-  function showUpgradeModal() {
-    // Show a simple upgrade message or rediected to landing pricing
-    const confirmed = confirm(t('msgLimitReached') || "Free plan limit reached (30 customers). Upgrade to continue adding more customers.");
+  function showUpgradeModal(limit = FREE_PLAN_LIMIT) {
+    const confirmed = confirm(
+      t('msgLimitReachedPlan', { limit: String(limit) })
+      || `Free plan limit reached (${limit} customers). Upgrade to continue adding more customers.`
+    );
     if (confirmed) {
-      window.open('landing.html#pricing', '_blank');
+      openSettingsPlanManagementSection();
     }
   }
+
+  function handleSubscriptionPlanSelect(nextPlan) {
+    const normalized = normalizeUserPlan(nextPlan);
+    if (normalized === normalizeUserPlan(currentUserPlan)) return;
+    if (normalized === 'enterprise') {
+      handleSubscriptionPlanContactClick(normalized);
+      return;
+    }
+    setCurrentUserPlan(normalized, { persistCloud: true });
+    renderSettings();
+    renderPlanManagementSection();
+    loadBillingProfileSettings();
+    showToast(t('settingsSubscriptionUpdated', { plan: getPlanBadgeText(normalized) }));
+  }
+
+  function handleSubscriptionPlanContactClick(targetPlan = 'enterprise') {
+    openEnterpriseContactModal(targetPlan);
+  }
+
+  function handleSubscriptionPlanDetailsClick() {
+    const detailLines = getSubscriptionPlanEntries().map((entry) => `• ${entry.name} (${entry.price}): ${entry.summary}`);
+    const detailsText = [t('settingsSubscriptionDetailsModalTitle'), '', ...detailLines].join('\n');
+    window.alert(detailsText);
+  }
+
+  function getEnterpriseContactRequests() {
+    const loaded = getCloudValue(ENTERPRISE_CONTACT_REQUESTS_KEY, getLocalValue(ENTERPRISE_CONTACT_REQUESTS_KEY, []));
+    return Array.isArray(loaded) ? loaded : [];
+  }
+
+  function saveEnterpriseContactRequests(requests) {
+    const normalized = Array.isArray(requests) ? requests : [];
+    if (window.FirebaseService?.getCurrentUser?.()) {
+      saveCloudValue(ENTERPRISE_CONTACT_REQUESTS_KEY, normalized);
+      return;
+    }
+    saveLocalValue(ENTERPRISE_CONTACT_REQUESTS_KEY, normalized);
+  }
+
+  function openEnterpriseContactModal(targetPlan = 'enterprise') {
+    const overlay = document.getElementById('enterprise-contact-overlay');
+    if (!overlay) return;
+    const planInput = document.getElementById('enterprise-contact-plan');
+    if (planInput) planInput.value = String(targetPlan || 'enterprise');
+    const teamNameInput = document.getElementById('enterprise-contact-team-name');
+    const representativeInput = document.getElementById('enterprise-contact-representative-name');
+    const rangeSelect = document.getElementById('enterprise-contact-member-range');
+    const messageInput = document.getElementById('enterprise-contact-message');
+    if (teamNameInput) teamNameInput.value = '';
+    if (representativeInput) representativeInput.value = '';
+    if (rangeSelect) rangeSelect.value = '';
+    if (messageInput) messageInput.value = '';
+    overlay.style.display = 'flex';
+    setTimeout(() => overlay.classList.add('active'), 10);
+  }
+
+  function closeEnterpriseContactModal() {
+    const overlay = document.getElementById('enterprise-contact-overlay');
+    if (!overlay) return;
+    overlay.classList.remove('active');
+    setTimeout(() => { overlay.style.display = 'none'; }, 220);
+  }
+
+  function getClientOsInfo() {
+    const nav = window.navigator || {};
+    const uaData = nav.userAgentData || null;
+    return {
+      platform: String(uaData?.platform || nav.platform || 'unknown'),
+      userAgent: String(nav.userAgent || ''),
+      language: String(nav.language || ''),
+      vendor: String(nav.vendor || ''),
+      hardwareConcurrency: Number.isFinite(Number(nav.hardwareConcurrency)) ? Number(nav.hardwareConcurrency) : null,
+      deviceMemory: typeof nav.deviceMemory === 'number' ? nav.deviceMemory : null,
+    };
+  }
+
+  function fallbackHashHex(value) {
+    const text = String(value || '');
+    let hash = 2166136261;
+    for (let i = 0; i < text.length; i += 1) {
+      hash ^= text.charCodeAt(i);
+      hash += (hash << 1) + (hash << 4) + (hash << 7) + (hash << 8) + (hash << 24);
+    }
+    return (hash >>> 0).toString(16).padStart(8, '0');
+  }
+
+  async function computeSha256Hex(value) {
+    const text = String(value || '');
+    const subtle = window.crypto?.subtle;
+    if (!subtle || typeof TextEncoder === 'undefined') {
+      return `fallback_${fallbackHashHex(text)}`;
+    }
+    const encoded = new TextEncoder().encode(text);
+    const digest = await subtle.digest('SHA-256', encoded);
+    return Array.from(new Uint8Array(digest))
+      .map((item) => item.toString(16).padStart(2, '0'))
+      .join('');
+  }
+
+  function getCanvasFingerprintSeed() {
+    try {
+      const canvas = document.createElement('canvas');
+      canvas.width = 220;
+      canvas.height = 60;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return '';
+      ctx.textBaseline = 'top';
+      ctx.font = '16px sans-serif';
+      ctx.fillStyle = '#0f172a';
+      ctx.fillRect(0, 0, 220, 60);
+      ctx.fillStyle = '#22d3ee';
+      ctx.fillText('Pholio Device Lock', 8, 10);
+      ctx.fillStyle = '#f8fafc';
+      ctx.fillText(window.navigator?.userAgent || '', 8, 30);
+      return canvas.toDataURL();
+    } catch {
+      return '';
+    }
+  }
+
+  async function buildAdminDeviceContext(forceRefresh = false) {
+    if (!forceRefresh && adminDeviceContextCache && adminDeviceContextCache.deviceId) {
+      return adminDeviceContextCache;
+    }
+    const nav = window.navigator || {};
+    const screenInfo = window.screen || {};
+    const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || '';
+    const resolution = `${Number(screenInfo.width) || 0}x${Number(screenInfo.height) || 0}@${Number(window.devicePixelRatio) || 1}`;
+    const platform = String(nav.userAgentData?.platform || nav.platform || 'unknown');
+    const userAgent = String(nav.userAgent || '');
+    const language = String(nav.language || '');
+    const fingerprintRaw = JSON.stringify({
+      canvas: getCanvasFingerprintSeed(),
+      timezone,
+      resolution,
+      platform,
+      language,
+      userAgent,
+      vendor: String(nav.vendor || ''),
+      hardwareConcurrency: Number(nav.hardwareConcurrency) || 0,
+      deviceMemory: Number(nav.deviceMemory) || 0,
+      colorDepth: Number(screenInfo.colorDepth) || 0,
+    });
+    const fingerprintHash = await computeSha256Hex(fingerprintRaw);
+    const deviceId = `dev_${fingerprintHash.slice(0, 24)}`;
+    const deviceLabel = `${platform || 'Unknown'} ${resolution}`.trim();
+    adminDeviceContextCache = {
+      deviceId,
+      fingerprintHash,
+      label: deviceLabel,
+      platform,
+      userAgent,
+      resolution,
+      timezone,
+      language,
+    };
+    return adminDeviceContextCache;
+  }
+
+  function persistAdminSecureSession(sessionToken = '', expiresAtMs = 0) {
+    try {
+      const payload = {
+        token: String(sessionToken || ''),
+        expiresAtMs: Number(expiresAtMs) || 0,
+      };
+      sessionStorage.setItem(ADMIN_SECURE_SESSION_KEY, JSON.stringify(payload));
+    } catch {
+      // ignore storage errors
+    }
+  }
+
+  function clearPersistedAdminSecureSession() {
+    try {
+      sessionStorage.removeItem(ADMIN_SECURE_SESSION_KEY);
+    } catch {
+      // ignore storage errors
+    }
+  }
+
+  function setAdminDeviceWarning(message = '', type = 'warning') {
+    const warningEl = document.getElementById('admin-device-warning');
+    if (!warningEl) return;
+    const nextMessage = String(message || '').trim();
+    if (!nextMessage) {
+      warningEl.textContent = '';
+      warningEl.classList.remove('is-warning', 'is-error', 'is-info');
+      warningEl.style.display = 'none';
+      return;
+    }
+    warningEl.textContent = nextMessage;
+    warningEl.classList.remove('is-warning', 'is-error', 'is-info');
+    warningEl.classList.add(
+      type === 'error' ? 'is-error' : (type === 'info' ? 'is-info' : 'is-warning')
+    );
+    warningEl.style.display = 'block';
+  }
+
+  function setAdminSecurityStatusMini(state = 'online') {
+    const statusEl = document.getElementById('admin-security-status-mini');
+    if (!statusEl) return;
+    const normalized = String(state || 'online').trim().toLowerCase();
+    const adminVisible = isCurrentUserAdmin() || !!adminSecurityContext.isAdmin;
+    statusEl.classList.remove('is-error', 'is-online');
+    if (!adminVisible) {
+      statusEl.style.display = 'none';
+      return;
+    }
+    if (normalized === 'error') {
+      statusEl.textContent = t('adminSecurityStatusOfflineError');
+      statusEl.classList.add('is-error');
+      return;
+    }
+    statusEl.textContent = t('adminSecurityStatusOnline');
+    statusEl.classList.add('is-online');
+  }
+
+  function getAdminSecurityWarningMessage(reason = '') {
+    const normalizedReason = String(reason || '').trim().toLowerCase();
+    if (normalizedReason === 'mfa_required') return t('adminMfaRequiredWarning');
+    if (
+      normalizedReason.startsWith('session_')
+      || normalizedReason.includes('session')
+      || normalizedReason === 'invalid_admin_session'
+    ) {
+      return t('adminSessionExpiredWarning');
+    }
+    if (
+      normalizedReason === 'unauthorized_device'
+      || normalizedReason === 'device_not_approved'
+      || normalizedReason === 'fingerprint_mismatch'
+    ) {
+      return t('adminDeviceUnauthorizedWarning');
+    }
+    if (normalizedReason === 'session_timeout') return t('adminSessionExpiredWarning');
+    if (normalizedReason === 'admin_security_init_failed') return t('adminSecurityInitFailed');
+    return '';
+  }
+
+  function logAdminSecurityInitError(context = '', err = null, metadata = {}) {
+    const safeMetadata = metadata && typeof metadata === 'object' ? metadata : {};
+    const detail = {
+      context: String(context || '').trim() || 'admin_security',
+      code: String(err?.code || err?.name || '').trim(),
+      message: String(err?.message || err || '').trim(),
+      reason: String(safeMetadata.reason || '').trim(),
+      deviceId: String(safeMetadata.deviceId || '').trim(),
+      hasFirebaseService: !!window.FirebaseService,
+    };
+    console.error(
+      `[Admin Debug] Error Code: ${detail.code || 'unknown'} | Context: ${detail.context} | Message: ${detail.message || 'n/a'} | Reason: ${detail.reason || 'n/a'}`,
+      err
+    );
+    console.log('[Admin Debug] Detail:', detail);
+  }
+
+  function canAccessAdminPanel() {
+    return isCurrentUserAdmin();
+  }
+
+  function clearAdminSessionTimeoutCheck() {
+    if (!adminSessionTimeoutHandle) return;
+    clearTimeout(adminSessionTimeoutHandle);
+    adminSessionTimeoutHandle = null;
+  }
+
+  function unbindAdminSessionActivityListeners() {
+    if (!adminSessionActivityBound) return;
+    const eventNames = ['pointerdown', 'keydown', 'touchstart', 'scroll'];
+    eventNames.forEach((eventName) => {
+      window.removeEventListener(eventName, handleAdminSessionActivity, true);
+    });
+    adminSessionActivityBound = false;
+  }
+
+  function bindAdminSessionActivityListeners() {
+    if (adminSessionActivityBound) return;
+    const eventNames = ['pointerdown', 'keydown', 'touchstart', 'scroll'];
+    eventNames.forEach((eventName) => {
+      window.addEventListener(eventName, handleAdminSessionActivity, true);
+    });
+    adminSessionActivityBound = true;
+  }
+
+  function stopAdminSessionMonitor() {
+    clearAdminSessionTimeoutCheck();
+    unbindAdminSessionActivityListeners();
+    adminSessionLastActivityAt = 0;
+    adminSessionLastTouchedAt = 0;
+  }
+
+  function scheduleAdminSessionTimeoutCheck() {
+    clearAdminSessionTimeoutCheck();
+    if (!canAccessAdminPanel()) return;
+    const elapsedMs = Date.now() - (adminSessionLastActivityAt || Date.now());
+    const remainingMs = ADMIN_SESSION_TIMEOUT_MS - elapsedMs;
+    if (remainingMs <= 0) {
+      handleAdminSessionTimeout();
+      return;
+    }
+    const delayMs = Math.min(remainingMs, 30 * 1000);
+    adminSessionTimeoutHandle = setTimeout(() => {
+      scheduleAdminSessionTimeoutCheck();
+    }, delayMs);
+  }
+
+  async function syncAdminSessionHeartbeat(force = false) {
+    if (!canAccessAdminPanel()) return;
+    const now = Date.now();
+    if (!force && (now - adminSessionLastTouchedAt) < ADMIN_SESSION_TOUCH_INTERVAL_MS) return;
+    adminSessionLastTouchedAt = now;
+    try {
+      const result = await window.FirebaseService?.touchAdminSecureSession?.({
+        deviceId: adminSecurityContext.deviceId,
+        token: adminSecurityContext.sessionToken,
+        reason: force ? 'heartbeat' : 'activity',
+      });
+      if (result && result.allowed === false) {
+        adminSecurityContext = {
+          ...adminSecurityContext,
+          authorized: false,
+          sessionActive: false,
+          reason: String(result.reason || 'session_timeout'),
+          sessionToken: '',
+          sessionExpiresAtMs: 0,
+        };
+        clearPersistedAdminSecureSession();
+        stopAdminSessionMonitor();
+        setAdminDeviceWarning(getAdminSecurityWarningMessage(adminSecurityContext.reason), 'error');
+        updateAdminSettingsAvailability();
+      }
+    } catch (err) {
+      console.warn('Admin session heartbeat failed', err);
+    }
+  }
+
+  function handleAdminSessionActivity() {
+    if (!canAccessAdminPanel()) return;
+    adminSessionLastActivityAt = Date.now();
+    scheduleAdminSessionTimeoutCheck();
+    syncAdminSessionHeartbeat(false);
+  }
+
+  function startAdminSessionMonitor() {
+    if (!canAccessAdminPanel()) {
+      stopAdminSessionMonitor();
+      return;
+    }
+    adminSessionLastActivityAt = Date.now();
+    bindAdminSessionActivityListeners();
+    scheduleAdminSessionTimeoutCheck();
+    syncAdminSessionHeartbeat(true);
+  }
+
+  function handleAdminSessionTimeout() {
+    if (!isCurrentUserAdmin()) return;
+    stopAdminSessionMonitor();
+    adminSecurityContext = {
+      ...adminSecurityContext,
+      authorized: false,
+      sessionActive: false,
+      reason: 'session_timeout',
+      sessionToken: '',
+      sessionExpiresAtMs: 0,
+    };
+    clearPersistedAdminSecureSession();
+    setAdminDeviceWarning(getAdminSecurityWarningMessage('session_timeout'), 'error');
+    window.FirebaseService?.endAdminSecureSession?.('timeout').catch(() => {});
+    updateAdminSettingsAvailability();
+    showToast(t('adminSessionExpiredWarning'), 'error');
+  }
+
+  function clearAdminSecurityState(reason = 'not_admin') {
+    stopAdminSessionMonitor();
+    clearPersistedAdminSecureSession();
+    adminDeviceState = { approved: [], pending: [] };
+    adminSecurityContext = {
+      isAdmin: false,
+      authorized: false,
+      sessionActive: false,
+      reason,
+      deviceId: '',
+      mfaVerified: false,
+      mfaRequired: false,
+      mfaEnrolledFactorCount: 0,
+      sessionToken: '',
+      sessionExpiresAtMs: 0,
+    };
+    setAdminDeviceWarning('');
+    setAdminSecurityStatusMini('online');
+  }
+
+  function getAdminMfaStatusText() {
+    return '';
+  }
+
+  function isAdminUserForTotpUi() {
+    return isCurrentUserAdmin();
+  }
+
+  function setAdminMfaEnrollMode() {
+    // MFA/TOTP removed
+  }
+
+  function updateAdminTotpControlsVisibility() {
+    // MFA/TOTP removed
+  }
+
+  function closeAdminTotpModal() {
+    // MFA/TOTP removed
+  }
+
+  function setAdminTotpQrPreview() {
+    // MFA/TOTP removed
+  }
+
+  function closeMfaLoginModal() {
+    // MFA/TOTP removed
+  }
+
+  function openMfaLoginModal() {
+    // MFA/TOTP removed
+  }
+
+  async function openAdminTotpSetupModal() {
+    // MFA/TOTP removed
+  }
+
+  async function handleAdminTotpEnrollSubmit() {
+    // MFA/TOTP removed
+  }
+
+  async function handleMfaLoginSubmit() {
+    // MFA/TOTP removed
+  }
+
+  function renderAdminDeviceTableRows() {
+    // Device lock UI removed
+  }
+
+  async function refreshAdminDeviceList() {
+    // Device lock UI removed
+  }
+
+  async function handleAdminDeviceActionClick() {
+    // Device lock UI removed
+  }
+
+  async function initializeAdminSecurityForUser(user) {
+    adminDeviceContextCache = null;
+    adminDeviceState = { approved: [], pending: [] };
+
+    const isAdmin = !!(user && isAdminEmail(user.email));
+    adminSecurityContext = {
+      isAdmin,
+      authorized: isAdmin,
+      sessionActive: isAdmin,
+      reason: isAdmin ? 'authorized' : 'not_admin',
+      deviceId: '',
+      mfaVerified: false,
+      mfaRequired: false,
+      mfaEnrolledFactorCount: 0,
+      sessionToken: '',
+      sessionExpiresAtMs: 0,
+    };
+
+    if (isAdmin) {
+      setAdminDeviceWarning('');
+      setAdminSecurityStatusMini('online');
+    } else {
+      clearAdminSecurityState('not_admin');
+    }
+    updateAdminSettingsAvailability();
+  }
+
+  function resetSupportTicketForm() {
+
+    const subjectInput = document.getElementById('support-ticket-subject');
+    const categorySelect = document.getElementById('support-ticket-category');
+    const messageInput = document.getElementById('support-ticket-message');
+    if (subjectInput) subjectInput.value = '';
+    if (categorySelect) categorySelect.value = 'bug';
+    if (messageInput) messageInput.value = '';
+  }
+
+  async function handleSupportTicketSubmit() {
+    const subject = String(document.getElementById('support-ticket-subject')?.value || '').trim();
+    const category = String(document.getElementById('support-ticket-category')?.value || 'bug').trim() || 'bug';
+    const message = String(document.getElementById('support-ticket-message')?.value || '').trim();
+
+    if (!subject || !message) {
+      showToast(t('supportValidation'), 'error');
+      return;
+    }
+
+    const user = window.FirebaseService?.getCurrentUser?.();
+    if (!user || typeof window.FirebaseService?.saveSupportTicket !== 'function') {
+      showToast(t('supportLoginRequired'), 'error');
+      return;
+    }
+
+    const payload = {
+      subject,
+      category,
+      message,
+      notifyTo: getLegalLocaleTextOrFallback('legalContactEmail', 'pholio.support@icloud.com'),
+      language: currentLang,
+      currency: currentCurrency,
+      osInfo: getClientOsInfo(),
+      status: 'pending',
+      ai_draft_reply: '',
+    };
+
+    try {
+      await window.FirebaseService.saveSupportTicket(payload);
+      resetSupportTicketForm();
+      showToast(t('supportSubmitSuccess'));
+    } catch (err) {
+      console.error('Support ticket submit failed', err);
+      showToast(t('supportSubmitFailed'), 'error');
+    }
+  }
+
+  async function handleEnterpriseContactSubmit() {
+    const teamName = String(document.getElementById('enterprise-contact-team-name')?.value || '').trim();
+    const representativeName = String(document.getElementById('enterprise-contact-representative-name')?.value || '').trim();
+    const memberRange = String(document.getElementById('enterprise-contact-member-range')?.value || '').trim();
+    const message = String(document.getElementById('enterprise-contact-message')?.value || '').trim();
+    const selectedPlan = String(document.getElementById('enterprise-contact-plan')?.value || 'enterprise').trim();
+
+    if (!teamName || !representativeName || !memberRange) {
+      showToast(t('enterpriseContactValidation'), 'error');
+      return;
+    }
+
+    const inquiryPayload = {
+      id: generateId(),
+      createdAt: new Date().toISOString(),
+      plan: normalizeUserPlan(selectedPlan),
+      teamName,
+      companyName: teamName,
+      representativeName,
+      memberRange,
+      message,
+    };
+    const nextRequests = [inquiryPayload, ...getEnterpriseContactRequests()];
+    saveEnterpriseContactRequests(nextRequests);
+
+    try {
+      if (window.FirebaseService?.saveEnterpriseInquiry) {
+        await window.FirebaseService.saveEnterpriseInquiry(inquiryPayload);
+      }
+      showToast('Success! We will contact you soon.');
+      closeEnterpriseContactModal();
+    } catch (err) {
+      console.error('Enterprise inquiry submit failed', err);
+      showToast('Inquiry submission failed. Please try again.', 'error');
+    }
+  }
+
+  function renderPlanManagementSection() {
+    const container = document.getElementById('settings-plan-content-container');
+    if (!container) return;
+    container.innerHTML = renderSubscriptionPlanSectionHtml('settings-subscription-plan-section');
+    bindSubscriptionPlanSectionEvents(container, 'settings-plan');
+  }
+
+  function openSettingsPlanManagementSection() {
+    handleOpenSettingsClick();
+    const planTabBtn = settingsOverlay?.querySelector('.settings-tab-btn[data-tab="plan"]');
+    if (planTabBtn && !planTabBtn.classList.contains('active')) planTabBtn.click();
+    window.requestAnimationFrame(() => {
+      const section = document.getElementById('settings-subscription-plan-section');
+      if (!section) return;
+      section.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      section.classList.add('settings-section-focus');
+      window.setTimeout(() => section.classList.remove('settings-section-focus'), 1200);
+    });
+  }
+
+  function renderInvoiceLegalFields(lang = currentLang, settings = getTaxSettings()) {
+    const profile = getInvoiceCountryProfile(lang);
+    const section = $('#invoice-legal-section');
+    const titleEl = $('#invoice-legal-section-title');
+    const captionEl = $('#invoice-legal-caption');
+    const container = $('#invoice-legal-fields');
+    if (!container) return;
+
+    const legalFields = Array.isArray(profile.legalFields) ? profile.legalFields : [];
+    const legalValues = settings?.legalFieldValues && typeof settings.legalFieldValues === 'object'
+      ? settings.legalFieldValues
+      : {};
+
+    if (!hasPaidPlanAccess(currentUserPlan) && legalFields.length > 0) {
+      if (titleEl) titleEl.textContent = profile.legalSectionTitle || 'Legal Information';
+      if (captionEl) captionEl.textContent = t('planFeatureLegalLocked') || '';
+      if (section) section.style.display = '';
+      container.innerHTML = `<div class="invoice-legal-locked">${escapeHtml(t('planFeatureLegalLocked') || '')}</div>`;
+      return;
+    }
+
+    if (titleEl) titleEl.textContent = profile.legalSectionTitle || 'Legal Information';
+    if (captionEl) captionEl.textContent = profile.legalSectionHint || '';
+    if (section) section.style.display = legalFields.length ? '' : 'none';
+
+    container.innerHTML = legalFields.map((field) => `
+      <div class="invoice-legal-field">
+        <label for="invoice-legal-${escapeHtml(field.key)}">${escapeHtml(field.label || field.key)}</label>
+        <input
+          type="text"
+          id="invoice-legal-${escapeHtml(field.key)}"
+          data-legal-field-key="${escapeHtml(field.key)}"
+          placeholder="${escapeHtml(field.placeholder || '')}"
+          value="${escapeHtml(legalValues[field.key] || '')}"
+        >
+      </div>
+    `).join('');
+  }
+
+  function getInvoiceLegalFieldValuesFromForm() {
+    const legalFieldValues = {};
+    document.querySelectorAll('#invoice-legal-fields [data-legal-field-key]').forEach((input) => {
+      const key = input.getAttribute('data-legal-field-key');
+      if (!key) return;
+      legalFieldValues[key] = String(input.value || '').trim();
+    });
+    return legalFieldValues;
+  }
+
+  function applyInvoiceLocaleDefaults(lang, options = {}) {
+    const { force = true } = options;
+    const profile = getInvoiceCountryProfile(lang);
+    const currentSettings = getTaxSettings();
+    const isFirstRegionInit = !currentSettings.invoiceRegionCode;
+    const shouldApplyLocaleDefaults = force || isFirstRegionInit;
+    const nextSettings = {
+      ...currentSettings,
+      rate: shouldApplyLocaleDefaults
+        ? Number(profile.defaultTaxRate ?? currentSettings.rate ?? 10)
+        : Number(currentSettings.rate ?? profile.defaultTaxRate ?? 10),
+      label: shouldApplyLocaleDefaults
+        ? (profile.taxLabel || currentSettings.label || 'Tax')
+        : (currentSettings.label || profile.taxLabel || 'Tax'),
+      invoiceRegionCode: profile.code || currentSettings.invoiceRegionCode || '',
+      legalFieldValues: { ...(currentSettings.legalFieldValues || {}) },
+    };
+
+    (profile.legalFields || []).forEach((field) => {
+      if (typeof nextSettings.legalFieldValues[field.key] !== 'string') {
+        nextSettings.legalFieldValues[field.key] = '';
+      }
+    });
+
+    saveTaxSettings(nextSettings);
+  }
+
+  function setInvoiceAssetPreview(selector, dataUrl = '') {
+    const img = $(selector);
+    if (!img) return;
+    if (dataUrl) {
+      img.src = dataUrl;
+      img.style.display = 'inline-block';
+    } else {
+      img.removeAttribute('src');
+      img.style.display = 'none';
+    }
+  }
+
+  function readImageFileAsDataUrl(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result || ''));
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+  }
+
+  let pendingInvoiceLogoDataUrl = '';
+  let pendingInvoiceStampDataUrl = '';
 
   function loadInvoiceSettings() {
     const settings = getTaxSettings();
     $('#tax-rate').value = settings.rate;
-    $('#tax-label').value = settings.label === 'Tax' || settings.label === 'VAT' || settings.label === 'GST' || settings.label === 'Sales Tax' || settings.label === '消費税' ? settings.label : 'Custom';
+    const taxLabelSelect = $('#tax-label');
+    const hasPresetTaxLabel = Array.from(taxLabelSelect?.options || []).some((option) => option.value === settings.label);
+    if (taxLabelSelect) taxLabelSelect.value = hasPresetTaxLabel ? settings.label : 'Custom';
 
     if ($('#tax-label').value === 'Custom') {
       $('#tax-label-custom').style.display = 'block';
@@ -5560,6 +7698,59 @@
     $('#invoice-bank').value = settings.bank || '';
     const templateSelect = $('#invoice-template');
     if (templateSelect) templateSelect.value = settings.invoiceTemplate || 'modern';
+    renderInvoiceLegalFields(currentLang, settings);
+    pendingInvoiceLogoDataUrl = settings.invoiceLogoDataUrl || '';
+    pendingInvoiceStampDataUrl = settings.invoiceStampDataUrl || '';
+    setInvoiceAssetPreview('#invoice-logo-preview', pendingInvoiceLogoDataUrl);
+    setInvoiceAssetPreview('#invoice-stamp-preview', pendingInvoiceStampDataUrl);
+    const logoInput = $('#invoice-logo-upload');
+    const stampInput = $('#invoice-stamp-upload');
+    if (logoInput) logoInput.value = '';
+    if (stampInput) stampInput.value = '';
+  }
+
+  function loadBillingProfileSettings() {
+    const profile = getBillingProfile();
+    const userEmail = String(window.FirebaseService?.getCurrentUser?.()?.email || '').trim();
+    const fullNameInput = $('#profile-full-name');
+    const addressInput = $('#profile-address');
+    const siretInput = $('#profile-siret-number');
+    const registrationInput = $('#profile-registration-number');
+    const emailInput = $('#profile-email');
+    const planBadge = $('#profile-plan-badge');
+    const planLabel = $('#profile-plan-label');
+    const currentPlanText = getPlanBadgeText(currentUserPlan);
+
+    if (fullNameInput) fullNameInput.value = profile.fullName || '';
+    if (addressInput) addressInput.value = profile.address || '';
+    if (siretInput) siretInput.value = profile.siretNumber || '';
+    if (registrationInput) registrationInput.value = profile.invoiceRegistrationNumber || '';
+    if (emailInput) emailInput.value = profile.email || userEmail;
+    if (planBadge) {
+      planBadge.textContent = currentPlanText;
+      planBadge.dataset.plan = normalizeUserPlan(currentUserPlan);
+    }
+    if (planLabel) planLabel.textContent = currentPlanText;
+    updateAdminTotpControlsVisibility();
+  }
+
+  function handleSaveBillingProfile() {
+    const fullName = $('#profile-full-name')?.value || '';
+    const address = $('#profile-address')?.value || '';
+    const siretNumber = $('#profile-siret-number')?.value || '';
+    const invoiceRegistrationNumber = $('#profile-registration-number')?.value || '';
+    const email = $('#profile-email')?.value || '';
+
+    saveBillingProfile({
+      fullName,
+      address,
+      siretNumber,
+      invoiceRegistrationNumber,
+      email,
+    });
+    setStudioName(fullName, { persistCloud: true });
+    updateHeaderBrandWordmark();
+    showToast(t('billingProfileSaved') || t('msgSettingsSaved'));
   }
 
   function handleTaxEnabledChange(e) {
@@ -5570,9 +7761,48 @@
     $('#tax-label-custom').style.display = e.target.value === 'Custom' ? 'block' : 'none';
   }
 
+  async function handleInvoiceLogoUploadChange(event) {
+    const file = event?.target?.files?.[0];
+    if (!file) return;
+    try {
+      pendingInvoiceLogoDataUrl = await readImageFileAsDataUrl(file);
+      setInvoiceAssetPreview('#invoice-logo-preview', pendingInvoiceLogoDataUrl);
+    } catch (err) {
+      console.error('Invoice logo load failed', err);
+      showToast(t('invoiceLogoLoadFailed') || 'Failed to load logo image.', 'error');
+    }
+  }
+
+  async function handleInvoiceStampUploadChange(event) {
+    const file = event?.target?.files?.[0];
+    if (!file) return;
+    try {
+      pendingInvoiceStampDataUrl = await readImageFileAsDataUrl(file);
+      setInvoiceAssetPreview('#invoice-stamp-preview', pendingInvoiceStampDataUrl);
+    } catch (err) {
+      console.error('Invoice stamp load failed', err);
+      showToast(t('invoiceStampLoadFailed') || 'Failed to load stamp image.', 'error');
+    }
+  }
+
+  function handleClearInvoiceLogoClick() {
+    pendingInvoiceLogoDataUrl = '';
+    setInvoiceAssetPreview('#invoice-logo-preview', '');
+    const input = $('#invoice-logo-upload');
+    if (input) input.value = '';
+  }
+
+  function handleClearInvoiceStampClick() {
+    pendingInvoiceStampDataUrl = '';
+    setInvoiceAssetPreview('#invoice-stamp-preview', '');
+    const input = $('#invoice-stamp-upload');
+    if (input) input.value = '';
+  }
+
   function handleSaveInvoiceSettings() {
     const label = $('#tax-label').value === 'Custom' ? $('#tax-label-custom').value : $('#tax-label').value;
     const currentSettings = getTaxSettings();
+    const profile = getInvoiceCountryProfile(currentLang);
     const settings = {
       enabled: $('#tax-enabled').checked,
       rate: Number($('#tax-rate').value),
@@ -5585,6 +7815,13 @@
       bank: $('#invoice-bank').value,
       invoiceTemplate: $('#invoice-template').value || 'modern',
       invoiceFooterMessage: currentSettings.invoiceFooterMessage || getDefaultInvoiceMessage(),
+      invoiceLogoDataUrl: pendingInvoiceLogoDataUrl || '',
+      invoiceStampDataUrl: pendingInvoiceStampDataUrl || '',
+      invoiceRegionCode: profile.code || currentSettings.invoiceRegionCode || '',
+      legalFieldValues: {
+        ...(currentSettings.legalFieldValues || {}),
+        ...getInvoiceLegalFieldValuesFromForm(),
+      },
     };
     saveTaxSettings(settings);
     showToast(t('msgSettingsSaved'));
@@ -5663,7 +7900,20 @@
   function handleLanguageSelectChange(event) {
     const selected = event?.target?.value;
     if (!selected) return;
+    if (!canUseLanguageByPlan(selected, currentUserPlan)) {
+      showToast(t('planFeatureLanguageLocked') || 'Upgrade required to use this language.', 'error');
+      getLanguageSelectElements().forEach((languageSelect) => {
+        languageSelect.value = currentLang;
+      });
+      return;
+    }
+    applyInvoiceLocaleDefaults(selected, { force: true });
     updateUITS(selected);
+    if (settingsOverlay?.classList.contains('active')) {
+      renderSettings();
+      renderPlanManagementSection();
+      loadInvoiceSettings();
+    }
     setMobileHeaderMenuOpen(false);
   }
 
@@ -5672,7 +7922,24 @@
     setListColumnsMenuOpen(false);
     setMobileHeaderMenuOpen(false);
     renderSettings();
+    loadBillingProfileSettings();
     loadContractTemplateSettings();
+    renderPlanManagementSection();
+    updateTeamManagementTabAvailability();
+    updateAdminSettingsAvailability();
+    if (canAccessAdminPanel()) {
+      refreshAdminOverview();
+      refreshAdminDeviceList();
+    } else if (isCurrentUserAdmin()) {
+      const normalizedReason = String(adminSecurityContext.reason || '').trim().toLowerCase();
+      if (normalizedReason === 'admin_security_init_failed') {
+        setAdminDeviceWarning('');
+        setAdminSecurityStatusMini('error');
+      } else {
+        const warning = getAdminSecurityWarningMessage(adminSecurityContext.reason);
+        if (warning) setAdminDeviceWarning(warning, 'error');
+      }
+    }
     settingsOverlay?.classList.add('active');
   }
 
@@ -5685,9 +7952,28 @@
     const name = $('#team-new-name')?.value.trim();
     const role = $('#team-new-role')?.value;
     if (!name) return;
+    const nextMemberCount = getCurrentTeamMemberCount() + 1;
+    const nextEstimate = calculatePlanEstimate(currentUserPlan, nextMemberCount);
+    if (nextEstimate.plan === 'small_team' && nextEstimate.extraMembers > 0 && nextEstimate.extraCost > 0) {
+      const confirmedAddon = confirm(t('teamAddonConfirm', {
+        extraMembers: String(nextEstimate.extraMembers),
+        extraCost: formatPlanMonthlyPrice(nextEstimate.extraCost),
+        perMember: formatPlanMonthlyPrice(nextEstimate.extraMemberPrice),
+        estimated: formatPlanMonthlyPrice(nextEstimate.totalPrice),
+      }));
+      if (!confirmedAddon) return;
+    }
+    if (nextEstimate.plan === 'medium_team' && nextEstimate.requiresEnterprise) {
+      const confirmedEnterprise = confirm(t('teamEnterpriseConfirm', {
+        limit: String(nextEstimate.maxMembers || 15),
+      }));
+      if (!confirmedEnterprise) return;
+    }
     window.TeamManager.addPhotographer({ name, role });
     $('#team-new-name').value = '';
     renderTeamList();
+    renderSettings();
+    renderPlanManagementSection();
     populateSelects();
     showToast(t('msgMemberAdded'));
   }
@@ -5700,10 +7986,21 @@
         settingsOverlay.querySelectorAll('.settings-tab-content').forEach((c) => c.classList.remove('active'));
         btn.classList.add('active');
         const tab = btn.dataset.tab;
+        if (tab === 'team' && !canAccessTeamManagement(currentUserPlan)) {
+          return;
+        }
         $(`#settings-content-${tab}`)?.classList.add('active');
         if (tab === 'invoice') loadInvoiceSettings();
+        if (tab === 'profile') loadBillingProfileSettings();
+        if (tab === 'plan') renderPlanManagementSection();
         if (tab === 'contract') loadContractTemplateSettings();
         if (tab === 'team') renderTeamList();
+        if (tab === 'support') {
+          refreshMySupportReplies({ notify: false });
+        }
+        if (tab === 'admin') {
+          refreshAdminOverview();
+        }
       }, `settings-tab-${tabName}`);
     });
   }
@@ -5719,18 +8016,12 @@
         showToast(t('firebaseConfigLoadFailed'));
         return;
       }
-      if (typeof window.FirebaseService.signInWithPopup !== 'function') {
-        showToast(t('googleConfigIssue'));
-        return;
-      }
-
-      await window.FirebaseService.signInWithPopup();
+      await window.FirebaseService.signInWithGoogle();
     } catch (err) {
-      const code = String(err?.code || '');
       console.error('Firebase Auth Error:', err?.code, err?.message);
       console.error(err);
 
-      if (code === 'auth/operation-not-supported-in-this-environment') {
+      if (String(err?.code || '') === 'auth/operation-not-supported-in-this-environment') {
         activateLocalGuestMode(t('localGuestModeUnsupported'));
         alert(t('googleLoginUnavailableAlert'));
         return;
@@ -5745,6 +8036,7 @@
     isLoggedIn = false;
     mergePromptedUid = null;
     saveLocalValue(LOCAL_GUEST_MODE_KEY, true);
+    clearAdminSecurityState('not_admin');
     setCloudSyncIndicator('syncing');
     Promise.resolve(window.FirebaseService?.signOut?.())
       .catch((err) => {
@@ -5757,7 +8049,17 @@
   }
 
   function bindCoreUIEventListeners() {
-    bindEventOnce(getLanguageSelectElement(), 'change', handleLanguageSelectChange, 'lang-select-change');
+    getLanguageSelectElements().forEach((selectEl, index) => {
+      bindEventOnce(selectEl, 'change', handleLanguageSelectChange, `lang-select-change-${index}`);
+    });
+    getHeaderCurrencySelectElements().forEach((currencySelectEl, index) => {
+      bindEventOnce(currencySelectEl, 'change', (event) => {
+        const nextCurrency = String(event?.target?.value || '').trim();
+        if (!nextCurrency) return;
+        updateCurrency(nextCurrency);
+        setMobileHeaderMenuOpen(false);
+      }, `header-currency-select-change-${index}`);
+    });
     bindEventOnce(document.getElementById('btn-theme'), 'click', toggleTheme, 'theme-toggle-click');
     if (ENABLE_STATS_FEATURES) {
       bindEventOnce(document.getElementById('btn-toggle-dashboard'), 'click', handleDashboardToggleButtonClick, 'dashboard-visibility-toggle');
@@ -5775,6 +8077,15 @@
     bindEventOnce(document, 'keydown', handleMobileHeaderMenuEscape, 'mobile-header-menu-escape');
     bindEventOnce(headerActions, 'click', handleMobileHeaderActionClick, 'mobile-header-menu-action-click');
     bindEventOnce(window, 'resize', handleMobileHeaderViewportChange, 'mobile-header-menu-viewport');
+    bindEventOnce(mobileFilterToggleButton, 'click', handleMobileFilterToggleClick, 'mobile-filter-toggle');
+    bindEventOnce(mobileFilterSheetOverlay, 'click', handleMobileFilterSheetOverlayClick, 'mobile-filter-overlay-click');
+    bindEventOnce(mobileFilterCloseButton, 'click', () => setMobileFilterSheetOpen(false), 'mobile-filter-close');
+    bindEventOnce(mobileFilterPayment, 'change', handleMobileFilterSheetControlChange, 'mobile-filter-payment-change');
+    bindEventOnce(mobileFilterPhotographer, 'change', handleMobileFilterSheetControlChange, 'mobile-filter-photographer-change');
+    bindEventOnce(mobileFilterMonth, 'change', handleMobileFilterSheetControlChange, 'mobile-filter-month-change');
+    bindEventOnce(mobileSortQuickList, 'click', handleMobileSortQuickClick, 'mobile-filter-sort-quick-click');
+    bindEventOnce(document, 'keydown', handleMobileFilterSheetEscape, 'mobile-filter-escape');
+    bindEventOnce(window, 'resize', handleMobileFilterSheetViewportChange, 'mobile-filter-viewport');
     bindEventOnce(document.getElementById('form-plan'), 'change', handlePlanSelectChange, 'form-plan-select-change');
     bindEventOnce(document.getElementById('form-plan-price'), 'input', handlePlanPriceInputChange, 'form-plan-price-input');
     bindEventOnce(document.getElementById('form-plan-cost'), 'input', handlePlanCostInputChange, 'form-plan-cost-input');
@@ -5792,11 +8103,45 @@
     bindEventOnce(document.getElementById('btn-export'), 'click', handleCsvExportClick, 'csv-export-click');
     bindEventOnce(document.getElementById('btn-ics-export'), 'click', handleIcsExportClick, 'ics-export-click');
     bindEventOnce(document.getElementById('btn-team-add'), 'click', handleTeamAddClick, 'team-add-click');
+    bindEventOnce(document.getElementById('btn-enterprise-contact-submit'), 'click', handleEnterpriseContactSubmit, 'enterprise-contact-submit');
+    bindEventOnce(document.getElementById('btn-enterprise-contact-cancel'), 'click', closeEnterpriseContactModal, 'enterprise-contact-cancel');
+    bindEventOnce(document.getElementById('btn-enterprise-contact-close'), 'click', closeEnterpriseContactModal, 'enterprise-contact-close');
+    bindEventOnce(document.getElementById('enterprise-contact-overlay'), 'click', (event) => {
+      if (event.target?.id === 'enterprise-contact-overlay') closeEnterpriseContactModal();
+    }, 'enterprise-contact-overlay-close');
+    bindEventOnce(document.getElementById('btn-support-submit'), 'click', handleSupportTicketSubmit, 'support-ticket-submit');
     bindEventOnce(document.getElementById('add-item-btn'), 'click', () => addDynamicChargeItem(), 'add-extra-item-click');
     bindEventOnce(document.getElementById('btn-google-login'), 'click', handleGoogleLoginClick, 'google-login-banner');
     bindEventOnce(document.getElementById('btn-google-login-screen'), 'click', handleGoogleLoginClick, 'google-login-screen');
     bindEventOnce(document.getElementById('btn-logout'), 'click', handleGoogleLogoutClick, 'google-logout');
-    bindEventOnce(document.getElementById('btn-header-logout'), 'click', handleGoogleLogoutClick, 'google-logout-header');
+    document.querySelectorAll('[data-legal-doc]').forEach((link, index) => {
+      bindEventOnce(link, 'click', handleLegalDocLinkClick, `legal-doc-link-${index}`);
+    });
+    document.querySelectorAll('[data-contact-link]').forEach((link, index) => {
+      bindEventOnce(link, 'click', (event) => {
+        event.preventDefault();
+        openContactModal();
+      }, `contact-link-${index}`);
+    });
+    legalRegionTabs.forEach((button, index) => {
+      bindEventOnce(button, 'click', handleLegalRegionTabClick, `legal-region-tab-${index}`);
+    });
+    bindEventOnce(legalModalCloseButton, 'click', closeLegalModal, 'legal-modal-close-top');
+    bindEventOnce(legalModalCloseFooterButton, 'click', closeLegalModal, 'legal-modal-close-footer');
+    bindEventOnce(legalModalOverlay, 'click', (event) => {
+      if (event?.target?.id === 'legal-modal-overlay') closeLegalModal();
+    }, 'legal-modal-overlay-close');
+    bindEventOnce(document, 'keydown', (event) => {
+      if (event.key !== 'Escape') return;
+      if (legalModalOverlay?.classList.contains('active')) closeLegalModal();
+      if (contactModalOverlay?.classList.contains('active')) closeContactModal();
+    }, 'legal-modal-escape');
+    bindEventOnce(contactModalCloseButton, 'click', closeContactModal, 'contact-modal-close-top');
+    bindEventOnce(contactModalCloseFooterButton, 'click', closeContactModal, 'contact-modal-close-footer');
+    bindEventOnce(contactModalSubmitButton, 'click', handleContactSubmit, 'contact-submit');
+    bindEventOnce(contactModalOverlay, 'click', (event) => {
+      if (event?.target?.id === 'contact-modal-overlay') closeContactModal();
+    }, 'contact-modal-overlay-close');
     bindSettingsTabListeners();
   }
 
@@ -5808,10 +8153,23 @@
     bindContractTemplateEventListeners();
     bindEventOnce($('#btn-confirm-delete'), 'click', handleConfirmDeleteClick, 'confirm-delete');
     bindEventOnce(document.getElementById('btn-add-invoice-item'), 'click', handleAddInvoiceItemClick, 'invoice-item-add');
+    bindEventOnce(document.getElementById('btn-preview-custom-invoice'), 'click', openInvoicePreviewModal, 'invoice-preview-open');
     bindEventOnce(document.getElementById('btn-generate-custom-invoice'), 'click', handleGenerateCustomInvoiceClick, 'invoice-generate-custom');
+    bindEventOnce(document.getElementById('btn-print-invoice-preview'), 'click', handleInvoicePreviewPrintClick, 'invoice-preview-print');
+    bindEventOnce(document.getElementById('btn-download-invoice-preview-pdf'), 'click', handleInvoicePreviewPdfDownloadClick, 'invoice-preview-pdf');
+    bindEventOnce(document.getElementById('btn-invoice-due-plus14'), 'click', handleInvoiceDuePlus14Click, 'invoice-due-plus14');
+    bindEventOnce(document.getElementById('invoice-logo-upload'), 'change', handleInvoiceLogoUploadChange, 'invoice-logo-upload');
+    bindEventOnce(document.getElementById('invoice-stamp-upload'), 'change', handleInvoiceStampUploadChange, 'invoice-stamp-upload');
+    bindEventOnce(document.getElementById('btn-clear-invoice-logo'), 'click', handleClearInvoiceLogoClick, 'invoice-logo-clear');
+    bindEventOnce(document.getElementById('btn-clear-invoice-stamp'), 'click', handleClearInvoiceStampClick, 'invoice-stamp-clear');
     bindEventOnce($('#tax-enabled'), 'change', handleTaxEnabledChange, 'tax-enabled-change');
     bindEventOnce($('#tax-label'), 'change', handleTaxLabelChange, 'tax-label-change');
     bindEventOnce($('#btn-save-invoice-settings'), 'click', handleSaveInvoiceSettings, 'tax-settings-save');
+    bindEventOnce(document.getElementById('btn-save-billing-profile'), 'click', handleSaveBillingProfile, 'billing-profile-save');
+    bindEventOnce(document.getElementById('btn-admin-refresh'), 'click', refreshAdminOverview, 'admin-overview-refresh');
+    bindEventOnce(document.getElementById('btn-admin-support-refresh'), 'click', refreshAdminSupportTickets, 'admin-support-refresh');
+    bindEventOnce(document.getElementById('admin-support-ticket-list-body'), 'click', handleAdminSupportTicketListClick, 'admin-support-list-click');
+    bindEventOnce(document.getElementById('btn-admin-support-reply'), 'click', handleAdminSupportReplySubmit, 'admin-support-reply');
     bindEventOnce(document.getElementById('btn-save-contract-template'), 'click', handleSaveContractTemplate, 'contract-template-save');
     bindEventOnce(document.getElementById('btn-contract-preset-standard'), 'click', () => applyContractTemplatePreset('standard'), 'contract-preset-standard');
     bindEventOnce(document.getElementById('btn-contract-preset-bridal'), 'click', () => applyContractTemplatePreset('bridal'), 'contract-preset-bridal');
@@ -5839,8 +8197,11 @@
     applyTheme(FORCE_DARK_MODE ? 'dark' : currentTheme);
 
     // 2. Set defaults
+    syncPlanFromStorage();
     updateLanguage(currentLang || 'ja');
+    applyInvoiceLocaleDefaults(currentLang || 'ja', { force: false });
     updateCurrency(currentCurrency);
+    updateHeaderBrandWordmark();
     if (ENABLE_STATS_FEATURES) {
       applyHeroMetricsConfig();
       setDashboardVisibility(dashboardVisible);
@@ -5890,7 +8251,10 @@
     currentTheme = FORCE_DARK_MODE ? 'dark' : getCloudValue(THEME_KEY, getLocalValue(THEME_KEY, 'dark'));
     currentCurrency = getCloudValue(CURRENCY_KEY, getLocalValue(CURRENCY_KEY, 'USD'));
     if (!CURRENCY_CONFIG[currentCurrency]) currentCurrency = 'USD';
+    currentStudioName = normalizeStudioName(getCloudValue(STUDIO_NAME_KEY, getLocalValue(STUDIO_NAME_KEY, '')));
+    syncPlanFromStorage();
     reloadRuntimeStateFromStorage();
+    updateHeaderBrandWordmark();
     if (ENABLE_STATS_FEATURES) {
       applyHeroMetricsConfig();
       applyDashboardConfig();
@@ -5905,50 +8269,446 @@
   let isLoggedIn = false;
   let authWatcherDisabled = false;
   let authUnsubscribe = null;
+  let currentAuthUserEmail = '';
   let cloudSyncState = 'local';
   let mergePromptedUid = null;
+  let adminSupportTickets = [];
+  let selectedAdminSupportTicketId = '';
+  let adminDeviceContextCache = null;
+  let adminDeviceState = { approved: [], pending: [] };
+  let adminSecurityContext = {
+    isAdmin: false,
+    authorized: false,
+    sessionActive: false,
+    reason: 'not_admin',
+    deviceId: '',
+    mfaVerified: false,
+    mfaRequired: false,
+    mfaEnrolledFactorCount: 0,
+    sessionToken: '',
+    sessionExpiresAtMs: 0,
+  };
+  let adminSessionLastActivityAt = 0;
+  let adminSessionTimeoutHandle = null;
+  let adminSessionActivityBound = false;
+  let adminSessionLastTouchedAt = 0;
+  let mfaLoginChallengeInfo = null;
+  let adminMfaEnrollMode = 'totp';
+  let adminMfaProbeResult = null;
+
+  function getLocaleTextOrFallback(key, fallback = '') {
+    const locale = window.LOCALE?.[currentLang];
+    if (locale && Object.prototype.hasOwnProperty.call(locale, key)) {
+      const value = locale[key];
+      if (typeof value === 'string' && value) return value;
+    }
+    return fallback;
+  }
 
   function getCloudSyncStatusLabel(state) {
-    if (state === 'syncing') return t('cloudSyncStatusSyncing');
-    if (state === 'ready') return t('cloudSyncStatusReady');
-    if (state === 'error') return t('cloudSyncStatusError');
-    return t('cloudSyncStatusLocal');
+    if (state === 'syncing') return getLocaleTextOrFallback('cloudSyncStatusSyncing', 'Syncing to cloud...');
+    if (state === 'ready') return getLocaleTextOrFallback('cloudSyncStatusReady', 'Cloud synced');
+    if (state === 'error') return getLocaleTextOrFallback('cloudSyncStatusError', 'Sync error');
+    return getLocaleTextOrFallback('cloudSyncStatusLocal', 'Saved locally');
+  }
+
+  function getCloudSyncTooltipLabel(state, fallbackLabel = '') {
+    if (state === 'ready') return getLocaleTextOrFallback('cloudSyncStatusReady', 'Cloud synced');
+    if (state === 'syncing') return getLocaleTextOrFallback('cloudSyncStatusSyncing', 'Syncing to cloud...');
+    if (state === 'error') return getLocaleTextOrFallback('cloudSyncErrorRelogin', 'Sync error: please sign in again.');
+    return fallbackLabel || getLocaleTextOrFallback('cloudSyncStatusLocal', 'Saved locally');
   }
 
   function setCloudSyncIndicator(state = 'local', customMessage = '') {
     cloudSyncState = state;
+    const statusLabel = customMessage || getCloudSyncStatusLabel(state);
+    const tooltipLabel = getCloudSyncTooltipLabel(state, statusLabel);
     if (cloudSyncIndicator) cloudSyncIndicator.dataset.state = state;
-    if (cloudSyncLabel) cloudSyncLabel.textContent = customMessage || getCloudSyncStatusLabel(state);
+    if (cloudSyncIndicator) {
+      cloudSyncIndicator.title = tooltipLabel;
+      cloudSyncIndicator.setAttribute('aria-label', tooltipLabel);
+    }
+    if (cloudSyncLabel) cloudSyncLabel.textContent = statusLabel;
   }
 
   function getAuthDisplayName(user) {
     return String(user?.displayName || user?.email || t('authLoggedInUserFallback'));
   }
 
-  function updateHeaderAuthUi(user = null) {
-    const headerLogout = document.getElementById('btn-header-logout');
-    const isGuest = getLocalValue(LOCAL_GUEST_MODE_KEY, false) === true;
-    const hasUser = !!user;
-    if (headerUserBadge) headerUserBadge.style.display = hasUser ? 'inline-flex' : 'none';
-    if (headerUserName) {
-      const displayName = hasUser ? getAuthDisplayName(user) : (isGuest ? t('authLoggedInUserFallback') : '');
-      const uid = String(user?.uid || '').trim();
-      const uidShort = uid ? uid.slice(0, 8) : '';
-      headerUserName.textContent = uidShort ? `${displayName} (${uidShort})` : displayName;
-      headerUserName.title = uid ? `${displayName}\nUID: ${uid}` : displayName;
-    }
-    if (headerUserAvatar) {
-      if (hasUser && user?.photoURL) {
-        headerUserAvatar.src = user.photoURL;
-      } else {
-        headerUserAvatar.src = 'iconpholio.png';
+  function normalizeEmail(value) {
+    return String(value || '').trim().toLowerCase();
+  }
+
+  function isAdminEmail(email) {
+    return ADMIN_MANAGEMENT_EMAILS.has(normalizeEmail(email));
+  }
+
+  function isCurrentUserAdmin() {
+    const currentUserEmail = String(window.FirebaseService?.getCurrentUser?.()?.email || '').trim();
+    if (currentUserEmail) return isAdminEmail(currentUserEmail);
+    if (typeof window.FirebaseService?.isCurrentUserAdmin === 'function') {
+      try {
+        return !!window.FirebaseService.isCurrentUserAdmin();
+      } catch {
+        return false;
       }
-      headerUserAvatar.alt = hasUser ? getAuthDisplayName(user) : '';
-      headerUserAvatar.style.visibility = hasUser ? 'visible' : 'hidden';
     }
-    if (headerLogout) {
-      headerLogout.style.display = hasUser && !isGuest ? '' : 'none';
+    return false;
+  }
+
+  function formatAdminPlanLabel(plan) {
+    const normalized = normalizeUserPlan(plan);
+    if (normalized === 'small_team') return 'TEAM S';
+    if (normalized === 'medium_team') return 'TEAM M';
+    if (normalized === 'enterprise') return 'ENTERPRISE';
+    if (normalized === 'individual') return 'PRO';
+    return 'FREE';
+  }
+
+  function getSupportStatusLabel(status) {
+    return status === 'replied' ? t('adminSupportStatusReplied') : t('adminSupportStatusPending');
+  }
+
+  function getSupportCategoryLabel(category) {
+    const normalized = String(category || '').trim().toLowerCase();
+    if (normalized === 'question') return t('supportCategoryQuestion');
+    if (normalized === 'feature_request') return t('supportCategoryFeatureRequest');
+    return t('supportCategoryBug');
+  }
+
+  function renderAdminSupportTicketDetail(ticketId = '') {
+    const detailSubjectEl = document.getElementById('admin-support-detail-subject');
+    const detailMessageEl = document.getElementById('admin-support-detail-message');
+    const aiDraftInput = document.getElementById('admin-support-ai-draft');
+    const replyInput = document.getElementById('admin-support-reply');
+    const sendButton = document.getElementById('btn-admin-support-reply');
+    const ticket = adminSupportTickets.find((item) => item.id === ticketId) || null;
+
+    if (!ticket) {
+      if (detailSubjectEl) detailSubjectEl.textContent = t('adminSupportSelectTicket');
+      if (detailMessageEl) detailMessageEl.textContent = '—';
+      if (aiDraftInput) aiDraftInput.value = '';
+      if (replyInput) replyInput.value = '';
+      if (sendButton) sendButton.disabled = true;
+      selectedAdminSupportTicketId = '';
+      return;
     }
+
+    selectedAdminSupportTicketId = ticket.id;
+    if (detailSubjectEl) {
+      const subject = ticket.subject || '—';
+      const meta = `${getSupportCategoryLabel(ticket.category)} · ${formatDateTime(ticket.createdAtIso)}`;
+      detailSubjectEl.textContent = `${subject} (${meta})`;
+    }
+    if (detailMessageEl) detailMessageEl.textContent = ticket.message || '—';
+    if (aiDraftInput) aiDraftInput.value = ticket.ai_draft_reply || '';
+    if (replyInput) {
+      const existingReply = ticket?.admin_reply?.message || ticket.user_notification_message || '';
+      replyInput.value = existingReply || ticket.ai_draft_reply || '';
+    }
+    if (sendButton) sendButton.disabled = false;
+  }
+
+  function renderAdminSupportTicketList(tickets = []) {
+    const tableBody = document.getElementById('admin-support-ticket-list-body');
+    if (!tableBody) return;
+
+    if (!Array.isArray(tickets) || tickets.length === 0) {
+      tableBody.innerHTML = `<tr><td colspan="4">${escapeHtml(t('adminSupportNoData'))}</td></tr>`;
+      renderAdminSupportTicketDetail('');
+      return;
+    }
+
+    tableBody.innerHTML = tickets.map((ticket) => {
+      const isActive = ticket.id === selectedAdminSupportTicketId;
+      const status = String(ticket.status || 'pending').trim().toLowerCase();
+      const statusClass = status === 'replied' ? 'admin-ticket-status-replied' : 'admin-ticket-status-pending';
+      const statusLabel = getSupportStatusLabel(status);
+      const userLabel = ticket.displayName || ticket.email || ticket.userId || '—';
+      return `
+        <tr data-ticket-id="${escapeHtml(ticket.id)}" class="${isActive ? 'active' : ''}">
+          <td><span class="admin-ticket-status ${statusClass}">${escapeHtml(statusLabel)}</span></td>
+          <td title="${escapeHtml(ticket.email || userLabel)}">${escapeHtml(userLabel)}</td>
+          <td>${escapeHtml(getSupportCategoryLabel(ticket.category))}</td>
+          <td>${escapeHtml(formatDateTime(ticket.createdAtIso))}</td>
+        </tr>
+      `;
+    }).join('');
+
+    const stillExists = tickets.some((ticket) => ticket.id === selectedAdminSupportTicketId);
+    const targetId = stillExists ? selectedAdminSupportTicketId : tickets[0]?.id || '';
+    renderAdminSupportTicketDetail(targetId);
+  }
+
+  function handleAdminSupportTicketListClick(event) {
+    const row = event?.target?.closest?.('tr[data-ticket-id]');
+    if (!row) return;
+    const ticketId = String(row.dataset.ticketId || '').trim();
+    if (!ticketId) return;
+    selectedAdminSupportTicketId = ticketId;
+    renderAdminSupportTicketList(adminSupportTickets);
+  }
+
+  async function refreshAdminSupportTickets() {
+    if (!canAccessAdminPanel()) return;
+    if (!window.FirebaseService?.getAdminSupportTickets) return;
+    const currentDevice = await buildAdminDeviceContext();
+
+    const tableBody = document.getElementById('admin-support-ticket-list-body');
+    if (tableBody) {
+      tableBody.innerHTML = `<tr><td colspan="4">${escapeHtml(t('adminLoading'))}</td></tr>`;
+    }
+
+    try {
+      const result = await window.FirebaseService.getAdminSupportTickets({
+        currentDeviceId: currentDevice.deviceId,
+        sessionToken: adminSecurityContext.sessionToken,
+      });
+      if (!result?.allowed) {
+        adminSecurityContext = {
+          ...adminSecurityContext,
+          authorized: false,
+          sessionActive: false,
+          reason: String(result.reason || 'unauthorized_device'),
+          sessionToken: '',
+          sessionExpiresAtMs: 0,
+        };
+        clearPersistedAdminSecureSession();
+        stopAdminSessionMonitor();
+        setAdminDeviceWarning(getAdminSecurityWarningMessage(adminSecurityContext.reason), 'error');
+        updateAdminSettingsAvailability();
+        return;
+      }
+      adminSupportTickets = Array.isArray(result.tickets) ? result.tickets : [];
+      renderAdminSupportTicketList(adminSupportTickets);
+    } catch (err) {
+      console.error('Admin support tickets load failed', err);
+      if (tableBody) {
+        tableBody.innerHTML = `<tr><td colspan="4">${escapeHtml(t('adminSupportLoadFailed'))}</td></tr>`;
+      }
+    }
+  }
+
+  async function handleAdminSupportReplySubmit() {
+    if (!canAccessAdminPanel()) {
+      showToast(t('adminDeviceActionFailed'), 'error');
+      return;
+    }
+    const ticketId = String(selectedAdminSupportTicketId || '').trim();
+    if (!ticketId) {
+      showToast(t('adminSupportSelectTicket'), 'error');
+      return;
+    }
+    const aiDraftInput = document.getElementById('admin-support-ai-draft');
+    const replyInput = document.getElementById('admin-support-reply');
+    const sendButton = document.getElementById('btn-admin-support-reply');
+    const aiDraftReply = String(aiDraftInput?.value || '').trim();
+    const replyMessage = String(replyInput?.value || '').trim();
+    if (!replyMessage) {
+      showToast(t('adminSupportReplyValidation'), 'error');
+      return;
+    }
+
+    if (sendButton) sendButton.disabled = true;
+    try {
+      const currentDevice = await buildAdminDeviceContext();
+      await window.FirebaseService?.replySupportTicket?.(ticketId, {
+        currentDeviceId: currentDevice.deviceId,
+        sessionToken: adminSecurityContext.sessionToken,
+        aiDraftReply,
+        replyMessage,
+      });
+      showToast(t('adminSupportReplySent'));
+      await refreshAdminSupportTickets();
+    } catch (err) {
+      console.error('Admin support reply submit failed', err);
+      showToast(t('adminSupportLoadFailed'), 'error');
+    } finally {
+      if (sendButton) sendButton.disabled = false;
+    }
+  }
+
+  function renderSupportRepliesForCurrentUser(tickets = []) {
+    const listRoot = document.getElementById('support-reply-list');
+    if (!listRoot) return;
+
+    const repliedTickets = (Array.isArray(tickets) ? tickets : [])
+      .filter((ticket) => String(ticket?.status || '').toLowerCase() === 'replied')
+      .filter((ticket) => String(ticket?.admin_reply?.message || ticket?.user_notification_message || '').trim().length > 0)
+      .sort((a, b) => (Number(new Date(b?.repliedAtIso || b?.createdAtIso || 0).getTime()) || 0)
+        - (Number(new Date(a?.repliedAtIso || a?.createdAtIso || 0).getTime()) || 0));
+
+    if (repliedTickets.length === 0) {
+      listRoot.innerHTML = `<p class="help-text">${escapeHtml(t('supportMyRepliesEmpty'))}</p>`;
+      return;
+    }
+
+    listRoot.innerHTML = repliedTickets.map((ticket) => {
+      const subject = ticket.subject || '—';
+      const repliedAt = formatDateTime(ticket.repliedAtIso || ticket.createdAtIso);
+      const replyText = ticket.admin_reply?.message || ticket.user_notification_message || '';
+      return `
+        <div class="support-reply-item">
+          <div class="support-reply-item-head">
+            <span>${escapeHtml(t('supportReplyFromAdmin'))}</span>
+            <span>${escapeHtml(t('supportReplyAt'))}: ${escapeHtml(repliedAt)}</span>
+          </div>
+          <div class="support-reply-item-subject">${escapeHtml(subject)}</div>
+          <div class="support-reply-item-body">${escapeHtml(replyText)}</div>
+        </div>
+      `;
+    }).join('');
+  }
+
+  async function refreshMySupportReplies(options = {}) {
+    const { notify = false } = options;
+    const user = window.FirebaseService?.getCurrentUser?.();
+    if (!user || !window.FirebaseService?.getMySupportTickets) {
+      renderSupportRepliesForCurrentUser([]);
+      return;
+    }
+    try {
+      const result = await window.FirebaseService.getMySupportTickets();
+      const tickets = Array.isArray(result?.tickets) ? result.tickets : [];
+      renderSupportRepliesForCurrentUser(tickets);
+
+      if (!notify) return;
+      const replied = tickets.filter((ticket) => (
+        String(ticket?.status || '').toLowerCase() === 'replied'
+        && String(ticket?.admin_reply?.message || ticket?.user_notification_message || '').trim().length > 0
+      ));
+      if (replied.length === 0) return;
+
+      const seenMap = getLocalValue(SUPPORT_REPLY_NOTICE_SEEN_KEY, {});
+      const nextSeenMap = seenMap && typeof seenMap === 'object' ? { ...seenMap } : {};
+      const unseen = replied.filter((ticket) => {
+        const version = String(ticket.repliedAtIso || ticket.updatedAtIso || ticket.createdAtIso || '');
+        return !nextSeenMap[ticket.id] || nextSeenMap[ticket.id] !== version;
+      });
+      if (unseen.length === 0) return;
+
+      showToast(t('supportReplyAvailable', { count: String(unseen.length) }));
+      unseen.forEach((ticket) => {
+        const version = String(ticket.repliedAtIso || ticket.updatedAtIso || ticket.createdAtIso || '');
+        nextSeenMap[ticket.id] = version;
+      });
+      saveLocalValue(SUPPORT_REPLY_NOTICE_SEEN_KEY, nextSeenMap);
+    } catch (err) {
+      console.error('Support replies load failed', err);
+    }
+  }
+
+  function renderAdminOverview(overview) {
+    const totalUsersEl = document.getElementById('admin-stat-total-users');
+    const planCountsEl = document.getElementById('admin-stat-plan-counts');
+    const totalProjectsEl = document.getElementById('admin-stat-total-projects');
+    const tableBody = document.getElementById('admin-user-list-body');
+    if (!totalUsersEl || !planCountsEl || !totalProjectsEl || !tableBody) return;
+
+    const safeOverview = overview && typeof overview === 'object' ? overview : {};
+    const stats = safeOverview.stats && typeof safeOverview.stats === 'object' ? safeOverview.stats : {};
+    const planCounts = stats.planCounts && typeof stats.planCounts === 'object'
+      ? stats.planCounts
+      : { free: 0, individual: 0, small_team: 0, medium_team: 0, enterprise: 0 };
+    const users = Array.isArray(safeOverview.users) ? safeOverview.users : [];
+    const totalUsers = Number(stats.totalUsers) || users.length || 0;
+    const totalProjects = Number(stats.totalProjects) || 0;
+    const teamCount = (Number(planCounts.small_team) || 0) + (Number(planCounts.medium_team) || 0) + (Number(planCounts.enterprise) || 0);
+
+    totalUsersEl.textContent = String(totalUsers);
+    planCountsEl.textContent = `FREE ${Number(planCounts.free) || 0} / PRO ${Number(planCounts.individual) || 0} / TEAM ${teamCount}`;
+    totalProjectsEl.textContent = String(totalProjects);
+
+    if (users.length === 0) {
+      tableBody.innerHTML = `<tr><td colspan="3">${escapeHtml(t('adminNoData'))}</td></tr>`;
+      return;
+    }
+
+    tableBody.innerHTML = users.map((user) => `
+      <tr>
+        <td>${escapeHtml(user.email || '—')}</td>
+        <td>${escapeHtml(formatAdminPlanLabel(user.plan))}</td>
+        <td>${escapeHtml(String(Number(user.projectCount) || 0))}</td>
+      </tr>
+    `).join('');
+  }
+
+  async function refreshAdminOverview() {
+    if (!canAccessAdminPanel()) return;
+    if (!window.FirebaseService?.getAdminUserOverview) return;
+    const currentDevice = await buildAdminDeviceContext();
+
+    const tableBody = document.getElementById('admin-user-list-body');
+    if (tableBody) {
+      tableBody.innerHTML = `<tr><td colspan="3">${escapeHtml(t('adminLoading'))}</td></tr>`;
+    }
+    try {
+      const overview = await window.FirebaseService.getAdminUserOverview({
+        currentDeviceId: currentDevice.deviceId,
+        sessionToken: adminSecurityContext.sessionToken,
+      });
+      if (!overview?.allowed) {
+        adminSecurityContext = {
+          ...adminSecurityContext,
+          authorized: false,
+          sessionActive: false,
+          reason: String(overview.reason || 'unauthorized_device'),
+          sessionToken: '',
+          sessionExpiresAtMs: 0,
+        };
+        clearPersistedAdminSecureSession();
+        stopAdminSessionMonitor();
+        setAdminDeviceWarning(getAdminSecurityWarningMessage(adminSecurityContext.reason), 'error');
+        updateAdminSettingsAvailability();
+        return;
+      }
+      renderAdminOverview(overview);
+      await refreshAdminSupportTickets();
+      await refreshAdminDeviceList();
+    } catch (err) {
+      console.error('Admin overview load failed', err);
+      if (tableBody) {
+        tableBody.innerHTML = `<tr><td colspan="3">${escapeHtml(t('adminLoadFailed'))}</td></tr>`;
+      }
+    }
+  }
+
+  function updateAdminSettingsAvailability() {
+    const tabButton = document.getElementById('settings-tab-admin');
+    const tabContent = document.getElementById('settings-content-admin');
+    if (!tabButton || !tabContent) return;
+
+    const hasAdminAccess = isCurrentUserAdmin();
+    tabButton.style.display = hasAdminAccess ? '' : 'none';
+
+    if (hasAdminAccess) {
+      setAdminDeviceWarning('');
+      setAdminSecurityStatusMini('online');
+      return;
+    }
+
+    tabButton.classList.remove('active');
+    tabContent.classList.remove('active');
+    const menuTab = settingsOverlay?.querySelector('.settings-tab-btn[data-tab="menu"]');
+    const menuContent = document.getElementById('settings-content-menu');
+    if (menuTab) menuTab.classList.add('active');
+    if (menuContent) menuContent.classList.add('active');
+    setAdminDeviceWarning('');
+    setAdminSecurityStatusMini('online');
+  }
+
+  function updateHeaderAuthUi(user = null) {
+    const headerPlanBadge = document.getElementById('header-plan-badge');
+    const headerPlanUsage = document.getElementById('header-plan-usage');
+    const hasUser = !!user;
+    if (headerPlanBadge) {
+      headerPlanBadge.style.display = hasUser ? 'inline-flex' : 'none';
+    }
+    updateHeaderPlanBadge();
+    if (!hasUser && headerPlanUsage) {
+      headerPlanUsage.style.display = 'none';
+    }
+    updateAdminSettingsAvailability();
   }
 
   function hasGuestLocalData() {
@@ -5964,42 +8724,14 @@
     if (mergePromptedUid === user.uid) return;
     mergePromptedUid = user.uid;
 
-    const localSummary = window.FirebaseService.getLocalDataSummary?.();
-    if (!localSummary?.hasLocalData) return;
-
-    let cloudSummary = { projects: 0, expenses: 0, hasCloudData: false };
-    try {
-      cloudSummary = await window.FirebaseService.getCloudDataSummary?.() || cloudSummary;
-    } catch (err) {
-      console.warn('Failed to fetch cloud summary before merge', err);
-    }
-
-    const shouldMerge = window.confirm(
-      t('cloudMergeConfirm', {
-        localCustomers: String(localSummary.customers || 0),
-        localExpenses: String(localSummary.expenses || 0),
-        cloudProjects: String(cloudSummary.projects || 0),
-        cloudExpenses: String(cloudSummary.expenses || 0),
-      })
-    );
-
-    if (!shouldMerge) {
-      showToast(t('cloudMergeSkipped'));
-      return;
-    }
-
     setCloudSyncIndicator('syncing');
     try {
-      const mergeResult = await window.FirebaseService.mergeLocalDataToCloud?.({ overwrite: false });
-      if (mergeResult?.merged) {
-        showToast(t('cloudMergeCompleted', {
-          customers: String(mergeResult.customerCount || 0),
-          expenses: String(mergeResult.expenseCount || 0),
-        }));
-      }
+      await (
+        window.FirebaseService.autoSyncLocalDataToCloud?.()
+        ?? window.FirebaseService.mergeLocalDataToCloud?.({ overwrite: false })
+      );
     } catch (err) {
       console.error('Local merge to cloud failed', err);
-      showToast(t('cloudMergeFailed'), 'error');
     }
   }
 
@@ -6019,11 +8751,13 @@
     const authBanner = document.getElementById('auth-banner');
     const authStatus = document.getElementById('auth-status');
     const loginBtn = document.getElementById('btn-google-login');
+    const loginScreenBtn = document.getElementById('btn-google-login-screen');
     const logoutBtn = document.getElementById('btn-logout');
 
     if (state === 'checking') {
       if (authStatus) authStatus.textContent = t('authChecking');
       if (loginBtn) loginBtn.style.display = 'none';
+      if (loginScreenBtn) loginScreenBtn.style.display = 'none';
       if (logoutBtn) logoutBtn.style.display = 'none';
       if (authScreen) authScreen.style.display = 'none';
       if (loginScreen) loginScreen.style.display = 'none';
@@ -6036,8 +8770,12 @@
 
     if (state === 'loggedOut') {
       isLoggedIn = false;
+      currentAuthUserEmail = '';
+      clearAdminSecurityState('not_admin');
+      setCurrentUserPlan('free', { persistCloud: false });
       if (authStatus) authStatus.textContent = t('authLoggedOutPrompt');
       if (loginBtn) loginBtn.style.display = '';
+      if (loginScreenBtn) loginScreenBtn.style.display = '';
       if (logoutBtn) logoutBtn.style.display = 'none';
       if (authScreenRoot) authScreenRoot.style.display = 'block';
       if (authScreen) authScreen.style.display = 'block';
@@ -6045,18 +8783,22 @@
       if (authBanner) authBanner.style.display = 'none';
       if (appContainer) appContainer.style.display = 'none';
       updateHeaderAuthUi(null);
+      renderSupportRepliesForCurrentUser([]);
       setCloudSyncIndicator('local');
       return;
     }
 
     if (state === 'loggedIn') {
       const userName = getAuthDisplayName(user);
+      currentAuthUserEmail = String(user?.email || '').trim();
+      syncPlanFromStorage();
       if (authStatus) authStatus.textContent = t('authLoggedInAs', { user: userName });
       if (loginBtn) loginBtn.style.display = 'none';
+      if (loginScreenBtn) loginScreenBtn.style.display = 'none';
       if (logoutBtn) logoutBtn.style.display = '';
       if (authScreen) authScreen.style.display = 'none';
       if (loginScreen) loginScreen.style.display = 'none';
-      if (authBanner) authBanner.style.display = 'flex';
+      if (authBanner) authBanner.style.display = 'none';
       if (appContainer) appContainer.style.display = 'block';
       updateHeaderAuthUi(user);
       setCloudSyncIndicator('syncing', `${t('cloudSyncStatusSyncing')} (${userName})`);
@@ -6071,6 +8813,12 @@
     try {
       await window.FirebaseService.loadForUser(resolvedUser);
       hydrateStateFromCloud();
+      syncPlanFromStorage();
+      if (window.FirebaseService?.setUserPlan && !getCloudValue('plan', null)) {
+        window.FirebaseService.setUserPlan(currentUserPlan).catch((err) => {
+          console.warn('User plan bootstrap save failed', err);
+        });
+      }
       applyTheme(currentTheme);
       updateLanguage(currentLang || 'ja');
       updateCurrency(currentCurrency);
@@ -6081,6 +8829,7 @@
       syncCalendarFilterControls();
       if (calendarView.classList.contains('active')) renderCalendar();
       setCloudSyncIndicator('ready');
+      refreshMySupportReplies({ notify: true });
     } catch (err) {
       console.error('Cloud data load failed', err);
       showToast(t('cloudDataLoadFailed'));
@@ -6132,56 +8881,39 @@
 
       await window.FirebaseService.whenReady();
 
-      // onAuthChanged is registered only after Firebase initialization is complete.
       authWatcherDisabled = false;
       if (typeof authUnsubscribe === 'function') {
         authUnsubscribe();
         authUnsubscribe = null;
       }
-      const authWatcher = window.FirebaseService.onAuthChanged((user) => {
+
+      authUnsubscribe = window.FirebaseService.onAuthChanged((user) => {
         if (authWatcherDisabled) return;
 
         if (user) {
           isLoggedIn = true;
           saveLocalValue(LOCAL_GUEST_MODE_KEY, false);
-          const userName = getAuthDisplayName(user);
           setAuthScreenState('loggedIn', user);
-          setCloudSyncIndicator('syncing', `${t('cloudSyncStatusSyncing')} (${userName})`);
-          maybeMergeGuestDataToCloud(user)
-            .then(() => handleAuthState(user))
-            .then(() => setCloudSyncIndicator('ready'))
-            .catch((err) => {
-              console.error('Auth update error:', err);
-              setCloudSyncIndicator('error');
-            });
-          return;
-        }
-
-        if (!isLoggedIn) {
-          if (hasGuestLocalData()) {
-            activateLocalGuestMode(t('localGuestModeDefault'));
-            return;
-          }
-          setAuthScreenState('loggedOut');
+          (async () => {
+            await maybeMergeGuestDataToCloud(user);
+            await handleAuthState(user);
+            await initializeAdminSecurityForUser(user);
+            setCloudSyncIndicator('ready');
+          })().catch((err) => {
+            console.error('Auth state update failed', err);
+            setCloudSyncIndicator('error');
+          });
           return;
         }
 
         isLoggedIn = false;
+        clearAdminSecurityState('not_admin');
         if (hasGuestLocalData()) {
           activateLocalGuestMode(t('localGuestModeDefault'));
           return;
         }
         setAuthScreenState('loggedOut');
       });
-      if (authWatcher && typeof authWatcher.then === 'function') {
-        authWatcher.then((unsubscribe) => {
-          if (typeof unsubscribe === 'function') authUnsubscribe = unsubscribe;
-        }).catch((err) => {
-          console.error('Auth watcher registration failed', err);
-        });
-      } else {
-        authUnsubscribe = authWatcher;
-      }
     } catch (err) {
       console.error('Firebase auth bootstrap failed', err);
       setAuthScreenState('loggedOut');

@@ -1,5 +1,5 @@
 /**
- * Team Management for PhotoCRM
+ * Team Management for Pholio
  * Uses Firebase-backed app state cache.
  */
 window.TeamManager = {

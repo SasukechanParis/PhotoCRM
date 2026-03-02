@@ -1,8 +1,8 @@
-# PhotoCRM Phase 3 - Antigravity Prompt
+# Pholio Phase 3 - Antigravity Prompt
 
 ## Instructions for Antigravity
 
-You are implementing custom field functionality for PhotoCRM. Make these exact changes:
+You are implementing custom field functionality for Pholio. Make these exact changes:
 
 ---
 
@@ -275,12 +275,12 @@ confirmDeleteField: '이 필드를 삭제하시겠습니까? 모든 고객에서
 **app.js - init() function:**
 Change version to v2.3.0:
 ```javascript
-console.log('🚀 PhotoCRM v2.3.0 Initializing...');
+console.log('🚀 Pholio v2.3.0 Initializing...');
 ```
 
 **index.html - comment:**
 ```html
-<!-- PhotoCRM v2.3.0 - Custom Fields - 2026-02-22 -->
+<!-- Pholio v2.3.0 - Custom Fields - 2026-02-22 -->
 ```
 
 **sw.js:**

@@ -29,29 +29,34 @@
       <h1>Pholio</h1>
       <p>クラウド同期を利用するにはGoogleログインが必要です。</p>
       <button class="btn btn-primary btn-lg" id="btn-google-login-screen">Googleでログイン</button>
+      <div class="login-legal-links">
+        <a href="#" id="login-terms-link" data-legal-doc="terms" data-i18n="termsLink">利用規約</a>
+        <span class="login-legal-separator">·</span>
+        <a href="#" id="login-privacy-link" data-legal-doc="privacy" data-i18n="privacyLink">プライバシーポリシー</a>
+        <span class="login-legal-separator">·</span>
+        <a href="#" id="login-contact-link" data-contact-link="support" data-i18n="contactLink">お問い合わせ</a>
+      </div>
     </div>
   </div>
   <div class="auth-banner" id="auth-banner">
     <div class="auth-status" id="auth-status">🔄 ログイン状態を確認中...</div>
     <div class="auth-actions">
       <button class="btn btn-primary btn-sm" id="btn-google-login">Googleでログイン</button>
-      <button class="btn btn-secondary btn-sm" id="btn-logout" style="display:none;">ログアウト</button>
     </div>
   </div>
   <div class="app-container" id="app-container">
 
     <!-- ===== Header ===== -->
     <header class="app-header">
-      <div class="logo">
-        <div class="brand-unit">
+      <div class="header-left">
+        <div class="logo">
           <img src="iconpholio.png" alt="Pholio" class="brand-logo-image" />
-          <span class="brand-wordmark">Pholio</span>
+          <div class="brand-text-group">
+            <span class="brand-wordmark" id="brand-wordmark">Pholio</span>
+            <span class="header-plan-badge" id="header-plan-badge" data-plan="free" style="display:none;">FREE</span>
+            <span class="header-plan-usage" id="header-plan-usage" style="display:none;">残り 20件</span>
+          </div>
         </div>
-      </div>
-      <button class="mobile-header-menu-btn" id="btn-mobile-header-menu" type="button" aria-expanded="false"
-        data-i18n-title="mobileMenu" data-i18n-aria-label="mobileMenu">⚙️</button>
-      <div class="header-actions">
-        <!-- Language Switcher -->
         <select id="languageSelect" class="btn btn-secondary btn-sm">
           <option value="en">🇺🇸 English</option>
           <option value="ja">🇯🇵 日本語</option>
@@ -60,19 +65,41 @@
           <option value="zh-TW">🇹🇼 繁體中文</option>
           <option value="ko">🇰🇷 한국어</option>
         </select>
-
-        <div class="cloud-sync-indicator" id="cloud-sync-indicator" data-state="local">
+        <select id="currency-select" class="btn btn-secondary btn-sm">
+          <option value="JPY">JPY (¥)</option>
+          <option value="EUR">EUR (€)</option>
+          <option value="USD">USD ($)</option>
+          <option value="KRW">KRW (₩)</option>
+          <option value="CNY">CNY (¥)</option>
+        </select>
+        <div class="cloud-sync-indicator" id="cloud-sync-indicator" data-state="local" title="ローカル保存中" aria-label="ローカル保存中">
           <span class="cloud-sync-dot" aria-hidden="true"></span>
           <span class="cloud-sync-label" id="cloud-sync-label" data-i18n="cloudSyncStatusLocal">ローカル保存中</span>
         </div>
-        <div class="header-user-badge" id="header-user-badge" style="display:none;">
-          <img class="header-user-avatar" id="header-user-avatar" alt="" />
-          <span class="header-user-name" id="header-user-name"></span>
-        </div>
         <button class="theme-toggle" id="btn-theme" title="Toggle Theme">🌙</button>
-        <button class="btn btn-secondary btn-sm" id="btn-header-logout" style="display:none;" data-i18n="logout">ログアウト</button>
         <button class="btn btn-secondary btn-sm" id="btn-settings" title="Settings" data-i18n="settingsHeader" data-i18n-title="settings">⚙
           Settings</button>
+        <button class="mobile-header-menu-btn" id="btn-mobile-header-menu" type="button" aria-expanded="false"
+          data-i18n-title="mobileMenu" data-i18n-aria-label="mobileMenu">⚙️</button>
+      </div>
+      <div class="header-actions">
+        <div class="mobile-header-controls">
+          <select id="languageSelect-mobile" class="btn btn-secondary btn-sm">
+            <option value="en">🇺🇸 English</option>
+            <option value="ja">🇯🇵 日本語</option>
+            <option value="fr">🇫🇷 Français</option>
+            <option value="zh-CN">🇨🇳 简体中文</option>
+            <option value="zh-TW">🇹🇼 繁體中文</option>
+            <option value="ko">🇰🇷 한국어</option>
+          </select>
+          <select id="currency-select-mobile" class="btn btn-secondary btn-sm">
+            <option value="JPY">JPY (¥)</option>
+            <option value="EUR">EUR (€)</option>
+            <option value="USD">USD ($)</option>
+            <option value="KRW">KRW (₩)</option>
+            <option value="CNY">CNY (¥)</option>
+          </select>
+        </div>
         <button class="btn btn-secondary btn-sm" id="btn-sync-export" title="バックアップ (JSON)" data-i18n="exportSync"
           data-i18n-title="exportSync">バックアップ (JSON)</button>
         <button class="btn btn-secondary btn-sm" id="btn-sync-import" title="データ復元" data-i18n="importSync"
@@ -80,8 +107,9 @@
         <input type="file" id="import-file" accept=".json" style="display:none;" />
         <button class="btn btn-secondary btn-sm" id="btn-ics-export" title="カレンダー連携 (iCal)" data-i18n="exportIcs"
           data-i18n-title="exportIcs">カレンダー連携 (iCal)</button>
-        <button class="btn btn-secondary btn-sm" id="btn-export" title="売上集計 (CSV)" data-i18n="exportCsv"
-          data-i18n-title="exportCsv">売上集計 (CSV)</button>
+        <button class="btn btn-secondary btn-sm" id="btn-export" title="データエクスポート" data-i18n="exportCsv"
+          data-i18n-title="exportCsv">データエクスポート</button>
+        <button class="btn btn-secondary btn-sm" id="btn-logout" data-i18n="logout" style="display:none;">ログアウト</button>
       </div>
     </header>
 
@@ -97,6 +125,11 @@
       <div class="dashboard-quick-menu" id="dashboard-quick-menu" style="display:none;">
         <div class="dashboard-quick-menu-content" id="dashboard-quick-menu-content"></div>
       </div>
+    </div>
+
+    <div class="tomorrow-reminder-card" id="tomorrow-reminder-card" style="display:none;">
+      <div class="tomorrow-reminder-title" id="tomorrow-reminder-title"></div>
+      <ul class="tomorrow-reminder-list" id="tomorrow-reminder-list"></ul>
     </div>
 
     <div class="dashboard-collapsible" id="dashboard-collapsible">
@@ -235,6 +268,10 @@
           <span class="search-icon">🔍</span>
           <input type="text" id="search-input" placeholder="お客様名・連絡先で検索..." data-i18n-placeholder="searchPlaceholder" />
         </div>
+        <button class="btn-icon toolbar-filter-toggle" id="btn-mobile-filters" type="button" aria-expanded="false"
+          data-i18n-title="mobileFilterOpenTitle" data-i18n-aria-label="mobileFilterOpenTitle">
+          <span aria-hidden="true">☰</span>
+        </button>
         <select class="filter-select ui-button-standard" id="filter-payment">
           <option value="all" data-i18n="filterAll">すべて</option>
           <option value="paid" data-i18n="filterPaid">入金済み</option>
@@ -252,6 +289,34 @@
           </button>
           <div class="list-columns-menu" id="list-columns-menu" style="display:none;">
             <div class="list-columns-menu-content" id="list-columns-menu-content"></div>
+          </div>
+        </div>
+      </div>
+      <div class="mobile-filter-sheet-overlay" id="mobile-filter-sheet-overlay" aria-hidden="true">
+        <div class="mobile-filter-sheet" id="mobile-filter-sheet" role="dialog" aria-modal="true"
+          aria-labelledby="mobile-filter-sheet-title">
+          <div class="mobile-filter-sheet-header">
+            <h3 id="mobile-filter-sheet-title" data-i18n="mobileFilterSheetTitle">フィルター・ソート</h3>
+            <button class="btn btn-secondary btn-sm" id="btn-mobile-filter-close" type="button" data-i18n="close">閉じる</button>
+          </div>
+          <div class="mobile-filter-sheet-body">
+            <div class="mobile-filter-field">
+              <label for="mobile-filter-payment" data-i18n="mobileFilterPaymentLabel">入金フィルター</label>
+              <select id="mobile-filter-payment" class="ui-button-standard"></select>
+            </div>
+            <div class="mobile-filter-field">
+              <label for="mobile-filter-photographer" data-i18n="mobileFilterPhotographerLabel">担当</label>
+              <select id="mobile-filter-photographer" class="ui-button-standard"></select>
+            </div>
+            <div class="mobile-filter-field">
+              <label for="mobile-filter-month" data-i18n="mobileFilterPeriodLabel">期間</label>
+              <select id="mobile-filter-month" class="ui-button-standard"></select>
+            </div>
+            <div class="mobile-filter-field">
+              <label data-i18n="mobileSortFieldLabel">並び替え項目</label>
+              <div id="mobile-sort-quick-list" class="mobile-sort-quick-list" role="group"
+                data-i18n-aria-label="mobileSortFieldLabel" aria-label="並び替え項目"></div>
+            </div>
           </div>
         </div>
       </div>
@@ -366,6 +431,82 @@
       </div>
     </div>
 
+    <footer class="app-legal-footer">
+      <a href="#" id="footer-terms-link" data-legal-doc="terms" data-i18n="termsLink">利用規約</a>
+      <span class="app-legal-separator">·</span>
+      <a href="#" id="footer-privacy-link" data-legal-doc="privacy" data-i18n="privacyLink">プライバシーポリシー</a>
+      <span class="app-legal-separator">·</span>
+      <a href="#" id="footer-contact-link" data-contact-link="support" data-i18n="contactLink">お問い合わせ</a>
+    </footer>
+
+  </div>
+
+  <div class="modal-overlay" id="legal-modal-overlay" style="display:none;">
+    <div class="modal legal-modal">
+      <div class="modal-header">
+        <h3 class="modal-title" id="legal-modal-title">利用規約</h3>
+        <button class="btn-close" id="btn-legal-modal-close">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="legal-region-switch" id="legal-region-switch" role="tablist" aria-label="Legal Region">
+          <button
+            type="button"
+            class="legal-region-tab active"
+            id="legal-region-tab-global"
+            data-legal-region="global"
+            role="tab"
+            aria-selected="true"
+          >Global</button>
+          <button
+            type="button"
+            class="legal-region-tab"
+            id="legal-region-tab-japan"
+            data-legal-region="japan"
+            role="tab"
+            aria-selected="false"
+          >Japan</button>
+          <button
+            type="button"
+            class="legal-region-tab"
+            id="legal-region-tab-eu"
+            data-legal-region="eu"
+            role="tab"
+            aria-selected="false"
+          >EU</button>
+        </div>
+        <div class="legal-modal-content" id="legal-modal-content"></div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" id="btn-legal-modal-close-footer" data-i18n="close">閉じる</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="contact-modal-overlay" style="display:none;">
+    <div class="modal contact-modal">
+      <div class="modal-header">
+        <h3 class="modal-title" data-i18n="contactModalTitle">お問い合わせ</h3>
+        <button class="btn-close" id="btn-contact-modal-close">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label for="contact-form-name" data-i18n="contactNameLabel">お名前（任意）</label>
+          <input type="text" id="contact-form-name" data-i18n-placeholder="contactNamePlaceholder" placeholder="お名前">
+        </div>
+        <div class="form-group">
+          <label for="contact-form-email" data-i18n="contactEmailLabel">連絡先メール（任意）</label>
+          <input type="email" id="contact-form-email" data-i18n-placeholder="contactEmailPlaceholder" placeholder="you@example.com">
+        </div>
+        <div class="form-group">
+          <label for="contact-form-message" data-i18n="contactMessageLabel">内容</label>
+          <textarea id="contact-form-message" style="min-height: 140px;" data-i18n-placeholder="contactMessagePlaceholder" placeholder="お問い合わせ内容をご入力ください"></textarea>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" id="btn-contact-modal-close-footer" data-i18n="cancel">キャンセル</button>
+        <button class="btn btn-primary" id="btn-contact-submit" data-i18n="contactSubmitButton">送信</button>
+      </div>
+    </div>
   </div>
 
   <!-- ===== Add/Edit Modal ===== -->
@@ -400,6 +541,16 @@
             <label for="form-contact" data-i18n="labelContact">連絡先（Insta / メール）</label>
             <input type="text" id="form-contact" placeholder="例: @yamada_hanako"
               data-i18n-placeholder="placeholderContact" />
+          </div>
+          <div class="form-group">
+            <label for="form-leadSource" data-i18n="labelLeadSource">問い合わせ元</label>
+            <select id="form-leadSource">
+              <option value="" data-i18n="selectDefault">選択してください</option>
+              <option value="instagram" data-i18n="leadSourceInstagram">インスタグラム</option>
+              <option value="homepage" data-i18n="leadSourceHomepage">ホームページ</option>
+              <option value="referral" data-i18n="leadSourceReferral">口コミ</option>
+              <option value="other" data-i18n="leadSourceOther">その他</option>
+            </select>
           </div>
           <div class="form-group" data-input-key="assignedTo">
             <label for="form-assignedTo" data-i18n="labelAssignedTo">担当カメラマン</label>
@@ -646,12 +797,55 @@
         </div>
         <div class="settings-tabs">
           <button class="settings-tab-btn active" data-tab="menu" data-i18n="settings">General</button>
+          <button class="settings-tab-btn" data-tab="profile" data-i18n="billingProfileTab">Billing Profile</button>
+          <button class="settings-tab-btn" data-tab="plan" data-i18n="settingsPlanTab">Plan</button>
           <button class="settings-tab-btn" data-tab="invoice" data-i18n="invoiceSettings">Invoice & Tax</button>
           <button class="settings-tab-btn" data-tab="contract">契約書設定</button>
           <button class="settings-tab-btn" data-tab="team" data-i18n="teamManager">Team</button>
+          <button class="settings-tab-btn" data-tab="support" data-i18n="supportFeedbackTab">Support</button>
+          <button class="settings-tab-btn" data-tab="admin" id="settings-tab-admin" data-i18n="adminPanelTab" style="display:none;">Admin</button>
         </div>
         <div class="settings-tab-content active" id="settings-content-menu">
           <div class="settings-list" id="settings-list"></div>
+        </div>
+
+        <div class="settings-tab-content" id="settings-content-profile">
+          <div class="settings-section">
+            <h3 data-i18n="billingProfileTitle">請求プロフィール</h3>
+            <p class="help-text" data-i18n="billingProfileHelp">請求書に使う請求先情報を設定します。</p>
+            <div class="billing-plan-row">
+              <span data-i18n="billingCurrentPlanLabel">現在のプラン</span>
+              <span class="header-plan-badge" id="profile-plan-badge" data-plan="free">FREE</span>
+              <span class="billing-plan-text" id="profile-plan-label">FREE</span>
+            </div>
+            <div class="form-group">
+              <label for="profile-full-name" data-i18n="billingFullNameLabel">屋号 / 氏名</label>
+              <input type="text" id="profile-full-name" data-i18n-placeholder="billingFullNamePlaceholder" placeholder="例: Pholio Studio">
+            </div>
+            <div class="form-group">
+              <label for="profile-address" data-i18n="billingAddressLabel">住所</label>
+              <textarea id="profile-address" style="min-height: 72px;" data-i18n-placeholder="billingAddressPlaceholder" placeholder="例: 東京都渋谷区..."></textarea>
+            </div>
+            <div class="form-group-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+              <div class="form-group">
+                <label for="profile-siret-number" data-i18n="billingSiretLabel">SIRET番号</label>
+                <input type="text" id="profile-siret-number" data-i18n-placeholder="billingSiretPlaceholder" placeholder="123 456 789 00012">
+              </div>
+              <div class="form-group">
+                <label for="profile-registration-number" data-i18n="billingRegistrationLabel">登録番号（T番号）</label>
+                <input type="text" id="profile-registration-number" data-i18n-placeholder="billingRegistrationPlaceholder" placeholder="T1234567890123">
+              </div>
+            </div>
+            <div class="form-group">
+              <label for="profile-email" data-i18n="billingEmailLabel">メールアドレス</label>
+              <input type="email" id="profile-email" data-i18n-placeholder="billingEmailPlaceholder" placeholder="example@pholio.app">
+            </div>
+            <button class="btn btn-primary" id="btn-save-billing-profile" data-i18n="billingSaveButton" style="width:100%; margin-top: 12px;">請求プロフィールを保存</button>
+          </div>
+        </div>
+
+        <div class="settings-tab-content" id="settings-content-plan">
+          <div id="settings-plan-content-container"></div>
         </div>
 
         <div class="settings-tab-content" id="settings-content-invoice">
@@ -711,6 +905,31 @@
               <label data-i18n="bankInfo">Bank Information (optional)</label>
               <textarea id="invoice-bank" style="min-height: 80px;"></textarea>
             </div>
+            <div class="settings-section" id="invoice-legal-section">
+              <h3 id="invoice-legal-section-title">法定情報</h3>
+              <p class="help-text" id="invoice-legal-caption">言語に応じた法定項目を入力してください。</p>
+              <div id="invoice-legal-fields"></div>
+            </div>
+            <div class="form-group">
+              <label data-i18n="invoiceLogoOptionalLabel">ロゴ画像（任意）</label>
+              <div class="invoice-asset-row">
+                <input type="file" id="invoice-logo-upload" accept="image/*">
+                <button class="btn btn-secondary btn-sm" type="button" id="btn-clear-invoice-logo" data-i18n="invoiceLogoClear">ロゴ削除</button>
+              </div>
+              <div class="invoice-asset-preview-wrap">
+                <img id="invoice-logo-preview" class="invoice-asset-preview" alt="Invoice Logo Preview" data-i18n-alt="invoiceLogoPreviewAlt" />
+              </div>
+            </div>
+            <div class="form-group">
+              <label data-i18n="invoiceStampOptionalLabel">印影（任意）</label>
+              <div class="invoice-asset-row">
+                <input type="file" id="invoice-stamp-upload" accept="image/*">
+                <button class="btn btn-secondary btn-sm" type="button" id="btn-clear-invoice-stamp" data-i18n="invoiceStampClear">印影削除</button>
+              </div>
+              <div class="invoice-asset-preview-wrap">
+                <img id="invoice-stamp-preview" class="invoice-asset-preview invoice-asset-stamp" alt="Invoice Stamp Preview" data-i18n-alt="invoiceStampPreviewAlt" />
+              </div>
+            </div>
             <div class="form-group">
               <label for="invoice-template" data-i18n="invoiceTemplate">Invoice Template</label>
               <select id="invoice-template">
@@ -741,6 +960,119 @@
             </div>
           </div>
         </div>
+        <div class="settings-tab-content" id="settings-content-support">
+          <div class="settings-section">
+            <h3 data-i18n="supportFeedbackTitle">Support & Feedback</h3>
+            <p class="help-text" data-i18n="supportFeedbackDesc">不具合報告や機能要望を送信できます。</p>
+            <div class="form-group">
+              <label for="support-ticket-subject" data-i18n="supportSubjectLabel">件名</label>
+              <input type="text" id="support-ticket-subject" data-i18n-placeholder="supportSubjectPlaceholder" placeholder="件名を入力" />
+            </div>
+            <div class="form-group">
+              <label for="support-ticket-category" data-i18n="supportCategoryLabel">カテゴリー</label>
+              <select id="support-ticket-category">
+                <option value="bug" data-i18n="supportCategoryBug">Bug</option>
+                <option value="question" data-i18n="supportCategoryQuestion">Question</option>
+                <option value="feature_request" data-i18n="supportCategoryFeatureRequest">Feature Request</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="support-ticket-message" data-i18n="supportMessageLabel">内容</label>
+              <textarea id="support-ticket-message" style="min-height: 130px;" data-i18n-placeholder="supportMessagePlaceholder" placeholder="内容を入力"></textarea>
+            </div>
+            <button class="btn btn-primary" id="btn-support-submit" data-i18n="supportSubmitButton">送信</button>
+            <div class="support-reply-section">
+              <h4 data-i18n="supportMyRepliesTitle">管理者からの返信</h4>
+              <div class="support-reply-list" id="support-reply-list">
+                <p class="help-text" data-i18n="supportMyRepliesEmpty">返信はまだありません。</p>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="settings-tab-content" id="settings-content-admin">
+          <div class="settings-section">
+            <h3 data-i18n="adminPanelTitle">管理者ダッシュボード</h3>
+            <p class="help-text" data-i18n="adminPanelDesc">ユーザーの機密データに触れずに運営統計のみ確認できます。</p>
+            <div class="admin-summary-grid">
+              <div class="admin-summary-card">
+                <span class="admin-summary-label" data-i18n="adminStatTotalUsers">総ユーザー数</span>
+                <strong id="admin-stat-total-users">0</strong>
+              </div>
+              <div class="admin-summary-card">
+                <span class="admin-summary-label" data-i18n="adminStatPlanBreakdown">プラン別契約数</span>
+                <strong id="admin-stat-plan-counts">FREE 0 / PRO 0 / TEAM 0</strong>
+              </div>
+              <div class="admin-summary-card">
+                <span class="admin-summary-label" data-i18n="adminStatTotalProjects">総案件作成数</span>
+                <strong id="admin-stat-total-projects">0</strong>
+              </div>
+            </div>
+            <div style="display:flex; justify-content:flex-end; margin-top:12px;">
+              <button class="btn btn-secondary btn-sm" id="btn-admin-refresh" data-i18n="adminRefreshButton">更新</button>
+            </div>
+            <div class="admin-user-table-wrap">
+              <table class="admin-user-table">
+                <thead>
+                  <tr>
+                    <th data-i18n="adminUserEmail">メールアドレス</th>
+                    <th data-i18n="adminUserPlan">プラン</th>
+                    <th data-i18n="adminUserProjectCount">案件数</th>
+                  </tr>
+                </thead>
+                <tbody id="admin-user-list-body">
+                  <tr>
+                    <td colspan="3" data-i18n="adminNoData">データがありません</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+          <div class="settings-section">
+            <h3 data-i18n="adminSupportSectionTitle">サポート管理</h3>
+            <p class="help-text" data-i18n="adminSupportSectionDesc">support_tickets の問い合わせを確認し、返信を管理します。</p>
+            <div style="display:flex; justify-content:flex-end; margin-bottom:10px;">
+              <button class="btn btn-secondary btn-sm" id="btn-admin-support-refresh" data-i18n="adminSupportRefresh">更新</button>
+            </div>
+            <div class="admin-user-table-wrap">
+              <table class="admin-user-table admin-support-table">
+                <thead>
+                  <tr>
+                    <th data-i18n="adminSupportStatus">ステータス</th>
+                    <th data-i18n="adminSupportUser">ユーザー</th>
+                    <th data-i18n="adminSupportCategory">カテゴリー</th>
+                    <th data-i18n="adminSupportReceivedAt">受信日時</th>
+                  </tr>
+                </thead>
+                <tbody id="admin-support-ticket-list-body">
+                  <tr>
+                    <td colspan="4" data-i18n="adminSupportNoData">問い合わせはありません</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <div class="admin-support-detail" id="admin-support-detail">
+              <h4 data-i18n="adminSupportDetailTitle">返信作成</h4>
+              <div class="admin-support-detail-meta">
+                <span id="admin-support-detail-subject">—</span>
+              </div>
+              <div class="form-group">
+                <label data-i18n="adminSupportMessage">問い合わせ内容</label>
+                <div class="admin-support-message-box" id="admin-support-detail-message">—</div>
+              </div>
+              <div class="form-group">
+                <label for="admin-support-ai-draft" data-i18n="adminSupportAiDraft">AI生成の下書き</label>
+                <textarea id="admin-support-ai-draft" style="min-height: 110px;" data-i18n-placeholder="adminSupportAiDraftPlaceholder" placeholder="AI draft"></textarea>
+              </div>
+              <div class="form-group">
+                <label for="admin-support-reply" data-i18n="adminSupportReply">返信文</label>
+                <textarea id="admin-support-reply" style="min-height: 130px;" data-i18n-placeholder="adminSupportReplyPlaceholder" placeholder="Reply"></textarea>
+              </div>
+              <div style="display:flex; justify-content:flex-end;">
+                <button class="btn btn-primary" id="btn-admin-support-reply" data-i18n="adminSupportSend">送信</button>
+              </div>
+            </div>
+          </div>
+        </div>
         <div class="settings-tab-content" id="settings-content-contract">
           <div class="settings-section">
             <h3>契約書テンプレート</h3>
@@ -760,6 +1092,46 @@
       </div>
       <div class="modal-footer">
         <button class="btn btn-primary" onclick="closeSettings()" data-i18n="settingsDone">完了</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="enterprise-contact-overlay" style="display:none;">
+    <div class="modal" style="max-width:560px;">
+      <div class="modal-header">
+        <h2 class="modal-title">
+          <span class="modal-icon">🏢</span>
+          <span data-i18n="enterpriseContactTitle">Enterprise Inquiry</span>
+        </h2>
+        <button class="btn-close" id="btn-enterprise-contact-close">✕</button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="enterprise-contact-plan" value="enterprise" />
+        <div class="form-group">
+          <label for="enterprise-contact-team-name" data-i18n="enterpriseContactTeamName">Team / Company Name</label>
+          <input type="text" id="enterprise-contact-team-name" data-i18n-placeholder="enterpriseContactPlaceholderTeamName" placeholder="Team name">
+        </div>
+        <div class="form-group">
+          <label for="enterprise-contact-representative-name" data-i18n="enterpriseContactRepresentative">Representative Name</label>
+          <input type="text" id="enterprise-contact-representative-name" data-i18n-placeholder="enterpriseContactPlaceholderRepresentative" placeholder="Representative name">
+        </div>
+        <div class="form-group">
+          <label for="enterprise-contact-member-range" data-i18n="enterpriseContactMemberRange">Expected Team Size</label>
+          <select id="enterprise-contact-member-range">
+            <option value="" data-i18n="selectDefault">Select</option>
+            <option value="16-30" data-i18n="enterpriseContactMemberRange16_30">16-30 members</option>
+            <option value="31-50" data-i18n="enterpriseContactMemberRange31_50">31-50 members</option>
+            <option value="51+" data-i18n="enterpriseContactMemberRange51Plus">51+ members</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="enterprise-contact-message" data-i18n="enterpriseContactMessage">Message</label>
+          <textarea id="enterprise-contact-message" style="min-height: 120px;" data-i18n-placeholder="enterpriseContactPlaceholderMessage" placeholder="Tell us about your needs"></textarea>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" id="btn-enterprise-contact-cancel" data-i18n="cancel">Cancel</button>
+        <button class="btn btn-primary" id="btn-enterprise-contact-submit" data-i18n="enterpriseContactSubmit">Submit</button>
       </div>
     </div>
   </div>
@@ -938,6 +1310,7 @@
           <div class="form-group">
             <label data-i18n="dueDate">Due Date</label>
             <input type="date" id="invoice-due-date">
+            <button class="btn btn-secondary btn-sm invoice-date-helper-btn" type="button" id="btn-invoice-due-plus14">+14日を自動入力</button>
           </div>
         </div>
         <div class="invoice-item-header">
@@ -963,7 +1336,29 @@
       </div>
       <div class="modal-footer">
         <button class="btn btn-secondary" onclick="closeInvoiceBuilderModal()" data-i18n="cancel">Cancel</button>
-        <button class="btn btn-primary" id="btn-generate-custom-invoice" data-i18n="invoiceGeneratePdfButton">📄 Generate PDF</button>
+        <button class="btn btn-secondary" id="btn-preview-custom-invoice">👁 印刷プレビュー</button>
+        <button class="btn btn-primary" id="btn-generate-custom-invoice" data-i18n="invoiceGeneratePdfButton">📄 PDF保存</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Invoice Preview Modal -->
+  <div class="modal-overlay" id="invoice-preview-modal" style="display:none;">
+    <div class="modal invoice-preview-modal">
+      <div class="modal-header">
+        <h3 class="modal-title">
+          <span class="modal-icon">🖨️</span>
+          印刷用プレビュー
+        </h3>
+        <button class="btn-close" onclick="closeInvoicePreviewModal()">✕</button>
+      </div>
+      <div class="modal-body invoice-preview-body">
+        <iframe id="invoice-preview-frame" class="invoice-preview-frame" title="Invoice Preview"></iframe>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeInvoicePreviewModal()">閉じる</button>
+        <button class="btn btn-secondary" id="btn-print-invoice-preview">印刷</button>
+        <button class="btn btn-primary" id="btn-download-invoice-preview-pdf">PDF保存</button>
       </div>
     </div>
   </div>

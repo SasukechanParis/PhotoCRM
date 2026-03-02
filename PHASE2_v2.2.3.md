@@ -1,4 +1,4 @@
-# PhotoCRM v2.2.3 - btoa Encoding Error Fix
+# Pholio v2.2.3 - btoa Encoding Error Fix
 
 ## 🔴 修正された致命的バグ
 
@@ -125,8 +125,8 @@ setTimeout(() => location.reload(true), 1000);
 1. ページをリロード
 2. コンソール（F12）に以下が表示されることを確認：
    ```
-   📦 Loading PhotoCRM v2.2.3 (Fixed btoa encoding error)...
-   🚀 PhotoCRM v2.2.3 Initializing...
+   📦 Loading Pholio v2.2.3 (Fixed btoa encoding error)...
+   🚀 Pholio v2.2.3 Initializing...
    ```
 3. **赤いエラーがないこと**を確認
 4. 「新規登録」ボタンをクリック ✅

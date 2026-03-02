@@ -1,0 +1,28 @@
+# OS
+.DS_Store
+
+# Node
+node_modules/
+
+# Logs
+*.log
+
+# Build cache
+.vite/
+
+# Local secrets / admin keys
+*firebase-adminsdk*.json
+
+# Backup and temporary artifacts
+*.bak
+*.tmp
+
+# Local exported data (do not deploy/track)
+customers.csv
+customers (1).csv
+photocrm_backup_*.json
+Pholio_AutoBackup_*.json
+
+# Optional local notes
+HANDOFF_DOCUMENT.md
+PHASE*.md

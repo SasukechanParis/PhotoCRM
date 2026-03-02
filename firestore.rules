@@ -9,14 +9,88 @@ service cloud.firestore {
       return isSignedIn() && request.auth.uid == userId;
     }
 
-    // App state document per user: /users/{uid}/app/main
+    function isAdmin() {
+      return isSignedIn()
+        && request.auth.token.email is string
+        && request.auth.token.email in ['sasuke.photographe@gmail.com'];
+    }
+
+    function isOwnerWriteForUserScopedDoc(userId) {
+      return request.resource == null
+        || !('userId' in request.resource.data)
+        || request.resource.data.userId == userId;
+    }
+
+    function isValidUserRootProfile(userId) {
+      return request.resource.data.userId == userId
+        && request.resource.data.email is string
+        && request.resource.data.email.size() > 0;
+    }
+
+    function isValidAdminSummary(userId) {
+      return request.resource.data.userId == userId
+        && request.resource.data.email is string
+        && request.resource.data.email.size() > 0
+        && request.resource.data.plan is string
+        && request.resource.data.projectCount is int
+        && request.resource.data.projectCount >= 0;
+    }
+
+    // Public user profile root: /users/{uid}
+    match /users/{uid} {
+      allow read: if isOwner(uid);
+      allow create, update: if isOwner(uid) && isValidUserRootProfile(uid);
+      allow delete: if isOwner(uid);
+    }
+
+    // User-owned app data: /users/{uid}/settings|projects|expenses|meta|...
     match /users/{uid}/{document=**} {
-      allow read, write: if isOwner(uid)
-        && (
-          request.method == 'get'
-          || request.resource == null
-          || request.resource.data.userId == request.auth.uid
-        );
+      allow read: if isOwner(uid);
+      allow create, update: if isOwner(uid) && isOwnerWriteForUserScopedDoc(uid);
+      allow delete: if isOwner(uid);
+    }
+
+    // Admin-readable privacy-safe summary only.
+    // Contains only: email, plan, projectCount.
+    match /admin_user_summaries/{uid} {
+      allow read: if isAdmin();
+      allow create: if isOwner(uid)
+        && isValidAdminSummary(uid)
+        && request.resource.data.keys().hasOnly(['userId', 'email', 'plan', 'projectCount', '__updatedAt']);
+      allow update: if isOwner(uid)
+        && isValidAdminSummary(uid)
+        && request.resource.data.diff(resource.data).changedKeys().hasOnly(['userId', 'email', 'plan', 'projectCount', '__updatedAt']);
+      allow delete: if isOwner(uid);
+    }
+
+    // Enterprise inquiries from authenticated users.
+    match /inquiries/{inquiryId} {
+      allow create: if isSignedIn()
+        && request.resource.data.userId == request.auth.uid;
+      allow read: if isSignedIn()
+        && (resource.data.userId == request.auth.uid || isAdmin());
+      allow update, delete: if isAdmin();
+    }
+
+    // Support & feedback tickets.
+    match /support_tickets/{ticketId} {
+      allow create: if isSignedIn()
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.status == 'pending'
+        && request.resource.data.ai_draft_reply is string;
+      allow read: if isSignedIn()
+        && (resource.data.userId == request.auth.uid || isAdmin());
+      allow update, delete: if isAdmin();
+    }
+
+    // Admin device-lock and security configuration.
+    match /admin_config/{document=**} {
+      allow read, create, update, delete: if isAdmin();
+    }
+
+    // Unauthorized-access/security logs for future alert hooks.
+    match /admin_security_logs/{logId} {
+      allow read, create, update, delete: if isAdmin();
     }
   }
 }
