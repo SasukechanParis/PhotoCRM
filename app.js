@@ -13,6 +13,7 @@
   const INVOICE_SENDER_PROFILE_KEY = 'photocrm_invoice_sender_profile';
   const EXPENSES_KEY = 'photocrm_expenses';
   const CURRENCY_KEY = 'photocrm_currency';
+  const ACCENT_COLOR_KEY = 'photocrm_accent_color';
   const CUSTOM_FIELDS_KEY = 'photocrm_custom_fields';
   const CALENDAR_FILTERS_KEY = 'photocrm_calendar_filters';
   const DASHBOARD_VISIBILITY_KEY = 'photocrm_dashboard_visible';
@@ -43,6 +44,7 @@
   const ENABLE_STATS_FEATURES = true;
   const DEFAULT_INVOICE_MESSAGE_KEY = 'invoiceDefaultMessage';
   const FREE_PLAN_LIMIT = 20;
+  const DEFAULT_ACCENT_COLOR = '#8b5cf6';
   const ADMIN_SECURE_SESSION_KEY = 'photocrm_admin_secure_session';
   const ADMIN_SESSION_TIMEOUT_MS = 60 * 60 * 1000;
   const ADMIN_SESSION_TOUCH_INTERVAL_MS = 5 * 60 * 1000;
@@ -241,6 +243,7 @@
       EXPENSES_KEY,
       LANG_KEY,
       THEME_KEY,
+      ACCENT_COLOR_KEY,
       CURRENCY_KEY,
       TAX_SETTINGS_KEY,
       INVOICE_SENDER_PROFILE_KEY,
@@ -399,6 +402,9 @@
   );
   let currentStudioName = normalizeStudioName(
     getCloudValue(STUDIO_NAME_KEY, getLocalValue(STUDIO_NAME_KEY, ''))
+  );
+  let currentAccentColor = normalizeAccentColor(
+    getCloudValue(ACCENT_COLOR_KEY, getLocalValue(ACCENT_COLOR_KEY, DEFAULT_ACCENT_COLOR))
   );
 
   function getLanguageSelectElements() {
@@ -1093,6 +1099,7 @@
     if (State.getRaw(USER_PLAN_KEY, null) === null) State.setJSON(USER_PLAN_KEY, 'free');
     if (State.getRaw(USER_BILLING_PROFILE_KEY, null) === null) State.setJSON(USER_BILLING_PROFILE_KEY, {});
     if (State.getRaw(STUDIO_NAME_KEY, null) === null) State.setJSON(STUDIO_NAME_KEY, '');
+    if (State.getRaw(ACCENT_COLOR_KEY, null) === null) State.setJSON(ACCENT_COLOR_KEY, DEFAULT_ACCENT_COLOR);
   }
 
   // ===== Storage Helpers =====
@@ -1515,7 +1522,11 @@
     googleCalendarAutoSyncEnabled = loadGoogleCalendarAutoSyncEnabled();
     googleCalendarSelectedId = loadGoogleCalendarSelectedId();
     currentStudioName = normalizeStudioName(getCloudValue(STUDIO_NAME_KEY, getLocalValue(STUDIO_NAME_KEY, '')));
+    currentAccentColor = normalizeAccentColor(
+      getCloudValue(ACCENT_COLOR_KEY, getLocalValue(ACCENT_COLOR_KEY, DEFAULT_ACCENT_COLOR))
+    );
     syncPlanFromStorage();
+    applyAccentColor(currentAccentColor, { persist: false });
     updateHeaderBrandWordmark();
   }
 
@@ -3293,6 +3304,7 @@
       billingProfile: getBillingProfile(),
       studioName: currentStudioName,
       theme: currentTheme,
+      accentColor: currentAccentColor,
       language: currentLang,
       currency: currentCurrency,
       exportedAt: new Date().toISOString(),
@@ -3332,6 +3344,72 @@
   }
 
   window.calculateTax = calculateTax;
+
+  function normalizeAccentColor(value) {
+    const raw = String(value || '').trim();
+    if (!raw) return DEFAULT_ACCENT_COLOR;
+    const normalized = raw.startsWith('#') ? raw : `#${raw}`;
+    const hex = normalized.toLowerCase();
+    if (/^#[0-9a-f]{6}$/.test(hex)) return hex;
+    if (/^#[0-9a-f]{3}$/.test(hex)) {
+      const [r, g, b] = hex.slice(1).split('');
+      return `#${r}${r}${g}${g}${b}${b}`;
+    }
+    return DEFAULT_ACCENT_COLOR;
+  }
+
+  function hexToRgb(hex) {
+    const normalized = normalizeAccentColor(hex).slice(1);
+    return {
+      r: parseInt(normalized.slice(0, 2), 16),
+      g: parseInt(normalized.slice(2, 4), 16),
+      b: parseInt(normalized.slice(4, 6), 16),
+    };
+  }
+
+  function channelToHex(value) {
+    const clamped = Math.max(0, Math.min(255, Math.round(value)));
+    return clamped.toString(16).padStart(2, '0');
+  }
+
+  function adjustColor(hex, ratio = 0) {
+    const { r, g, b } = hexToRgb(hex);
+    const next = (channel) => {
+      if (ratio >= 0) return channel + (255 - channel) * ratio;
+      return channel * (1 + ratio);
+    };
+    return `#${channelToHex(next(r))}${channelToHex(next(g))}${channelToHex(next(b))}`;
+  }
+
+  function getAccentPalette(accentHex) {
+    const normalized = normalizeAccentColor(accentHex);
+    const rgb = hexToRgb(normalized);
+    return {
+      accent: normalized,
+      accentHover: adjustColor(normalized, 0.18),
+      accentGlow: `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.25)`,
+    };
+  }
+
+  function applyAccentColor(color, options = {}) {
+    const { persist = true } = options;
+    const palette = getAccentPalette(color);
+    currentAccentColor = palette.accent;
+
+    const root = document.documentElement;
+    root.style.setProperty('--accent', palette.accent);
+    root.style.setProperty('--accent-hover', palette.accentHover);
+    root.style.setProperty('--accent-glow', palette.accentGlow);
+    root.style.setProperty('--primary', palette.accent);
+    root.style.setProperty('--primary-light', palette.accentGlow);
+
+    const themeMeta = document.querySelector('meta[name="theme-color"]');
+    if (themeMeta) themeMeta.setAttribute('content', palette.accent);
+
+    saveLocalValue(ACCENT_COLOR_KEY, palette.accent);
+    if (persist) saveCloudValue(ACCENT_COLOR_KEY, palette.accent);
+  }
+  window.applyAccentColor = applyAccentColor;
 
   // ===== Theme Management =====
   let currentTheme = FORCE_DARK_MODE
@@ -6150,6 +6228,23 @@
         <div class="settings-detail-empty">${escapeHtml(t('settingsCurrencyHelp'))}</div>
       </div>
       <div class="settings-section">
+        <h3>${escapeHtml(t('settingsAccentSection'))}</h3>
+        <div class="settings-item dashboard-config-row">
+          <label class="dashboard-config-label" for="settings-accent-color">${escapeHtml(t('settingsAccentLabel'))}</label>
+          <div class="settings-accent-control">
+            <input
+              type="color"
+              id="settings-accent-color"
+              class="settings-color-input settings-accent-input"
+              value="${escapeHtml(currentAccentColor)}"
+              aria-label="${escapeHtml(t('settingsAccentLabel'))}"
+            >
+            <button type="button" class="btn btn-secondary btn-sm" id="btn-reset-accent-color">${escapeHtml(t('settingsAccentReset'))}</button>
+          </div>
+        </div>
+        <div class="settings-detail-empty">${escapeHtml(t('settingsAccentHelp'))}</div>
+      </div>
+      <div class="settings-section">
         <h3>${escapeHtml(t('settingsPlanSection'))}</h3>
         <div class="settings-item-list">${planRows}</div>
         <div class="settings-add-box" style="display:grid; grid-template-columns:1fr; gap:8px;">
@@ -6238,6 +6333,27 @@
       if (!nextCurrency) return;
       updateCurrency(nextCurrency);
     }, 'settings-currency-select-change');
+
+    const accentColorInput = container.querySelector('#settings-accent-color');
+    if (accentColorInput) {
+      accentColorInput.value = normalizeAccentColor(currentAccentColor);
+      bindEventOnce(accentColorInput, 'input', (event) => {
+        const nextColor = String(event?.target?.value || '').trim();
+        applyAccentColor(nextColor, { persist: false });
+      }, 'settings-accent-color-input');
+      bindEventOnce(accentColorInput, 'change', (event) => {
+        const nextColor = String(event?.target?.value || '').trim();
+        applyAccentColor(nextColor, { persist: true });
+        showToast(t('settingsSaved'));
+      }, 'settings-accent-color-change');
+    }
+
+    bindEventOnce(container.querySelector('#btn-reset-accent-color'), 'click', () => {
+      applyAccentColor(DEFAULT_ACCENT_COLOR, { persist: true });
+      const input = container.querySelector('#settings-accent-color');
+      if (input) input.value = currentAccentColor;
+      showToast(t('settingsSaved'));
+    }, 'settings-accent-color-reset');
 
     container.querySelectorAll('button[data-plan-edit]').forEach((button) => {
       const index = Number(button.dataset.planEdit);
@@ -6399,6 +6515,7 @@
         if (typeof data.googleCalendarSelectedId === 'string') setGoogleCalendarSelectedId(data.googleCalendarSelectedId);
         if (data.billingProfile && typeof data.billingProfile === 'object') saveBillingProfile(data.billingProfile);
         if (typeof data.studioName === 'string') setStudioName(data.studioName);
+        if (typeof data.accentColor === 'string') applyAccentColor(data.accentColor, { persist: true });
         if (typeof data.contractTemplateText === 'string') saveContractTemplate(data.contractTemplateText);
         reloadRuntimeStateFromStorage();
         applyHeroMetricsConfig();
@@ -8382,6 +8499,7 @@
 
     // 1. Apply theme first (prevents flash)
     applyTheme(FORCE_DARK_MODE ? 'dark' : currentTheme);
+    applyAccentColor(currentAccentColor, { persist: false });
 
     // 2. Set defaults
     syncPlanFromStorage();
@@ -8436,6 +8554,9 @@
     currentLang = hydratedLang;
     if (!window.LOCALE || !window.LOCALE[currentLang]) currentLang = 'ja';
     currentTheme = FORCE_DARK_MODE ? 'dark' : getCloudValue(THEME_KEY, getLocalValue(THEME_KEY, 'dark'));
+    currentAccentColor = normalizeAccentColor(
+      getCloudValue(ACCENT_COLOR_KEY, getLocalValue(ACCENT_COLOR_KEY, DEFAULT_ACCENT_COLOR))
+    );
     currentCurrency = getCloudValue(CURRENCY_KEY, getLocalValue(CURRENCY_KEY, 'USD'));
     if (!CURRENCY_CONFIG[currentCurrency]) currentCurrency = 'USD';
     currentStudioName = normalizeStudioName(getCloudValue(STUDIO_NAME_KEY, getLocalValue(STUDIO_NAME_KEY, '')));

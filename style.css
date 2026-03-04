@@ -4319,6 +4319,42 @@ html[lang="fr"] .modal-footer .btn {
   cursor: pointer;
 }
 
+.settings-accent-control {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 220px;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+}
+
+.settings-accent-input {
+  width: 56px;
+  height: 36px;
+  padding: 3px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.18);
+}
+
+.settings-accent-input::-webkit-color-swatch-wrapper {
+  padding: 0;
+  border-radius: 8px;
+}
+
+.settings-accent-input::-webkit-color-swatch {
+  border: none;
+  border-radius: 8px;
+}
+
+.settings-accent-input::-moz-color-swatch {
+  border: none;
+  border-radius: 8px;
+}
+
 .settings-add-box {
   display: flex;
   gap: 8px;
@@ -4483,6 +4519,12 @@ html[lang="fr"] .modal-footer .btn {
     max-width: none;
     min-width: 0;
     flex: 1 1 100%;
+  }
+
+  .settings-accent-control {
+    justify-content: flex-start;
+    width: 100%;
+    min-width: 0;
   }
 }
 
