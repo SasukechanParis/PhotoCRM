@@ -3406,10 +3406,24 @@
     const themeMeta = document.querySelector('meta[name="theme-color"]');
     if (themeMeta) themeMeta.setAttribute('content', palette.accent);
 
+    const currentYear = selectedDashboardMonth?.getFullYear?.() || new Date().getFullYear();
+    if (revenueProfitChartInstance) renderRevenueChart(currentYear);
+    if (requestTrendChartInstance) renderRequestTrendChart(currentYear);
+
     saveLocalValue(ACCENT_COLOR_KEY, palette.accent);
-    if (persist) saveCloudValue(ACCENT_COLOR_KEY, palette.accent);
+    if (!persist) return Promise.resolve(true);
+    return saveCloudValue(ACCENT_COLOR_KEY, palette.accent);
   }
   window.applyAccentColor = applyAccentColor;
+
+  function syncThemeColorPreviewUi(container, color) {
+    const root = container || document;
+    const normalized = normalizeAccentColor(color);
+    const preview = root.querySelector('#theme-color-preview');
+    const value = root.querySelector('#theme-color-value');
+    if (preview) preview.style.background = normalized;
+    if (value) value.textContent = normalized.toUpperCase();
+  }
 
   // ===== Theme Management =====
   let currentTheme = FORCE_DARK_MODE
@@ -4292,6 +4306,25 @@
     };
   }
 
+  function getDashboardChartPalette() {
+    const accent = normalizeAccentColor(currentAccentColor);
+    const accentSoft = `${accent}66`;
+    const accentStrong = adjustColor(accent, -0.12);
+    const sub = adjustColor(accent, 0.22);
+    const subSoft = `${sub}44`;
+    const muted = adjustColor(accent, -0.34);
+    const mutedSoft = `${muted}33`;
+    return {
+      accent,
+      accentSoft,
+      accentStrong,
+      sub,
+      subSoft,
+      muted,
+      mutedSoft,
+    };
+  }
+
   function getDashboardRequestChartDatasetLabels(year) {
     return {
       current: t('chartRequestCurrentYear', { year: String(year) }),
@@ -4363,6 +4396,7 @@
     const labels = getDashboardChartMonthLabels();
     const { revenueByMonth, profitByMonth } = buildMonthlyRevenueProfitSeries(year);
     const datasetLabels = getDashboardChartDatasetLabels();
+    const palette = getDashboardChartPalette();
 
     if (!revenueProfitChartInstance) {
       revenueProfitChartInstance = new window.Chart(ctx, {
@@ -4373,8 +4407,8 @@
             {
               label: datasetLabels.revenue,
               data: revenueByMonth,
-              backgroundColor: '#007bff',
-              borderColor: '#007bff',
+              backgroundColor: palette.accent,
+              borderColor: palette.accentStrong,
               borderWidth: 1,
               borderRadius: 6,
               maxBarThickness: 28,
@@ -4382,8 +4416,8 @@
             {
               label: datasetLabels.profit,
               data: profitByMonth,
-              backgroundColor: '#28a745',
-              borderColor: '#28a745',
+              backgroundColor: palette.sub,
+              borderColor: palette.accentStrong,
               borderWidth: 1,
               borderRadius: 6,
               maxBarThickness: 28,
@@ -4431,14 +4465,14 @@
     if (revenueProfitChartInstance.data.datasets[0]) {
       revenueProfitChartInstance.data.datasets[0].label = datasetLabels.revenue;
       revenueProfitChartInstance.data.datasets[0].data = revenueByMonth;
-      revenueProfitChartInstance.data.datasets[0].backgroundColor = '#007bff';
-      revenueProfitChartInstance.data.datasets[0].borderColor = '#007bff';
+      revenueProfitChartInstance.data.datasets[0].backgroundColor = palette.accent;
+      revenueProfitChartInstance.data.datasets[0].borderColor = palette.accentStrong;
     }
     if (revenueProfitChartInstance.data.datasets[1]) {
       revenueProfitChartInstance.data.datasets[1].label = datasetLabels.profit;
       revenueProfitChartInstance.data.datasets[1].data = profitByMonth;
-      revenueProfitChartInstance.data.datasets[1].backgroundColor = '#28a745';
-      revenueProfitChartInstance.data.datasets[1].borderColor = '#28a745';
+      revenueProfitChartInstance.data.datasets[1].backgroundColor = palette.sub;
+      revenueProfitChartInstance.data.datasets[1].borderColor = palette.accentStrong;
     }
     revenueProfitChartInstance.update();
   }
@@ -4453,13 +4487,14 @@
     const { currentYearCounts, previousYearCounts } = buildMonthlyRequestCountSeries(year);
     const hasPreviousYearData = previousYearCounts.some((value) => value > 0);
     const datasetLabels = getDashboardRequestChartDatasetLabels(year);
+    const palette = getDashboardChartPalette();
 
     const datasets = [
       {
         label: datasetLabels.current,
         data: currentYearCounts,
-        borderColor: '#2563eb',
-        backgroundColor: 'rgba(37,99,235,0.14)',
+        borderColor: palette.accentStrong,
+        backgroundColor: palette.accentSoft,
         fill: false,
         tension: 0.3,
         borderWidth: 2,
@@ -4472,8 +4507,8 @@
       datasets.push({
         label: datasetLabels.previous,
         data: previousYearCounts,
-        borderColor: '#94a3b8',
-        backgroundColor: 'rgba(148,163,184,0.12)',
+        borderColor: palette.muted,
+        backgroundColor: palette.mutedSoft,
         fill: false,
         tension: 0.3,
         borderWidth: 2,
@@ -6066,15 +6101,11 @@
       ? `<div class="settings-item"><span>${escapeHtml(t('settingsPlanEmpty'))}</span></div>`
       : planMaster.map((plan, index) => `
         <div class="settings-item">
-          <div style="flex:1;">
+          <div class="settings-item-content">
             <div style="font-weight:600;">${escapeHtml(plan.name)}</div>
             <div style="font-size:0.85rem;color:var(--text-muted);">${escapeHtml(t('settingsPlanSummary', { revenue: formatCurrency(plan.price), cost: formatCurrency(plan.cost) }))}</div>
           </div>
-          <div style="display:flex; align-items:center; gap:6px;">
-            <label class="settings-color-label" title="${escapeHtml(t('settingsPlanColor'))}">
-              <span class="settings-color-dot" style="background:${resolvePlanTagColor(plan.name)};"></span>
-              <input type="color" class="settings-color-input" data-plan-color="${index}" value="${resolvePlanTagColor(plan.name)}" aria-label="${escapeHtml(t('settingsPlanColor'))}">
-            </label>
+          <div class="settings-item-actions">
             <button type="button" class="btn-icon-sm" data-plan-edit="${index}" title="${escapeHtml(t('edit'))}">✏️</button>
             <button type="button" class="btn-icon-sm" data-plan-remove="${index}" title="${escapeHtml(t('delete'))}">✕</button>
           </div>
@@ -6201,21 +6232,20 @@
           <input
             type="text"
             id="settings-studio-name"
-            class="ui-button-standard"
-            style="min-width: 180px;"
+            class="ui-button-standard settings-studio-input"
             value="${escapeHtml(currentStudioName)}"
             placeholder="${escapeHtml(t('settingsStudioNamePlaceholder'))}"
           >
         </div>
-        <div style="display:flex; justify-content:flex-end;">
-          <button type="button" class="btn btn-primary btn-sm" id="btn-save-studio-name">${escapeHtml(t('settingsStudioNameSave'))}</button>
+        <div class="settings-save-row">
+          <button type="button" class="btn btn-primary btn-sm" id="btn-save-studio-name">${escapeHtml(t('saveSettings'))}</button>
         </div>
       </div>
       <div class="settings-section">
         <h3>${escapeHtml(t('settingsLanguageSection'))}</h3>
         <div class="settings-item dashboard-config-row">
           <label class="dashboard-config-label" for="settings-language-select">${escapeHtml(t('settingsLanguageLabel'))}</label>
-          <select id="settings-language-select" class="ui-button-standard" style="min-width: 180px;">${languageOptionRows}</select>
+          <select id="settings-language-select" class="ui-button-standard settings-select">${languageOptionRows}</select>
         </div>
         <div class="settings-detail-empty">${escapeHtml(t('settingsLanguageHelp'))}</div>
       </div>
@@ -6223,37 +6253,39 @@
         <h3>${escapeHtml(t('settingsCurrencySection'))}</h3>
         <div class="settings-item dashboard-config-row">
           <label class="dashboard-config-label" for="settings-currency-select">${escapeHtml(t('currency'))}</label>
-          <select id="settings-currency-select" class="ui-button-standard" style="min-width: 180px;">${currencyOptionRows}</select>
+          <select id="settings-currency-select" class="ui-button-standard settings-select">${currencyOptionRows}</select>
         </div>
         <div class="settings-detail-empty">${escapeHtml(t('settingsCurrencyHelp'))}</div>
       </div>
       <div class="settings-section">
-        <h3>${escapeHtml(t('settingsAccentSection'))}</h3>
+        <h3>${escapeHtml(t('themeColorSection'))}</h3>
         <div class="settings-item dashboard-config-row">
-          <label class="dashboard-config-label" for="settings-accent-color">${escapeHtml(t('settingsAccentLabel'))}</label>
-          <div class="settings-accent-control">
+          <label class="dashboard-config-label" for="theme-color-picker">${escapeHtml(t('themeColorLabel'))}</label>
+          <div class="theme-color-control">
             <input
               type="color"
-              id="settings-accent-color"
-              class="settings-color-input settings-accent-input"
+              id="theme-color-picker"
+              class="settings-color-input theme-color-input"
               value="${escapeHtml(currentAccentColor)}"
-              aria-label="${escapeHtml(t('settingsAccentLabel'))}"
+              aria-label="${escapeHtml(t('themeColorLabel'))}"
             >
-            <button type="button" class="btn btn-secondary btn-sm" id="btn-reset-accent-color">${escapeHtml(t('settingsAccentReset'))}</button>
+            <span class="theme-color-preview" id="theme-color-preview" aria-hidden="true" style="background:${escapeHtml(currentAccentColor)};"></span>
+            <span class="theme-color-value" id="theme-color-value">${escapeHtml(currentAccentColor.toUpperCase())}</span>
+            <button type="button" class="btn btn-secondary btn-sm" id="btn-reset-theme-color">${escapeHtml(t('themeColorReset'))}</button>
           </div>
         </div>
-        <div class="settings-detail-empty">${escapeHtml(t('settingsAccentHelp'))}</div>
+        <div class="settings-detail-empty">${escapeHtml(t('themeColorHelp'))}</div>
       </div>
       <div class="settings-section">
         <h3>${escapeHtml(t('settingsPlanSection'))}</h3>
         <div class="settings-item-list">${planRows}</div>
-        <div class="settings-add-box" style="display:grid; grid-template-columns:1fr; gap:8px;">
+        <div class="settings-add-box settings-add-box-plan">
           <input type="hidden" id="edit-plan-index" value="">
           <input type="text" id="add-plan-name" placeholder="${escapeHtml(t('settingsPlanNamePlaceholder'))}">
           <input type="number" id="add-plan-price" min="0" step="1" placeholder="${escapeHtml(t('settingsPlanRevenuePlaceholder'))}">
           <input type="number" id="add-plan-cost" min="0" step="1" placeholder="${escapeHtml(t('settingsPlanCostPlaceholder'))}">
-          <div style="display:flex; gap:8px;">
-            <button type="button" class="btn btn-primary btn-sm" id="btn-plan-save">${t('settingsAddBtn')}</button>
+          <div class="settings-form-actions">
+            <button type="button" class="btn btn-primary btn-sm" id="btn-plan-save">${escapeHtml(t('saveSettings'))}</button>
             <button type="button" class="btn btn-secondary btn-sm" id="btn-plan-reset">${escapeHtml(t('clear'))}</button>
           </div>
         </div>
@@ -6261,7 +6293,7 @@
       <div class="settings-section">
         <h3>${escapeHtml(t('settingsDynamicSection'))}</h3>
         <div class="settings-item-list">${dynamicItemRows}</div>
-        <div class="settings-add-box" style="display:grid; grid-template-columns:1fr auto; gap:8px;">
+        <div class="settings-add-box settings-add-box-dynamic">
           <input type="text" id="add-dynamic-item-name" placeholder="${escapeHtml(t('settingsDynamicCategoryPlaceholder'))}">
           <button type="button" class="btn btn-primary btn-sm" id="btn-dynamic-item-add">${escapeHtml(t('settingsDynamicAddCategory'))}</button>
         </div>
@@ -6277,8 +6309,8 @@
         <div class="settings-detail-empty">${escapeHtml(t('settingsGoogleCalendarAutoSyncDesc'))}</div>
         <div class="settings-item dashboard-config-row">
           <label class="dashboard-config-label" for="settings-google-calendar-select">${escapeHtml(t('settingsGoogleCalendarSelectLabel'))}</label>
-          <div style="display:flex; align-items:center; gap:6px; min-width: 240px;">
-            <select id="settings-google-calendar-select" class="ui-button-standard" style="flex:1; min-width:0;"></select>
+          <div class="settings-inline-select-wrap">
+            <select id="settings-google-calendar-select" class="ui-button-standard"></select>
             <button type="button" class="btn-icon-sm" id="settings-google-calendar-refresh" title="${escapeHtml(t('settingsGoogleCalendarRefresh'))}" aria-label="${escapeHtml(t('settingsGoogleCalendarRefresh'))}">↻</button>
           </div>
         </div>
@@ -6334,26 +6366,38 @@
       updateCurrency(nextCurrency);
     }, 'settings-currency-select-change');
 
-    const accentColorInput = container.querySelector('#settings-accent-color');
+    const accentColorInput = container.querySelector('#theme-color-picker');
     if (accentColorInput) {
       accentColorInput.value = normalizeAccentColor(currentAccentColor);
+      syncThemeColorPreviewUi(container, accentColorInput.value);
       bindEventOnce(accentColorInput, 'input', (event) => {
         const nextColor = String(event?.target?.value || '').trim();
         applyAccentColor(nextColor, { persist: false });
-      }, 'settings-accent-color-input');
-      bindEventOnce(accentColorInput, 'change', (event) => {
+        syncThemeColorPreviewUi(container, nextColor);
+      }, 'theme-color-picker-input');
+      bindEventOnce(accentColorInput, 'change', async (event) => {
         const nextColor = String(event?.target?.value || '').trim();
-        applyAccentColor(nextColor, { persist: true });
-        showToast(t('settingsSaved'));
-      }, 'settings-accent-color-change');
+        syncThemeColorPreviewUi(container, nextColor);
+        try {
+          const saved = await applyAccentColor(nextColor, { persist: true });
+          if (saved !== false) showToast(t('settingsSaved'));
+        } catch (err) {
+          console.error('Accent color save failed', err);
+        }
+      }, 'theme-color-picker-change');
     }
 
-    bindEventOnce(container.querySelector('#btn-reset-accent-color'), 'click', () => {
-      applyAccentColor(DEFAULT_ACCENT_COLOR, { persist: true });
-      const input = container.querySelector('#settings-accent-color');
+    bindEventOnce(container.querySelector('#btn-reset-theme-color'), 'click', async () => {
+      syncThemeColorPreviewUi(container, DEFAULT_ACCENT_COLOR);
+      try {
+        const saved = await applyAccentColor(DEFAULT_ACCENT_COLOR, { persist: true });
+        if (saved !== false) showToast(t('settingsSaved'));
+      } catch (err) {
+        console.error('Accent color reset failed', err);
+      }
+      const input = container.querySelector('#theme-color-picker');
       if (input) input.value = currentAccentColor;
-      showToast(t('settingsSaved'));
-    }, 'settings-accent-color-reset');
+    }, 'theme-color-picker-reset');
 
     container.querySelectorAll('button[data-plan-edit]').forEach((button) => {
       const index = Number(button.dataset.planEdit);
@@ -6363,12 +6407,6 @@
     container.querySelectorAll('button[data-plan-remove]').forEach((button) => {
       const index = Number(button.dataset.planRemove);
       bindEventOnce(button, 'click', () => removePlanMasterByIndex(index), `plan-master-remove-${index}`);
-    });
-
-    container.querySelectorAll('input[data-plan-color]').forEach((input) => {
-      const index = Number(input.dataset.planColor);
-      bindEventOnce(input, 'input', () => updatePlanColorByIndex(index, input.value), `plan-master-color-${index}`);
-      bindEventOnce(input, 'change', () => updatePlanColorByIndex(index, input.value), `plan-master-color-change-${index}`);
     });
 
     const addDynamicItemNameInput = container.querySelector('#add-dynamic-item-name');
