@@ -343,6 +343,21 @@
     mirrorToIndexedDB(`local:${key}`, value);
   }
 
+  let cloudSaveRetryToastTimer = null;
+  function notifyCloudSaveRetry() {
+    if (cloudSaveRetryToastTimer) return;
+    showToast(
+      getLocaleTextOrFallback(
+        'cloudSaveRetryMessage',
+        'クラウド保存に失敗しました。通信状態を確認して再試行してください。'
+      ),
+      'error'
+    );
+    cloudSaveRetryToastTimer = window.setTimeout(() => {
+      cloudSaveRetryToastTimer = null;
+    }, 5000);
+  }
+
   function saveCloudValue(key, value, options = {}) {
     const propagateError = !!options?.propagateError;
     State.setJSON(key, value);
@@ -361,6 +376,7 @@
         }).catch((err) => {
           console.error(`Failed to save ${key}`, err);
           setCloudSyncIndicator('error');
+          notifyCloudSaveRetry();
           if (propagateError) throw err;
           return false;
         });
@@ -369,6 +385,7 @@
     } catch (err) {
       console.error(`Failed to save ${key}`, err);
       setCloudSyncIndicator('error');
+      notifyCloudSaveRetry();
       if (propagateError) return Promise.reject(err);
       return Promise.resolve(false);
     }
@@ -621,6 +638,19 @@
     return str;
   }
   window.t = t;
+
+  function getUnsetDisplayText() {
+    const localeBucket = window.LOCALE?.[currentLang] || {};
+    const candidate = localeBucket.valUnsetInput || localeBucket.valUnset;
+    if (typeof candidate === 'string' && candidate.trim()) return candidate;
+    return '（未入力）';
+  }
+
+  function toDisplayText(value) {
+    if (value === null || value === undefined) return getUnsetDisplayText();
+    const text = String(value).trim();
+    return text || getUnsetDisplayText();
+  }
 
   function getDefaultInvoiceMessage() {
     return t(DEFAULT_INVOICE_MESSAGE_KEY);
@@ -1043,6 +1073,8 @@
 
     refreshLanguageOptionAvailability();
     refreshUiAfterLanguageChange();
+    updateSettingsCurrentTabIndicator();
+    scheduleVerticalLongVowelNormalization();
   }
   window.updateLanguage = updateLanguage;
   window.updateUITS = updateLanguage;
@@ -1065,29 +1097,34 @@
 
   // ===== Storage Helpers =====
   function loadCustomers() {
-    const loaded = getCloudValue(STORAGE_KEY, []);
-    const records = Array.isArray(loaded) ? loaded : [];
-    const currentUid = String(window.FirebaseService?.getCurrentUser?.()?.uid || '').trim();
-    const scopedRecords = currentUid
-      ? records.filter((record) => {
-        const ownerUid = String(record?.userId || '').trim();
-        return !ownerUid || ownerUid === currentUid;
-      })
-      : records;
-    return withCurrentUserId(scopedRecords).map((record) => {
-      const normalizedExtraChargeItems = normalizeExtraChargeItems(record?.extraChargeItems);
-      const fallbackExpense = toSafeNumber(record?.planCost, toSafeNumber(record?.planDetails?.planCost, 0))
-        + normalizedExtraChargeItems.reduce((sum, item) => sum + toSafeNumber(item?.cost, 0), 0);
-      return {
-        ...record,
-        planDetails: normalizePlanDetails(record?.planDetails, record?.revenue),
-        extraChargeItems: normalizedExtraChargeItems,
-        workflowStatus: normalizeWorkflowStatus(record?.workflowStatus),
-        expense: toSafeNumber(record?.expense, fallbackExpense),
-        costumePrice: toSafeNumber(record?.costumePrice, 0),
-        hairMakeupPrice: toSafeNumber(record?.hairMakeupPrice, 0),
-      };
-    });
+    try {
+      const loaded = getCloudValue(STORAGE_KEY, []);
+      const records = Array.isArray(loaded) ? loaded : [];
+      const currentUid = String(window.FirebaseService?.getCurrentUser?.()?.uid || '').trim();
+      const scopedRecords = currentUid
+        ? records.filter((record) => {
+          const ownerUid = String(record?.userId || '').trim();
+          return !ownerUid || ownerUid === currentUid;
+        })
+        : records;
+      return withCurrentUserId(scopedRecords).map((record) => {
+        const normalizedExtraChargeItems = normalizeExtraChargeItems(record?.extraChargeItems);
+        const fallbackExpense = toSafeNumber(record?.planCost, toSafeNumber(record?.planDetails?.planCost, 0))
+          + normalizedExtraChargeItems.reduce((sum, item) => sum + toSafeNumber(item?.cost, 0), 0);
+        return {
+          ...record,
+          planDetails: normalizePlanDetails(record?.planDetails, record?.revenue),
+          extraChargeItems: normalizedExtraChargeItems,
+          workflowStatus: normalizeWorkflowStatus(record?.workflowStatus),
+          expense: toSafeNumber(record?.expense, fallbackExpense),
+          costumePrice: toSafeNumber(record?.costumePrice, 0),
+          hairMakeupPrice: toSafeNumber(record?.hairMakeupPrice, 0),
+        };
+      });
+    } catch (err) {
+      console.error('[Customer Load] failed', err);
+      return [];
+    }
   }
   function withCurrentUserId(records) {
     const uid = window.FirebaseService?.getCurrentUser?.()?.uid;
@@ -1096,22 +1133,27 @@
   }
 
   function saveCustomers(data, options = {}) {
-    const records = Array.isArray(data) ? data : [];
-    const normalized = records.map((record) => {
-      const normalizedExtraChargeItems = normalizeExtraChargeItems(record?.extraChargeItems);
-      const fallbackExpense = toSafeNumber(record?.planCost, toSafeNumber(record?.planDetails?.planCost, 0))
-        + normalizedExtraChargeItems.reduce((sum, item) => sum + toSafeNumber(item?.cost, 0), 0);
-      return {
-        ...(record || {}),
-        planDetails: normalizePlanDetails(record?.planDetails, record?.revenue),
-        extraChargeItems: normalizedExtraChargeItems,
-        workflowStatus: normalizeWorkflowStatus(record?.workflowStatus),
-        expense: toSafeNumber(record?.expense, fallbackExpense),
-        costumePrice: toSafeNumber(record?.costumePrice, 0),
-        hairMakeupPrice: toSafeNumber(record?.hairMakeupPrice, 0),
-      };
-    });
-    return saveCloudValue(STORAGE_KEY, withCurrentUserId(normalized), options);
+    try {
+      const records = Array.isArray(data) ? data : [];
+      const normalized = records.map((record) => {
+        const normalizedExtraChargeItems = normalizeExtraChargeItems(record?.extraChargeItems);
+        const fallbackExpense = toSafeNumber(record?.planCost, toSafeNumber(record?.planDetails?.planCost, 0))
+          + normalizedExtraChargeItems.reduce((sum, item) => sum + toSafeNumber(item?.cost, 0), 0);
+        return {
+          ...(record || {}),
+          planDetails: normalizePlanDetails(record?.planDetails, record?.revenue),
+          extraChargeItems: normalizedExtraChargeItems,
+          workflowStatus: normalizeWorkflowStatus(record?.workflowStatus),
+          expense: toSafeNumber(record?.expense, fallbackExpense),
+          costumePrice: toSafeNumber(record?.costumePrice, 0),
+          hairMakeupPrice: toSafeNumber(record?.hairMakeupPrice, 0),
+        };
+      });
+      return saveCloudValue(STORAGE_KEY, withCurrentUserId(normalized), options);
+    } catch (err) {
+      console.error('[Customer Save] normalization failed', err);
+      return Promise.reject(err);
+    }
   }
 
   function loadOptions() {
@@ -1318,6 +1360,15 @@
       .filter((item) => item.visible !== false)
       .map((item) => LIST_COLUMN_DEFINITIONS.find((entry) => entry.key === item.key))
       .filter(Boolean);
+  }
+
+  function getListColumnOrderMap() {
+    const map = {};
+    listColumnConfig.forEach((item, index) => {
+      if (!item?.key) return;
+      map[item.key] = index + 1;
+    });
+    return map;
   }
 
   function normalizePlanMasterItem(plan) {
@@ -1547,6 +1598,73 @@
       console.error(`[SafeRun] ${label}`, err);
       return fallback;
     }
+  }
+
+  const VERTICAL_TEXT_TARGET_SELECTOR = [
+    '.vertical-text',
+    '.vertical-writing',
+    '.tategaki',
+    '[style*="writing-mode: vertical"]',
+    '[style*="writing-mode:vertical"]',
+    '[style*="writing-mode: vertical-rl"]',
+    '[style*="writing-mode:vertical-rl"]',
+    '[style*="writing-mode: vertical-lr"]',
+    '[style*="writing-mode:vertical-lr"]',
+  ].join(', ');
+  let verticalLongVowelNormalizeFrame = null;
+
+  function normalizeVerticalLongVowelMarks(root = document) {
+    if (!root || typeof root.querySelectorAll !== 'function') return;
+
+    const targets = root.querySelectorAll(VERTICAL_TEXT_TARGET_SELECTOR);
+    targets.forEach((target) => {
+      const walker = document.createTreeWalker(
+        target,
+        window.NodeFilter?.SHOW_TEXT ?? 4,
+        null
+      );
+      const textNodes = [];
+      let currentNode = walker.nextNode();
+      while (currentNode) {
+        if (
+          currentNode.nodeValue
+          && currentNode.nodeValue.includes('ー')
+          && !currentNode.parentElement?.closest('.ch-rotate')
+        ) {
+          textNodes.push(currentNode);
+        }
+        currentNode = walker.nextNode();
+      }
+
+      textNodes.forEach((textNode) => {
+        const text = textNode.nodeValue;
+        if (!text || !text.includes('ー')) return;
+
+        const fragment = document.createDocumentFragment();
+        for (const ch of text) {
+          if (ch === 'ー') {
+            const marker = document.createElement('span');
+            marker.className = 'ch-rotate';
+            marker.textContent = 'ー';
+            fragment.appendChild(marker);
+          } else {
+            fragment.appendChild(document.createTextNode(ch));
+          }
+        }
+
+        textNode.parentNode?.replaceChild(fragment, textNode);
+      });
+    });
+  }
+
+  function scheduleVerticalLongVowelNormalization(root = document) {
+    if (verticalLongVowelNormalizeFrame) {
+      cancelAnimationFrame(verticalLongVowelNormalizeFrame);
+    }
+    verticalLongVowelNormalizeFrame = requestAnimationFrame(() => {
+      verticalLongVowelNormalizeFrame = null;
+      normalizeVerticalLongVowelMarks(root);
+    });
   }
 
   let activeLegalDocType = 'terms';
@@ -1840,7 +1958,7 @@
     } catch {
       // Ignore URL parsing failures.
     }
-    return getLocalValue(LOCAL_GUEST_MODE_KEY, false) === true;
+    return false;
   }
 
   function activateLocalGuestMode(message = '') {
@@ -2551,7 +2669,8 @@
 
   function resolveCustomerPlanName(customer) {
     const match = findPlanMasterByValue(customer?.planMasterId || customer?.plan || '');
-    return match?.name || customer?.plan || '—';
+    if (match?.name) return String(match.name).trim();
+    return typeof customer?.plan === 'string' ? customer.plan.trim() : '';
   }
 
   let dynamicItemRowSeed = 0;
@@ -3545,6 +3664,7 @@
   }
 
   function getListSettingsButtonLabel() {
+    if (isMobileViewport()) return '⚙';
     return `⚙ ${t('listColumnSettings')}`;
   }
 
@@ -3662,6 +3782,7 @@
   }
 
   function handleListColumnsViewportChange() {
+    updateListSettingsButtonLabel();
     if (!isListColumnsMenuOpen) return;
     positionListColumnsMenu();
   }
@@ -3907,6 +4028,7 @@
   }
 
   function handleMobileHeaderViewportChange() {
+    updateListSettingsButtonLabel();
     if (!isMobileViewport()) {
       setMobileHeaderMenuOpen(false);
     }
@@ -4459,11 +4581,24 @@
     if (pf_staff !== 'all') list = list.filter(c => c.assignedTo === pf_staff);
 
     const { key, dir } = currentSort;
+    const dateSortKeys = new Set(['inquiryDate', 'contractDate', 'shootingDate', 'meetingDate', 'billingDate', 'deliveryDate', 'paymentConfirmDate']);
     list.sort((a, b) => {
       let va = a[key] ?? '', vb = b[key] ?? '';
-      if (key === 'revenue') { va = Number(va) || 0; vb = Number(vb) || 0; }
-      else if (key === 'paymentChecked') { va = va ? 1 : 0; vb = vb ? 1 : 0; }
-      else { va = String(va).toLowerCase(); vb = String(vb).toLowerCase(); }
+      if (key === 'revenue') {
+        va = Number(va) || 0;
+        vb = Number(vb) || 0;
+      } else if (key === 'paymentChecked') {
+        va = va ? 1 : 0;
+        vb = vb ? 1 : 0;
+      } else if (dateSortKeys.has(key)) {
+        const aParts = parseDateParts(va);
+        const bParts = parseDateParts(vb);
+        va = aParts ? new Date(aParts.year, aParts.month, aParts.day).getTime() : 0;
+        vb = bParts ? new Date(bParts.year, bParts.month, bParts.day).getTime() : 0;
+      } else {
+        va = String(va).toLowerCase();
+        vb = String(vb).toLowerCase();
+      }
       if (va < vb) return dir === 'asc' ? -1 : 1;
       if (va > vb) return dir === 'asc' ? 1 : -1;
       return 0;
@@ -4491,9 +4626,9 @@
       case 'contractDate':
       case 'shootingDate':
       case 'meetingDate':
-        return formatDate(customer[columnKey]);
+        return toDisplayText(formatDate(customer[columnKey]));
       case 'customerName':
-        return `<span>${escapeHtml(customer.customerName || '—')}</span>`;
+        return `<span>${escapeHtml(toDisplayText(customer.customerName))}</span>`;
       case 'workflowStatus': {
         const statusKey = normalizeWorkflowStatus(customer?.workflowStatus);
         const statusLabel = getWorkflowStatusLabel(statusKey);
@@ -4504,9 +4639,9 @@
         `;
       }
       case 'contact':
-        return escapeHtml(customer.contact || '—');
+        return escapeHtml(toDisplayText(customer.contact));
       case 'plan':
-        return renderPlanBadge(resolveCustomerPlanName(customer));
+        return renderPlanBadge(toDisplayText(resolveCustomerPlanName(customer)));
       case 'revenue':
         return viewMode === 'card'
           ? `<strong>${formatCurrency(customer.revenue)}</strong>`
@@ -4545,6 +4680,7 @@
     const list = getFilteredCustomers();
     const actionLabels = getActionLabels();
     const visibleColumns = getVisibleListColumns();
+    const listOrderMap = getListColumnOrderMap();
     const workflowLegend = document.getElementById('workflow-status-legend');
     renderTableHeaders(visibleColumns, actionLabels);
     renderWorkflowStatusLegend();
@@ -4616,29 +4752,33 @@
       if (customerCardGrid) {
         const statusDot = renderWorkflowStatusDot(c);
         const shootingLabel = t('thShootingDate');
-        const shootingValue = formatDate(c.shootingDate) || t('valUnset');
+        const shootingValue = formatDate(c.shootingDate) || getUnsetDisplayText();
+        const mobileDateText = shootingValue;
         const revenueLabel = t('thRevenue');
         const profitLabel = t('cardProfit');
         const planLabel = t('thPlan');
         const noteLabel = t('labelNotes');
-        const planValue = resolveCustomerPlanName(c) || t('valUnset');
+        const planValue = toDisplayText(resolveCustomerPlanName(c));
         const revenueValue = toSafeNumber(c.revenue, 0);
         const profitValue = getCustomerProfitValue(c);
         const profitClass = profitValue < 0 ? 'is-negative' : 'is-positive';
-        const noteValue = String(c.notes || c.details || '').replace(/\s+/g, ' ').trim() || t('valUnset');
+        const noteValue = toDisplayText(String(c.notes || c.details || '').replace(/\s+/g, ' ').trim());
 
         const card = document.createElement('article');
         card.className = 'customer-card';
         card.classList.add('customer-row-colorized-card');
         card.style.setProperty('--row-accent', rowAccentColor);
+        card.style.setProperty('--field-order-shootingDate', String(listOrderMap.shootingDate || 1));
+        card.style.setProperty('--field-order-customerName', String(listOrderMap.customerName || 2));
+        card.style.setProperty('--field-order-plan', String(listOrderMap.plan || 3));
         card.dataset.id = c.id;
         card.innerHTML = `
           <div class="customer-card-mobile-head">
             <div class="customer-card-mobile-left">
               <span class="customer-card-status-dot">${statusDot}</span>
-              <div class="customer-card-mobile-main">
-                <div class="customer-card-mobile-name">${escapeHtml(c.customerName || t('valUnset'))}</div>
-                <div class="customer-card-mobile-date" title="${escapeHtml(`${shootingLabel}: ${shootingValue}`)}">${escapeHtml(`${shootingLabel}: ${shootingValue}`)}</div>
+              <div class="customer-card-mobile-main customer-card-flex-fields">
+                <div class="customer-card-mobile-date customer-card-field" data-field="shootingDate" title="${escapeHtml(`${shootingLabel}: ${shootingValue}`)}">${escapeHtml(mobileDateText)}</div>
+                <div class="customer-card-mobile-name customer-card-field" data-field="customerName" title="${escapeHtml(toDisplayText(c.customerName))}">${escapeHtml(toDisplayText(c.customerName))}</div>
               </div>
             </div>
             <div class="customer-card-mobile-metrics">
@@ -4647,7 +4787,7 @@
             </div>
           </div>
           <div class="customer-card-mobile-foot">
-            <div class="customer-card-mobile-plan" title="${escapeHtml(`${planLabel}: ${planValue}`)}">${escapeHtml(`${planLabel}: ${planValue}`)}</div>
+            <div class="customer-card-mobile-plan customer-card-field" data-field="plan" title="${escapeHtml(`${planLabel}: ${planValue}`)}">${escapeHtml(`${planLabel}: ${planValue}`)}</div>
             <div class="customer-card-mobile-note" title="${escapeHtml(`${noteLabel}: ${noteValue}`)}">${escapeHtml(`${noteLabel}: ${noteValue}`)}</div>
           </div>
           <div class="customer-card-actions action-buttons">
@@ -4697,16 +4837,18 @@
     updateMonthFilter();
     updateHeaderPlanBadge();
     if (isMobileFilterSheetOpen) renderMobileSortQuickList();
+    scheduleVerticalLongVowelNormalization();
   }
 
   function bindSortEventListeners() {
+    const dateSortKeys = new Set(['inquiryDate', 'contractDate', 'shootingDate', 'meetingDate', 'billingDate', 'deliveryDate', 'paymentConfirmDate']);
     $$('thead th[data-sort]').forEach((th) => {
       const key = th.dataset.sort || 'unknown';
       bindEventOnce(th, 'click', () => {
         const sortKey = th.dataset.sort;
         if (!sortKey) return;
         if (currentSort.key === sortKey) currentSort.dir = currentSort.dir === 'asc' ? 'desc' : 'asc';
-        else currentSort = { key: sortKey, dir: 'asc' };
+        else currentSort = { key: sortKey, dir: dateSortKeys.has(sortKey) ? 'desc' : 'asc' };
         renderTable();
       }, `table-sort-${key}`);
     });
@@ -5436,21 +5578,21 @@
     editingId = id; // Set editingId for task management
 
     // Basic fields
-    $('#detail-name').textContent = c.customerName || '—';
-    $('#detail-contact').textContent = c.contact || '—';
-    $('#detail-shooting-date').textContent = formatDate(c.shootingDate);
-    $('#detail-location').textContent = c.location || '—';
-    $('#detail-plan').textContent = resolveCustomerPlanName(c);
+    $('#detail-name').textContent = toDisplayText(c.customerName);
+    $('#detail-contact').textContent = toDisplayText(c.contact);
+    $('#detail-shooting-date').textContent = toDisplayText(formatDate(c.shootingDate));
+    $('#detail-location').textContent = toDisplayText(c.location);
+    $('#detail-plan').textContent = toDisplayText(resolveCustomerPlanName(c));
     const detailWorkflowStatus = $('#detail-workflow-status');
     if (detailWorkflowStatus) detailWorkflowStatus.innerHTML = renderWorkflowStatusBadge(c);
     $('#detail-revenue').textContent = formatCurrency(c.revenue);
     $('#detail-payment').innerHTML = c.paymentChecked ? `<span class="badge badge-success">${t('paid')}</span>` : `<span class="badge badge-warning">${t('unpaid')}</span>`;
-    $('#detail-notes').textContent = c.notes || '—';
+    $('#detail-notes').textContent = toDisplayText(c.notes);
     const planDetails = normalizePlanDetails(c.planDetails, c.revenue);
     const detailPlanName = $('#detail-plan-name');
     const detailBasePrice = $('#detail-base-price');
     const detailTotalPrice = $('#detail-total-price');
-    if (detailPlanName) detailPlanName.textContent = planDetails.planName || resolveCustomerPlanName(c);
+    if (detailPlanName) detailPlanName.textContent = toDisplayText(planDetails.planName || resolveCustomerPlanName(c));
     if (detailBasePrice) detailBasePrice.textContent = formatCurrency(planDetails.basePrice);
     if (detailTotalPrice) detailTotalPrice.textContent = formatCurrency(planDetails.totalPrice);
 
@@ -7940,6 +8082,7 @@
         if (warning) setAdminDeviceWarning(warning, 'error');
       }
     }
+    updateSettingsCurrentTabIndicator();
     settingsOverlay?.classList.add('active');
   }
 
@@ -7978,6 +8121,14 @@
     showToast(t('msgMemberAdded'));
   }
 
+  function updateSettingsCurrentTabIndicator() {
+    const indicator = document.getElementById('settings-current-tab-indicator');
+    if (!indicator) return;
+    const activeButton = settingsOverlay?.querySelector('.settings-tab-btn.active');
+    const label = String(activeButton?.textContent || '').trim();
+    indicator.textContent = label ? `▶ ${label}` : '';
+  }
+
   function bindSettingsTabListeners() {
     settingsOverlay?.querySelectorAll('.settings-tab-btn').forEach((btn) => {
       const tabName = btn.dataset.tab || 'default';
@@ -8001,6 +8152,7 @@
         if (tab === 'admin') {
           refreshAdminOverview();
         }
+        updateSettingsCurrentTabIndicator();
       }, `settings-tab-${tabName}`);
     });
   }
@@ -8016,7 +8168,9 @@
         showToast(t('firebaseConfigLoadFailed'));
         return;
       }
-      await window.FirebaseService.signInWithGoogle();
+      const loginFn = window.FirebaseService.signInWithPopup
+        ?? window.FirebaseService.signInWithGoogle;
+      await loginFn.call(window.FirebaseService);
     } catch (err) {
       console.error('Firebase Auth Error:', err?.code, err?.message);
       console.error(err);
@@ -8035,7 +8189,7 @@
   function handleGoogleLogoutClick() {
     isLoggedIn = false;
     mergePromptedUid = null;
-    saveLocalValue(LOCAL_GUEST_MODE_KEY, true);
+    saveLocalValue(LOCAL_GUEST_MODE_KEY, false);
     clearAdminSecurityState('not_admin');
     setCloudSyncIndicator('syncing');
     Promise.resolve(window.FirebaseService?.signOut?.())
@@ -8044,11 +8198,43 @@
       })
       .finally(() => {
         setCloudSyncIndicator('local');
-        activateLocalGuestMode(t('localGuestModeDefault'));
+        setAuthScreenState('loggedOut');
       });
   }
 
+  async function handleRefreshClick() {
+    const refreshButton = document.getElementById('btn-refresh');
+    if (refreshButton?.disabled) return;
+    if (refreshButton) refreshButton.disabled = true;
+    try {
+      window.location.reload();
+    } catch (err) {
+      console.error('Refresh failed', err);
+      showToast('更新に失敗しました。再読み込みしてください。', 'error');
+    } finally {
+      if (refreshButton) refreshButton.disabled = false;
+    }
+  }
+
+  function enforceLoggedOutScreen() {
+    if (!isLoggedIn) {
+      setAuthScreenState('loggedOut');
+    }
+  }
+
+  function enforceLoggedOutScreenSoon() {
+    window.setTimeout(enforceLoggedOutScreen, 0);
+    window.setTimeout(enforceLoggedOutScreen, 200);
+    window.setTimeout(enforceLoggedOutScreen, 600);
+  }
+
+  function patchAuthBootstrapForMobile() {
+    if (!window.matchMedia('(max-width: 768px)').matches) return;
+    enforceLoggedOutScreenSoon();
+  }
+
   function bindCoreUIEventListeners() {
+    updateListSettingsButtonLabel();
     getLanguageSelectElements().forEach((selectEl, index) => {
       bindEventOnce(selectEl, 'change', handleLanguageSelectChange, `lang-select-change-${index}`);
     });
@@ -8114,6 +8300,7 @@
     bindEventOnce(document.getElementById('btn-google-login'), 'click', handleGoogleLoginClick, 'google-login-banner');
     bindEventOnce(document.getElementById('btn-google-login-screen'), 'click', handleGoogleLoginClick, 'google-login-screen');
     bindEventOnce(document.getElementById('btn-logout'), 'click', handleGoogleLogoutClick, 'google-logout');
+    bindEventOnce(document.getElementById('btn-refresh'), 'click', handleRefreshClick, 'manual-refresh');
     document.querySelectorAll('[data-legal-doc]').forEach((link, index) => {
       bindEventOnce(link, 'click', handleLegalDocLinkClick, `legal-doc-link-${index}`);
     });
@@ -8753,12 +8940,14 @@
     const loginBtn = document.getElementById('btn-google-login');
     const loginScreenBtn = document.getElementById('btn-google-login-screen');
     const logoutBtn = document.getElementById('btn-logout');
+    const refreshBtn = document.getElementById('btn-refresh');
 
     if (state === 'checking') {
       if (authStatus) authStatus.textContent = t('authChecking');
       if (loginBtn) loginBtn.style.display = 'none';
       if (loginScreenBtn) loginScreenBtn.style.display = 'none';
       if (logoutBtn) logoutBtn.style.display = 'none';
+      if (refreshBtn) refreshBtn.style.display = 'none';
       if (authScreen) authScreen.style.display = 'none';
       if (loginScreen) loginScreen.style.display = 'none';
       if (authBanner) authBanner.style.display = 'flex';
@@ -8777,6 +8966,7 @@
       if (loginBtn) loginBtn.style.display = '';
       if (loginScreenBtn) loginScreenBtn.style.display = '';
       if (logoutBtn) logoutBtn.style.display = 'none';
+      if (refreshBtn) refreshBtn.style.display = 'none';
       if (authScreenRoot) authScreenRoot.style.display = 'block';
       if (authScreen) authScreen.style.display = 'block';
       if (loginScreen) loginScreen.style.display = 'flex';
@@ -8796,6 +8986,7 @@
       if (loginBtn) loginBtn.style.display = 'none';
       if (loginScreenBtn) loginScreenBtn.style.display = 'none';
       if (logoutBtn) logoutBtn.style.display = '';
+      if (refreshBtn) refreshBtn.style.display = 'inline-flex';
       if (authScreen) authScreen.style.display = 'none';
       if (loginScreen) loginScreen.style.display = 'none';
       if (authBanner) authBanner.style.display = 'none';
@@ -8832,7 +9023,13 @@
       refreshMySupportReplies({ notify: true });
     } catch (err) {
       console.error('Cloud data load failed', err);
-      showToast(t('cloudDataLoadFailed'));
+      showToast(
+        getLocaleTextOrFallback(
+          'cloudDataLoadRetryMessage',
+          'クラウドデータの読み込みに失敗しました。右上の更新ボタンから再試行してください。'
+        ),
+        'error'
+      );
       setCloudSyncIndicator('error');
     } finally {
       const appContainer = document.getElementById('app-container');
@@ -8908,7 +9105,7 @@
 
         isLoggedIn = false;
         clearAdminSecurityState('not_admin');
-        if (hasGuestLocalData()) {
+        if (window.location.protocol === 'file:' && hasGuestLocalData()) {
           activateLocalGuestMode(t('localGuestModeDefault'));
           return;
         }
@@ -8930,6 +9127,7 @@
 
     init();
     setAuthScreenState('checking');
+    patchAuthBootstrapForMobile();
     registerPwaServiceWorker();
     await initializeFirebaseAuthFlow();
   }
@@ -8938,11 +9136,13 @@
   document.addEventListener('DOMContentLoaded', async () => {
     try {
       await bootstrapApp();
+      scheduleVerticalLongVowelNormalization();
     } catch (err) {
       console.error('App bootstrap failed', err);
       try {
         init();
         setAuthScreenState('loggedOut');
+        scheduleVerticalLongVowelNormalization();
       } catch (fallbackErr) {
         console.error('Bootstrap fallback failed', fallbackErr);
       }

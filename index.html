@@ -25,17 +25,8 @@
 <body>
   <div class="login-screen" id="login-screen" style="display:none;">
     <div class="login-card">
-      <div class="login-logo">📷</div>
-      <h1>Pholio</h1>
-      <p>クラウド同期を利用するにはGoogleログインが必要です。</p>
+      <h1>Pholioへようこそ</h1>
       <button class="btn btn-primary btn-lg" id="btn-google-login-screen">Googleでログイン</button>
-      <div class="login-legal-links">
-        <a href="#" id="login-terms-link" data-legal-doc="terms" data-i18n="termsLink">利用規約</a>
-        <span class="login-legal-separator">·</span>
-        <a href="#" id="login-privacy-link" data-legal-doc="privacy" data-i18n="privacyLink">プライバシーポリシー</a>
-        <span class="login-legal-separator">·</span>
-        <a href="#" id="login-contact-link" data-contact-link="support" data-i18n="contactLink">お問い合わせ</a>
-      </div>
     </div>
   </div>
   <div class="auth-banner" id="auth-banner">
@@ -79,6 +70,7 @@
         <button class="theme-toggle" id="btn-theme" title="Toggle Theme">🌙</button>
         <button class="btn btn-secondary btn-sm" id="btn-settings" title="Settings" data-i18n="settingsHeader" data-i18n-title="settings">⚙
           Settings</button>
+        <button class="btn btn-secondary btn-sm header-refresh-btn" id="btn-refresh" title="更新" aria-label="更新">↻</button>
         <button class="mobile-header-menu-btn" id="btn-mobile-header-menu" type="button" aria-expanded="false"
           data-i18n-title="mobileMenu" data-i18n-aria-label="mobileMenu">⚙️</button>
       </div>
@@ -779,7 +771,7 @@
   </div>
 
   <div class="modal-overlay" id="settings-overlay">
-    <div class="modal" style="max-width:650px;">
+    <div class="modal settings-modal" style="max-width:650px;">
       <div class="modal-header">
         <h2 class="modal-title">
           <span class="modal-icon">⚙️</span>
@@ -805,6 +797,7 @@
           <button class="settings-tab-btn" data-tab="support" data-i18n="supportFeedbackTab">Support</button>
           <button class="settings-tab-btn" data-tab="admin" id="settings-tab-admin" data-i18n="adminPanelTab" style="display:none;">Admin</button>
         </div>
+        <div class="settings-current-tab-indicator" id="settings-current-tab-indicator" aria-live="polite"></div>
         <div class="settings-tab-content active" id="settings-content-menu">
           <div class="settings-list" id="settings-list"></div>
         </div>

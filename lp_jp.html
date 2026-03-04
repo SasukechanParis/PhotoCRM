@@ -1,0 +1,914 @@
+<!DOCTYPE html>
+<html lang="ja">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Pholio | あなたのワークフローを、そのままアプリに</title>
+  <meta name="description"
+    content="事務作業を自動化し、クリエイティブに集中したいフォトグラファーへ。項目を自由に並べ替えて、あなたの仕事順に最適化できる管理ツールです。">
+  <style>
+    :root {
+      --bg: #0f0f1a;
+      --bg-secondary: #1a1a2e;
+      --bg-card: rgba(30, 30, 50, 0.62);
+      --accent: #8b5cf6;
+      --accent-glow: rgba(139, 92, 246, 0.38);
+      --text: #ffffff;
+      --text-dim: #94a3b8;
+      --border: rgba(255, 255, 255, 0.09);
+      --success: #22c55e;
+      --header-h: 80px;
+      --container-w: 1200px;
+      --radius-lg: 24px;
+      --radius-md: 16px;
+      --transition: 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    html {
+      scroll-behavior: smooth;
+    }
+
+    body {
+      font-family: "Hiragino Kaku Gothic ProN", "Hiragino Sans", "Yu Gothic", "YuGothic", "Noto Sans JP", "Meiryo", sans-serif;
+      background-color: var(--bg);
+      color: var(--text);
+      line-height: 1.76;
+      overflow-x: hidden;
+      -webkit-font-smoothing: antialiased;
+      text-rendering: optimizeLegibility;
+      font-feature-settings: "palt";
+    }
+
+    body::before {
+      content: "";
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      z-index: -1;
+      background:
+        radial-gradient(circle at 10% 20%, rgba(139, 92, 246, 0.12) 0%, transparent 40%),
+        radial-gradient(circle at 90% 80%, rgba(61, 130, 246, 0.12) 0%, transparent 40%);
+    }
+
+    .bg-grid {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      z-index: -1;
+      background-image:
+        linear-gradient(var(--border) 1px, transparent 1px),
+        linear-gradient(90deg, var(--border) 1px, transparent 1px);
+      background-size: 50px 50px;
+      mask-image: radial-gradient(circle at center, black, transparent 82%);
+      opacity: 0.15;
+    }
+
+    .container {
+      max-width: var(--container-w);
+      margin: 0 auto;
+      padding: 0 24px;
+    }
+
+    section {
+      padding: 100px 0;
+      opacity: 0;
+      transform: translateY(30px);
+      transition: opacity 1s, transform 1s;
+    }
+
+    section.visible {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    .navbar {
+      height: var(--header-h);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 40px;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      z-index: 1000;
+      backdrop-filter: blur(20px);
+      border-bottom: 1px solid var(--border);
+      background: rgba(15, 15, 26, 0.72);
+    }
+
+    .logo {
+      font-size: 1.5rem;
+      font-weight: 800;
+      background: linear-gradient(135deg, #fff, var(--accent));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .nav-menu ul {
+      display: flex;
+      gap: 40px;
+      list-style: none;
+    }
+
+    .nav-menu a {
+      text-decoration: none;
+      color: var(--text-dim);
+      font-weight: 600;
+      transition: var(--transition);
+      font-size: 0.94rem;
+    }
+
+    .nav-menu a:hover {
+      color: var(--text);
+    }
+
+    .btn-nav {
+      padding: 10px 20px;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 100px;
+      color: var(--text);
+      text-decoration: none;
+      font-weight: 700;
+      font-size: 0.87rem;
+      transition: var(--transition);
+    }
+
+    .btn-nav:hover {
+      background: rgba(255, 255, 255, 0.1);
+      border-color: rgba(255, 255, 255, 0.2);
+    }
+
+    h1 {
+      font-size: clamp(2.1rem, 7.2vw, 4rem);
+      font-weight: 800;
+      line-height: 1.34;
+      letter-spacing: 0;
+      margin-bottom: 24px;
+    }
+
+    h2 {
+      font-size: clamp(1.88rem, 4.8vw, 2.8rem);
+      font-weight: 700;
+      text-align: center;
+      margin-bottom: 56px;
+      letter-spacing: 0;
+      line-height: 1.42;
+    }
+
+    .gradient-text {
+      background: linear-gradient(135deg, #fff 35%, var(--accent));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .hero {
+      padding-top: 170px;
+      text-align: center;
+    }
+
+    .badge {
+      display: inline-block;
+      padding: 7px 14px;
+      background: rgba(139, 92, 246, 0.12);
+      border: 1px solid rgba(139, 92, 246, 0.26);
+      border-radius: 100px;
+      color: #c4b5fd;
+      font-size: 0.85rem;
+      font-weight: 700;
+      margin-bottom: 22px;
+    }
+
+    .hero p {
+      color: var(--text-dim);
+      font-size: 1.1rem;
+      max-width: 780px;
+      margin: 0 auto 42px;
+      line-height: 1.92;
+    }
+
+    .cta-group {
+      display: flex;
+      gap: 20px;
+      justify-content: center;
+      margin-bottom: 72px;
+    }
+
+    .btn-primary {
+      padding: 16px 36px;
+      background: var(--accent);
+      color: #fff;
+      border-radius: var(--radius-md);
+      text-decoration: none;
+      font-weight: 700;
+      box-shadow: 0 10px 30px var(--accent-glow);
+      transition: var(--transition);
+      display: inline-block;
+    }
+
+    .btn-primary:hover {
+      transform: translateY(-3px);
+      box-shadow: 0 15px 40px var(--accent-glow);
+      filter: brightness(1.1);
+    }
+
+    .btn-secondary {
+      padding: 16px 36px;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid var(--border);
+      color: #fff;
+      border-radius: var(--radius-md);
+      text-decoration: none;
+      font-weight: 700;
+      transition: var(--transition);
+      display: inline-block;
+    }
+
+    .btn-secondary:hover {
+      background: rgba(255, 255, 255, 0.1);
+    }
+
+    .hero-visual {
+      max-width: 1000px;
+      margin: 0 auto;
+      perspective: 1000px;
+    }
+
+    .mockup-frame {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      overflow: hidden;
+      box-shadow: 0 50px 100px rgba(0, 0, 0, 0.5);
+      transform: rotateX(5deg);
+      transition: transform 0.5s;
+    }
+
+    .mockup-frame:hover {
+      transform: rotateX(0deg) translateY(-10px);
+    }
+
+    .mockup-header {
+      height: 44px;
+      background: rgba(255, 255, 255, 0.03);
+      display: flex;
+      align-items: center;
+      padding: 0 20px;
+      gap: 8px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      opacity: 0.45;
+    }
+
+    .red {
+      background: #ff5f56;
+    }
+
+    .yellow {
+      background: #ffbd2e;
+    }
+
+    .green {
+      background: #27c93f;
+    }
+
+    .mockup-body {
+      min-height: 500px;
+      background:
+        radial-gradient(circle at 78% 18%, rgba(139, 92, 246, 0.26) 0, transparent 36%),
+        radial-gradient(circle at 18% 84%, rgba(53, 124, 255, 0.17) 0, transparent 40%),
+        linear-gradient(160deg, #171729 0%, #11111f 100%);
+      padding: 26px;
+    }
+
+    .dashboard-shell {
+      display: grid;
+      grid-template-columns: 1.45fr 1fr;
+      gap: 18px;
+      height: 100%;
+    }
+
+    .glass-panel {
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      backdrop-filter: blur(10px);
+    }
+
+    .reorder-panel {
+      padding: 18px;
+      display: grid;
+      grid-template-rows: auto repeat(5, 1fr);
+      gap: 10px;
+    }
+
+    .stack-panel {
+      display: grid;
+      grid-template-rows: 1fr 1fr;
+      gap: 18px;
+    }
+
+    .focus-panel,
+    .kpi-panel {
+      padding: 18px;
+      display: grid;
+      gap: 12px;
+      align-content: start;
+    }
+
+    .panel-title {
+      font-size: 0.88rem;
+      color: var(--text-dim);
+      font-weight: 700;
+      letter-spacing: 0.02em;
+    }
+
+    .field-row {
+      display: grid;
+      grid-template-columns: 22px 1fr auto;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 12px;
+      border-radius: 12px;
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid rgba(255, 255, 255, 0.06);
+    }
+
+    .field-row .drag {
+      color: #a78bfa;
+      font-weight: 700;
+      font-size: 0.8rem;
+      letter-spacing: -0.1em;
+    }
+
+    .field-row .name {
+      color: #e2e8f0;
+      font-size: 0.9rem;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .field-row .tag {
+      font-size: 0.72rem;
+      padding: 3px 8px;
+      border-radius: 999px;
+      border: 1px solid rgba(34, 197, 94, 0.36);
+      color: #86efac;
+    }
+
+    .chip-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .chip {
+      font-size: 0.77rem;
+      padding: 6px 10px;
+      border-radius: 999px;
+      background: rgba(139, 92, 246, 0.16);
+      border: 1px solid rgba(139, 92, 246, 0.24);
+      color: #ede9fe;
+    }
+
+    .kpi-value {
+      font-size: 2rem;
+      color: #ddd6fe;
+      font-weight: 800;
+      line-height: 1.2;
+    }
+
+    .kpi-sub {
+      color: var(--text-dim);
+      font-size: 0.9rem;
+      line-height: 1.7;
+    }
+
+    .features-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 32px;
+    }
+
+    .feature-card {
+      padding: 40px 30px;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      backdrop-filter: blur(10px);
+      transition: var(--transition);
+    }
+
+    .feature-card:hover {
+      transform: translateY(-10px);
+      background: rgba(255, 255, 255, 0.05);
+      border-color: var(--accent);
+    }
+
+    .feature-card .icon {
+      width: 56px;
+      height: 56px;
+      border-radius: 14px;
+      display: grid;
+      place-items: center;
+      margin-bottom: 22px;
+      background: rgba(139, 92, 246, 0.14);
+      border: 1px solid rgba(139, 92, 246, 0.22);
+      font-size: 1.5rem;
+    }
+
+    .feature-card h3 {
+      font-size: 1.28rem;
+      margin-bottom: 12px;
+      line-height: 1.58;
+    }
+
+    .feature-card p {
+      color: var(--text-dim);
+      line-height: 1.86;
+      font-size: 0.97rem;
+    }
+
+    .stats-grid {
+      display: flex;
+      justify-content: space-around;
+      text-align: center;
+      background: rgba(139, 92, 246, 0.05);
+      padding: 60px 0;
+      border-radius: var(--radius-lg);
+      border: 1px solid var(--border);
+    }
+
+    .stat-value {
+      display: block;
+      font-size: 3rem;
+      font-weight: 800;
+      color: var(--accent);
+      margin-bottom: 8px;
+    }
+
+    .stat-label {
+      color: var(--text-dim);
+      font-weight: 500;
+    }
+
+    .pricing-intro {
+      text-align: center;
+      margin: -26px auto 36px;
+      color: #ddd6fe;
+      background: rgba(139, 92, 246, 0.1);
+      border: 1px solid rgba(139, 92, 246, 0.24);
+      border-radius: 999px;
+      width: fit-content;
+      padding: 10px 20px;
+      font-size: 0.95rem;
+      font-weight: 600;
+    }
+
+    .pricing-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 32px;
+      align-items: center;
+    }
+
+    .price-card {
+      padding: 56px 36px;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      text-align: center;
+      transition: var(--transition);
+    }
+
+    .price-card.popular {
+      background: rgba(139, 92, 246, 0.08);
+      border-color: var(--accent);
+      transform: scale(1.05);
+      position: relative;
+    }
+
+    .price-card.popular::before {
+      content: "おすすめ";
+      position: absolute;
+      top: -15px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: var(--accent);
+      color: #fff;
+      padding: 4px 16px;
+      border-radius: 100px;
+      font-size: 0.8rem;
+      font-weight: 700;
+    }
+
+    .price-card h3 {
+      font-size: 1.5rem;
+      margin-bottom: 18px;
+      line-height: 1.5;
+    }
+
+    .price-card .price {
+      font-size: 3rem;
+      font-weight: 800;
+      margin-bottom: 26px;
+    }
+
+    .price-card .price span {
+      font-size: 0.95rem;
+      color: var(--text-dim);
+      font-weight: 500;
+    }
+
+    .price-card ul {
+      list-style: none;
+      text-align: left;
+      margin-bottom: 36px;
+      color: var(--text-dim);
+      line-height: 1.85;
+    }
+
+    .price-card li {
+      margin-bottom: 12px;
+    }
+
+    .price-card li::before {
+      content: "✓ ";
+      color: var(--success);
+      font-weight: bold;
+    }
+
+    .btn-price {
+      display: block;
+      padding: 14px;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid var(--border);
+      color: #fff;
+      border-radius: var(--radius-md);
+      text-decoration: none;
+      font-weight: 700;
+      transition: var(--transition);
+    }
+
+    .price-card.popular .btn-price {
+      background: var(--accent);
+      border: none;
+    }
+
+    .btn-price:hover {
+      filter: brightness(1.2);
+      transform: scale(1.02);
+    }
+
+    .final-cta {
+      text-align: center;
+      padding: 150px 0;
+      background: radial-gradient(circle at center, rgba(139, 92, 246, 0.15) 0%, transparent 70%);
+    }
+
+    .final-cta h2 {
+      margin-bottom: 20px;
+    }
+
+    .final-cta p {
+      font-size: 1.12rem;
+      color: var(--text-dim);
+      margin-bottom: 36px;
+      line-height: 1.9;
+    }
+
+    .footer {
+      padding: 80px 0 40px;
+      border-top: 1px solid var(--border);
+      background: #0a0a14;
+    }
+
+    .footer-links {
+      display: flex;
+      justify-content: center;
+      gap: 120px;
+      margin-bottom: 56px;
+    }
+
+    .footer-group h4 {
+      margin-bottom: 20px;
+      color: #fff;
+    }
+
+    .footer-group ul {
+      list-style: none;
+    }
+
+    .footer-group li {
+      margin-bottom: 10px;
+    }
+
+    .footer-group a {
+      color: var(--text-dim);
+      text-decoration: none;
+      transition: var(--transition);
+    }
+
+    .footer-group a:hover {
+      color: var(--accent);
+    }
+
+    .footer-bottom {
+      text-align: center;
+      color: rgba(255, 255, 255, 0.28);
+      font-size: 0.9rem;
+    }
+
+    @media (max-width: 980px) {
+      .dashboard-shell {
+        grid-template-columns: 1fr;
+      }
+
+      .mockup-body {
+        min-height: 640px;
+      }
+    }
+
+    @media (max-width: 768px) {
+      .nav-menu {
+        display: none;
+      }
+
+      .navbar {
+        padding: 0 20px;
+      }
+
+      .hero {
+        padding-top: 140px;
+      }
+
+      .cta-group {
+        flex-direction: column;
+      }
+
+      .stats-grid {
+        flex-direction: column;
+        gap: 40px;
+      }
+
+      .pricing-grid {
+        gap: 40px;
+      }
+
+      .price-card.popular {
+        transform: scale(1);
+      }
+
+      .footer-links {
+        flex-direction: column;
+        align-items: center;
+        gap: 40px;
+        text-align: center;
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <div class="bg-grid"></div>
+
+  <header class="navbar">
+    <div class="logo">Pholio</div>
+    <nav class="nav-menu">
+      <ul>
+        <li><a href="#features">機能</a></li>
+        <li><a href="#pricing">料金</a></li>
+        <li><a href="https://sasuke-portfolio-v2.web.app/" target="_blank" rel="noopener noreferrer">開発背景</a></li>
+      </ul>
+    </nav>
+    <div class="nav-cta">
+      <a href="#pricing" class="btn-nav">無料で試す</a>
+    </div>
+  </header>
+
+  <main class="container">
+    <section id="hero" class="hero">
+      <div class="hero-content">
+        <span class="badge">v2.2.3 ベータ版</span>
+        <h1>あなたのワークフローを、そのままアプリに。<br><span class="gradient-text">自由自在な項目配置。</span></h1>
+        <p>事務作業を自動化し、クリエイティブに集中したいフォトグラファーへ。<br>項目を自分好みの順番に並べ替え、あなたの仕事順でそのまま管理できます。</p>
+        <div class="cta-group">
+          <a href="#pricing" class="btn-primary">ベータ版を無料で始める</a>
+          <a href="#features" class="btn-secondary">機能を見る</a>
+        </div>
+      </div>
+
+      <div class="hero-visual">
+        <div class="mockup-frame">
+          <div class="mockup-header">
+            <span class="dot red"></span>
+            <span class="dot yellow"></span>
+            <span class="dot green"></span>
+          </div>
+          <div class="mockup-body">
+            <div class="dashboard-shell">
+              <div class="glass-panel reorder-panel">
+                <div class="panel-title">項目を並べ替えて、自分専用の管理画面へ</div>
+                <div class="field-row">
+                  <span class="drag">⋮⋮</span>
+                  <span class="name">撮影日</span>
+                  <span class="tag">必須</span>
+                </div>
+                <div class="field-row">
+                  <span class="drag">⋮⋮</span>
+                  <span class="name">お客様名</span>
+                  <span class="tag">基本</span>
+                </div>
+                <div class="field-row">
+                  <span class="drag">⋮⋮</span>
+                  <span class="name">ロケ地</span>
+                  <span class="tag">任意</span>
+                </div>
+                <div class="field-row">
+                  <span class="drag">⋮⋮</span>
+                  <span class="name">納期</span>
+                  <span class="tag">重要</span>
+                </div>
+                <div class="field-row">
+                  <span class="drag">⋮⋮</span>
+                  <span class="name">請求状況</span>
+                  <span class="tag">会計</span>
+                </div>
+              </div>
+
+              <div class="stack-panel">
+                <div class="glass-panel focus-panel">
+                  <div class="panel-title">表示項目カスタム</div>
+                  <div class="chip-list">
+                    <span class="chip">撮影日</span>
+                    <span class="chip">顧客名</span>
+                    <span class="chip">ロケ地</span>
+                    <span class="chip">納期</span>
+                    <span class="chip">請求</span>
+                  </div>
+                  <div class="kpi-sub">不要な項目は非表示にして、毎日の確認を短時間で終えられます。</div>
+                </div>
+
+                <div class="glass-panel kpi-panel">
+                  <div class="panel-title">今月の売上見込み</div>
+                  <div class="kpi-value">¥486,000</div>
+                  <div class="kpi-sub">売上・未請求・進行中案件を、あなたが決めた並び順のまま一目で把握できます。</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="features" class="features">
+      <h2>撮影の現場感覚に寄り添う、<br>柔軟で実務的な設計</h2>
+      <div class="features-grid">
+        <div class="feature-card">
+          <div class="icon">↕️</div>
+          <h3>項目を自分好みの順番に並べ替え</h3>
+          <p>固定レイアウトに合わせる必要はありません。あなたの確認順・作業順に合わせて、管理画面そのものを最適化できます。</p>
+        </div>
+        <div class="feature-card">
+          <div class="icon">🧩</div>
+          <h3>撮影ジャンル別のワークフロー設定</h3>
+          <p>ウェディング、家族写真、プロフィール撮影など、案件タイプごとに表示項目と並び順を切り替えられます。</p>
+        </div>
+        <div class="feature-card">
+          <div class="icon">🎯</div>
+          <h3>必要な項目だけに絞るフォーカス表示</h3>
+          <p>毎日見る情報だけを残して視認性を向上。連絡漏れや確認漏れを防ぎながら、判断スピードを上げます。</p>
+        </div>
+        <div class="feature-card">
+          <div class="icon">📊</div>
+          <h3>見積・請求・入金を同じ流れで管理</h3>
+          <p>撮影進行とお金の流れを分断せず、ひとつの画面で追跡。事務作業の負担を軽くして制作時間を確保できます。</p>
+        </div>
+      </div>
+    </section>
+
+    <section id="preview">
+      <div class="stats-grid">
+        <div class="stat-item">
+          <span class="stat-value">-50%</span>
+          <span class="stat-label">事務作業時間の削減目安</span>
+        </div>
+        <div class="stat-item">
+          <span class="stat-value">100%</span>
+          <span class="stat-label">項目順カスタマイズ自由度</span>
+        </div>
+        <div class="stat-item">
+          <span class="stat-value">1画面</span>
+          <span class="stat-label">問い合わせから入金まで一元管理</span>
+        </div>
+      </div>
+    </section>
+
+    <section id="pricing" class="pricing">
+      <h2>わかりやすい料金プラン</h2>
+      <p class="pricing-intro">現在はベータ版につき、全機能を無料開放中です。</p>
+      <div class="pricing-grid">
+        <div class="price-card">
+          <h3>ベータ版（無料）</h3>
+          <div class="price">¥0<span>/月</span></div>
+          <ul>
+            <li>ベータ期間中は全機能を利用可能</li>
+            <li>20件までの案件管理</li>
+            <li>ローカル保存対応</li>
+          </ul>
+          <a href="#" class="btn-price">今すぐ利用可能</a>
+        </div>
+        <div class="price-card popular">
+          <h3>個人プラン</h3>
+          <div class="price">¥1,200<span>/月 予定</span></div>
+          <ul>
+            <li>案件数無制限</li>
+            <li>クラウド同期とバックアップ</li>
+            <li>詳細な分析ダッシュボード</li>
+          </ul>
+          <a href="#" class="btn-price">公開準備中</a>
+        </div>
+        <div class="price-card">
+          <h3>チームプラン</h3>
+          <div class="price">¥2,400<span>/月 予定</span></div>
+          <ul>
+            <li>個人プランの全機能</li>
+            <li>5名までのメンバー管理</li>
+            <li>権限設定と進行共有</li>
+          </ul>
+          <a href="#" class="btn-price">公開準備中</a>
+        </div>
+      </div>
+    </section>
+
+    <section class="final-cta">
+      <h2>あなたの仕事順で、もっと撮影に集中</h2>
+      <p>項目順を整えるだけで、確認と連絡の迷いは大きく減ります。<br>Pholioは、同じ悩みを持つフォトグラファー目線で作った管理ツールです。</p>
+      <a href="#pricing" class="btn-primary">ベータ版を無料で試す</a>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <div class="footer-links container">
+      <div class="footer-group">
+        <h4>プロダクト</h4>
+        <ul>
+          <li><a href="#features">機能一覧</a></li>
+          <li><a href="#pricing">料金プラン</a></li>
+          <li><a href="#">リリースノート</a></li>
+        </ul>
+      </div>
+      <div class="footer-group">
+        <h4>サポート</h4>
+        <ul>
+          <li><a href="#">お問い合わせ</a></li>
+          <li><a href="#">利用規約</a></li>
+          <li><a href="#">プライバシーポリシー</a></li>
+        </ul>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <p>&copy; 2026 Pholio. Photographers First.</p>
+    </div>
+  </footer>
+
+  <script>
+    document.addEventListener("DOMContentLoaded", () => {
+      const observer = new IntersectionObserver((entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            entry.target.classList.add("visible");
+          }
+        });
+      }, { threshold: 0.1 });
+
+      document.querySelectorAll("section").forEach((section) => observer.observe(section));
+
+      const hero = document.getElementById("hero");
+      if (hero) hero.classList.add("visible");
+    });
+  </script>
+</body>
+
+</html>
