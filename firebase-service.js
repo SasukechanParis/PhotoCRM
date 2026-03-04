@@ -54,6 +54,7 @@ const SETTINGS_KEYS = [
   'photocrm_plan_master',
   'photocrm_team',
   'photocrm_theme',
+  'photocrm_accent_color',
   'photocrm_lang',
   'photocrm_tax_settings',
   'photocrm_invoice_sender_profile',
