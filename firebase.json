@@ -1,6 +1,6 @@
 {
   "hosting": {
-    "site": "pholio",
+    "target": "pholio",
     "public": ".",
     "ignore": [
       "firebase.json",
